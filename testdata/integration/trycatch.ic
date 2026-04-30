@@ -25,10 +25,12 @@ if outer == "" {
 }
 
 let thrown = ""
+let thrownCause = ""
 try {
-  throw "boom"
+  throw error("boom", error("inner"))
 } catch err {
   thrown = err.message
+  thrownCause = err.cause.message
   if err.stack == "" {
     panic("expected non-empty throw stack")
   }
@@ -42,6 +44,9 @@ try {
 
 if thrown != "boom" {
   panic("expected string throw to be caught")
+}
+if thrownCause != "inner" {
+  panic("expected chained throw cause")
 }
 
 let normalized = ""

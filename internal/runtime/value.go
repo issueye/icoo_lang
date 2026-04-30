@@ -174,6 +174,7 @@ type StackFrame struct {
 type ErrorValue struct {
 	Message string
 	Stack   []StackFrame
+	Cause   *ErrorValue
 }
 
 func (e *ErrorValue) Kind() ValueKind { return ErrorKind }
@@ -192,10 +193,41 @@ func (e *ErrorValue) StackString() string {
 	if e == nil {
 		return ""
 	}
-	if len(e.Stack) == 0 {
-		return e.Message
-	}
 	var b strings.Builder
+	e.writeChainString(&b, false, map[*ErrorValue]struct{}{})
+	return b.String()
+}
+
+func (e *ErrorValue) writeChainString(b *strings.Builder, caused bool, seen map[*ErrorValue]struct{}) {
+	if e == nil {
+		return
+	}
+	if _, ok := seen[e]; ok {
+		if caused {
+			b.WriteString("Caused by: <cycle>")
+		} else {
+			b.WriteString("<cycle>")
+		}
+		return
+	}
+	seen[e] = struct{}{}
+	if caused {
+		b.WriteString("Caused by: ")
+	}
+	if len(e.Stack) == 0 {
+		b.WriteString(e.Message)
+	} else {
+		e.writeStackSegment(b)
+	}
+	if e.Cause != nil {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		e.Cause.writeChainString(b, true, seen)
+	}
+}
+
+func (e *ErrorValue) writeStackSegment(b *strings.Builder) {
 	b.WriteString(e.Message)
 	for _, frame := range e.Stack {
 		b.WriteString("\n  at ")
@@ -222,5 +254,4 @@ func (e *ErrorValue) StackString() string {
 		}
 		b.WriteString(")")
 	}
-	return b.String()
 }

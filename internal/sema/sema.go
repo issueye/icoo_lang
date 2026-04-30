@@ -23,7 +23,7 @@ func Analyze(program *ast.Program) []diag.Diagnostic {
 }
 
 func (a *Analyzer) defineBuiltins() {
-	builtins := []string{"print", "println", "len", "typeOf", "chan", "panic"}
+	builtins := []string{"print", "println", "len", "typeOf", "chan", "panic", "error"}
 	for _, name := range builtins {
 		a.scope.Define(Symbol{Name: name})
 	}

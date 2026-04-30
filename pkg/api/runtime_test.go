@@ -193,9 +193,11 @@ let message = ""
 let stack = ""
 let frameCount = 0
 let topFunction = ""
+let causeMessage = ""
+let causeType = ""
 
 fn boom() {
-  throw "boom"
+  throw error("boom", error("inner"))
 }
 
 try {
@@ -205,6 +207,8 @@ try {
   stack = err.stack
   frameCount = len(err.frames)
   topFunction = err.frames[0].function
+  causeMessage = err.cause.message
+  causeType = typeOf(err.cause)
 }
 
 if message != "boom" {
@@ -219,6 +223,18 @@ if frameCount == 0 {
 if topFunction != "boom" {
   panic("unexpected top frame function")
 }
+if causeMessage != "inner" {
+  panic("unexpected cause message")
+}
+if causeType != "error" {
+  panic("unexpected cause type")
+}
+if stack == message {
+  panic("expected chained stack output")
+}
+if stack == causeMessage {
+  panic("expected stack to include throwing frame")
+}
 `
 
 	rt := NewRuntime()
@@ -227,12 +243,55 @@ if topFunction != "boom" {
 	}
 }
 
+func TestRuntimeRunSource_ErrorWithoutCauseReturnsNullCause(t *testing.T) {
+	src := `
+let isNull = false
+
+try {
+  throw error("solo")
+} catch err {
+  isNull = err.cause == null
+}
+
+if isNull != true {
+  panic("expected null cause")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected null cause run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ErrorNormalizesNonErrorCause(t *testing.T) {
+	src := `
+let causeMessage = ""
+
+try {
+  throw error("outer", 123)
+} catch err {
+  causeMessage = err.cause.message
+}
+
+if causeMessage != "123" {
+  panic("unexpected normalized cause message")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected normalized cause run to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_RethrowPreservesOriginalStack(t *testing.T) {
 	src := `
 let stack = ""
+let causeMessage = ""
 
 fn inner() {
-  throw "boom"
+  throw error("boom", error("inner cause"))
 }
 
 fn outer() {
@@ -247,10 +306,14 @@ try {
   outer()
 } catch err {
   stack = err.stack
+  causeMessage = err.cause.message
 }
 
 if stack == "" {
   panic("expected rethrow stack")
+}
+if causeMessage != "inner cause" {
+  panic("expected preserved rethrow cause")
 }
 `
 
@@ -263,7 +326,7 @@ if stack == "" {
 func TestRuntimeRunFile_UncaughtErrorIncludesSourceLines(t *testing.T) {
 	src := `
 fn inner() {
-  len(1)
+  throw error("outer", error("inner"))
 }
 
 fn outer() {
@@ -284,8 +347,17 @@ outer()
 		t.Fatalf("expected uncaught runtime error")
 	} else {
 		msg := err.Error()
-		if !strings.Contains(msg, "at len (native)") {
-			t.Fatalf("expected native len frame, got: %q", msg)
+		if !strings.Contains(msg, "outer") {
+			t.Fatalf("expected outer message, got: %q", msg)
+		}
+		if !strings.Contains(msg, "Caused by: inner") {
+			t.Fatalf("expected caused-by message, got: %q", msg)
+		}
+		if !strings.Contains(msg, "outer\n  at inner ("+path+":3)") {
+			t.Fatalf("expected top segment before cause, got: %q", msg)
+		}
+		if !strings.Contains(msg, "Caused by: inner") {
+			t.Fatalf("expected caused-by message, got: %q", msg)
 		}
 		if !strings.Contains(msg, "at inner ("+path+":3)") {
 			t.Fatalf("expected inner frame with source line, got: %q", msg)
@@ -343,19 +415,24 @@ if out != "boom/finally" {
 func TestRuntimeRunSource_TryFinallyRethrowsAfterFinally(t *testing.T) {
 	src := `
 let out = ""
+let causeMessage = ""
 
 try {
   try {
-    throw "boom"
+    throw error("boom", error("inner"))
   } finally {
     out = "finally"
   }
 } catch err {
   out = out + "/" + err.message
+  causeMessage = err.cause.message
 }
 
 if out != "finally/boom" {
   panic("unexpected try/finally rethrow result")
+}
+if causeMessage != "inner" {
+  panic("expected cause to survive finally rethrow")
 }
 `
 
@@ -397,7 +474,7 @@ fn demo() {
   try {
     return "ok"
   } finally {
-    throw "finally boom"
+    throw error("finally boom", error("root cause"))
   }
 }
 
@@ -407,6 +484,9 @@ try {
 } catch err {
   if err.message != "finally boom" {
     panic("unexpected finally override message")
+  }
+  if err.cause.message != "root cause" {
+    panic("unexpected finally override cause")
   }
 }
 `

@@ -260,6 +260,14 @@ func (vm *VM) execGetProperty(name string) error {
 			vm.Push(runtime.StringValue{Value: value.StackString()})
 			return nil
 		}
+		if name == "cause" {
+			if value.Cause == nil {
+				vm.Push(runtime.NullValue{})
+			} else {
+				vm.Push(value.Cause)
+			}
+			return nil
+		}
 		if name == "frames" {
 			frames := make([]runtime.Value, 0, len(value.Stack))
 			for _, frame := range value.Stack {

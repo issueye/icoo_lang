@@ -71,7 +71,11 @@ func (vm *VM) errorToValue(err error) *runtime.ErrorValue {
 	if ok := asErrorValue(err, &errorValue); ok && errorValue != nil {
 		return errorValue
 	}
-	return &runtime.ErrorValue{Message: err.Error()}
+	exc := &runtime.ErrorValue{Message: err.Error()}
+	if cause := errors.Unwrap(err); cause != nil {
+		exc.Cause = vm.errorToValue(cause)
+	}
+	return exc
 }
 
 func asErrorValue(err error, target **runtime.ErrorValue) bool {

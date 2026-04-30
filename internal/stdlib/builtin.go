@@ -15,6 +15,7 @@ func RegisterBuiltins(machine *vm.VM) {
 	machine.DefineBuiltin("len", &runtime.NativeFunction{Name: "len", Arity: 1, Fn: builtinLen})
 	machine.DefineBuiltin("typeOf", &runtime.NativeFunction{Name: "typeOf", Arity: 1, Fn: builtinTypeOf})
 	machine.DefineBuiltin("panic", &runtime.NativeFunction{Name: "panic", Arity: 1, Fn: builtinPanic})
+	machine.DefineBuiltin("error", &runtime.NativeFunction{Name: "error", Arity: -1, Fn: builtinError})
 }
 
 func builtinPrint(args []runtime.Value) (runtime.Value, error) {
@@ -54,6 +55,24 @@ func builtinTypeOf(args []runtime.Value) (runtime.Value, error) {
 
 func builtinPanic(args []runtime.Value) (runtime.Value, error) {
 	return nil, fmt.Errorf("panic: %s", stringify(args[0]))
+}
+
+func builtinError(args []runtime.Value) (runtime.Value, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return nil, fmt.Errorf("error expects 1 or 2 arguments, got %d", len(args))
+	}
+	err := &runtime.ErrorValue{Message: stringify(args[0])}
+	if len(args) == 2 {
+		switch cause := args[1].(type) {
+		case runtime.NullValue:
+			// no cause
+		case *runtime.ErrorValue:
+			err.Cause = cause
+		default:
+			err.Cause = &runtime.ErrorValue{Message: stringify(args[1])}
+		}
+	}
+	return err, nil
 }
 
 func stringify(v runtime.Value) string {
