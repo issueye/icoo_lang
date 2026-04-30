@@ -32,6 +32,8 @@ type VM struct {
 	builtins map[string]runtime.Value
 	modules  map[string]*runtime.Module
 
+	mu sync.RWMutex
+
 	loadModule ModuleLoader
 	lastModule *runtime.Module
 
@@ -61,18 +63,28 @@ func (vm *VM) Pool() *concurrency.GoroutinePool {
 func (vm *VM) goExecutor(task *concurrency.GoTask) {
 	switch callee := task.Callee.(type) {
 	case *runtime.Closure:
+		vm.mu.RLock()
+		globals := make(map[string]runtime.Value, len(vm.globals))
+		for k, v := range vm.globals {
+			globals[k] = v
+		}
+		modules := make(map[string]*runtime.Module, len(vm.modules))
+		for k, v := range vm.modules {
+			modules[k] = v
+		}
+		vm.mu.RUnlock()
 		sub := &VM{
 			stack:    make([]runtime.Value, 0, 64),
 			frames:   make([]CallFrame, 0, 8),
 			handlers: nil,
-			globals:  vm.globals,
+			globals:  globals,
 			builtins: vm.builtins,
-			modules:  vm.modules,
+			modules:  modules,
 		}
+		sub.stack = append(sub.stack, callee)
 		for _, arg := range task.Args {
 			sub.stack = append(sub.stack, arg)
 		}
-		sub.stack = append(sub.stack, callee)
 		base := len(sub.stack) - len(task.Args) - 1
 		sub.frames = append(sub.frames, CallFrame{
 			Closure: callee,
@@ -113,8 +125,10 @@ func (vm *VM) Peek(distance int) runtime.Value {
 }
 
 func (vm *VM) DefineBuiltin(name string, v runtime.Value) {
+	vm.mu.Lock()
 	vm.builtins[name] = v
 	vm.globals[name] = v
+	vm.mu.Unlock()
 }
 
 func (vm *VM) SetModuleLoader(loader ModuleLoader) {

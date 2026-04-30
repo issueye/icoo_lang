@@ -314,10 +314,10 @@ func (p *Parser) parseSelectCase() *ast.SelectCase {
 		ch := p.parseExpression(PrecLowest)
 		var bindName, okName string
 		p.expect(token.As, "expected 'as' after recv expression")
-		bindTok := p.expect(token.Ident, "expected binding name after 'as'")
+		bindTok := p.expectIdentOrKeyword("binding name")
 		bindName = bindTok.Lexeme
 		if p.match(token.Comma) {
-			okTok := p.expect(token.Ident, "expected second binding name after ','")
+			okTok := p.expectIdentOrKeyword("ok binding name")
 			okName = okTok.Lexeme
 		}
 		body := p.parseBlockStmt()

@@ -69,7 +69,9 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 				}
 				continue
 			}
+			vm.mu.RLock()
 			value, ok := vm.globals[name]
+			vm.mu.RUnlock()
 			if !ok {
 				if raised := vm.raise(runtimeError("undefined global: %s", name)); raised != nil {
 					return nil, raised
@@ -85,7 +87,9 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 				}
 				continue
 			}
+			vm.mu.Lock()
 			vm.globals[name] = vm.Pop()
+			vm.mu.Unlock()
 		case bytecode.OpSetGlobal:
 			name, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
@@ -94,13 +98,16 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 				}
 				continue
 			}
+			vm.mu.Lock()
 			if _, ok := vm.globals[name]; !ok {
+				vm.mu.Unlock()
 				if raised := vm.raise(runtimeError("undefined global: %s", name)); raised != nil {
 					return nil, raised
 				}
 				continue
 			}
 			vm.globals[name] = vm.Peek(0)
+			vm.mu.Unlock()
 		case bytecode.OpAdd:
 			if err := vm.execAdd(); err != nil {
 				if raised := vm.raise(err); raised != nil {

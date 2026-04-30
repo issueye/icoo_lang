@@ -111,7 +111,7 @@ func (p *Parser) expect(tt token.Type, msg string) token.Token {
 
 func (p *Parser) expectIdentOrKeyword(msg string) token.Token {
 	tok := p.current()
-	if tok.Type == token.Ident {
+	if tok.Type == token.Ident || tok.Type == token.Underscore {
 		return p.advance()
 	}
 	if _, isKeyword := token.Keywords[tok.Lexeme]; isKeyword {

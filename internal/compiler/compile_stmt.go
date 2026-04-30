@@ -600,33 +600,6 @@ func (c *Compiler) compileSelectStmt(stmt *ast.SelectStmt) {
 		case ast.SelectElseCaseKind:
 		}
 
-		// Compile case body with bindings
-		c.beginScope()
-
-		switch selCase.Kind {
-		case ast.SelectRecvCaseKind:
-			if selCase.BindName != "_" {
-				c.emit(bytecode.OpGetLocal)
-				c.emitShort(uint16(c.mustResolveLocal(selectResultName)))
-				valProp := c.current.chunk.AddConstant(runtime.StringValue{Value: "value"})
-				c.emit(bytecode.OpGetProperty)
-				c.emitShort(valProp)
-				c.addLocal(selCase.BindName, false)
-			}
-			if selCase.OkName != "" && selCase.OkName != "_" {
-				c.emit(bytecode.OpGetLocal)
-				c.emitShort(uint16(c.mustResolveLocal(selectResultName)))
-				okProp := c.current.chunk.AddConstant(runtime.StringValue{Value: "ok"})
-				c.emit(bytecode.OpGetProperty)
-				c.emitShort(okProp)
-				c.addLocal(selCase.OkName, false)
-			}
-		case ast.SelectSendCaseKind:
-			// No bindings for send case
-		case ast.SelectElseCaseKind:
-			// No bindings for else case
-		}
-
 		c.compileBlockStmt(selCase.Body, false)
 		c.endScope()
 

@@ -99,7 +99,7 @@ func (p *Parser) parseParamList() []ast.Param {
 		return params
 	}
 	for {
-		nameTok := p.expect(token.Ident, "expected parameter name")
+		nameTok := p.expectIdentOrKeyword("parameter name")
 		params = append(params, ast.Param{Name: nameTok.Lexeme, Span_: nameTok.Span})
 		if p.match(token.RParen) {
 			break
