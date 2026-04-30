@@ -1,8 +1,9 @@
 package vm
 
 import (
-	"fmt"
+	"errors"
 
+	"icoo_lang/internal/bytecode"
 	"icoo_lang/internal/runtime"
 )
 
@@ -49,9 +50,9 @@ func (vm *VM) callNative(fn *runtime.NativeFunction, argc int) error {
 	return nil
 }
 
-func (vm *VM) errorToValue(err error) runtime.Value {
+func (vm *VM) errorToValue(err error) *runtime.ErrorValue {
 	if err == nil {
-		return runtime.NullValue{}
+		return &runtime.ErrorValue{}
 	}
 	var errorValue *runtime.ErrorValue
 	if ok := asErrorValue(err, &errorValue); ok && errorValue != nil {
@@ -61,30 +62,51 @@ func (vm *VM) errorToValue(err error) runtime.Value {
 }
 
 func asErrorValue(err error, target **runtime.ErrorValue) bool {
-	matched := false
-	defer func() {
-		if recover() != nil {
-			matched = false
-		}
-	}()
-	if fmt.Sprintf("%T", err) == "*runtime.ErrorValue" {
-		if value, ok := any(err).(*runtime.ErrorValue); ok {
-			*target = value
-			matched = true
-		}
+	if err == nil {
+		return false
 	}
-	return matched
+	return errors.As(err, target)
+}
+
+func (vm *VM) captureStack() []runtime.StackFrame {
+	frames := make([]runtime.StackFrame, 0, len(vm.frames))
+	for i := len(vm.frames) - 1; i >= 0; i-- {
+		frame := vm.frames[i]
+		stackFrame := runtime.StackFrame{Function: "<anonymous>"}
+		if frame.Closure != nil && frame.Closure.Proto != nil {
+			if frame.Closure.Proto.Name != "" {
+				stackFrame.Function = frame.Closure.Proto.Name
+			}
+			if chunk, ok := frame.Closure.Proto.Chunk.(*bytecode.Chunk); ok {
+				ip := frame.IP - 1
+				if ip < 0 {
+					ip = 0
+				}
+				if ip < len(chunk.Lines) {
+					stackFrame.Line = chunk.Lines[ip]
+				}
+			}
+		}
+		if frame.Module != nil {
+			stackFrame.File = frame.Module.Path
+		}
+		frames = append(frames, stackFrame)
+	}
+	return frames
 }
 
 func (vm *VM) raise(err error) error {
-	if len(vm.handlers) == 0 {
-		return err
-	}
 	exc := vm.errorToValue(err)
+	if len(exc.Stack) == 0 {
+		exc.Stack = vm.captureStack()
+	}
+	if len(vm.handlers) == 0 {
+		return exc
+	}
 	handler := vm.handlers[len(vm.handlers)-1]
 	vm.handlers = vm.handlers[:len(vm.handlers)-1]
 	if handler.FrameIndex < 0 || handler.FrameIndex >= len(vm.frames) {
-		return err
+		return exc
 	}
 	vm.frames = vm.frames[:handler.FrameIndex+1]
 	frame := &vm.frames[handler.FrameIndex]

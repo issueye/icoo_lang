@@ -29,6 +29,9 @@ try {
   throw "boom"
 } catch err {
   thrown = err.message
+  if err.stack == "" {
+    panic("expected non-empty throw stack")
+  }
 }
 
 if thrown != "boom" {

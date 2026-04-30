@@ -178,6 +178,73 @@ func TestRuntimeRunSource_UncaughtThrowStillReturnsHostError(t *testing.T) {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err == nil {
 		t.Fatalf("expected uncaught throw to be returned to host")
+	} else {
+		if err.Error() != "boom\n  at __module_init__ (unknown)" {
+			t.Fatalf("unexpected uncaught throw stack: %q", err.Error())
+		}
+	}
+}
+
+func TestRuntimeRunSource_CatchCanReadErrorStack(t *testing.T) {
+	src := `
+let message = ""
+let stack = ""
+
+fn boom() {
+  throw "boom"
+}
+
+try {
+  boom()
+} catch err {
+  message = err.message
+  stack = err.stack
+}
+
+if message != "boom" {
+  panic("unexpected caught throw message")
+}
+if stack == "" {
+  panic("expected non-empty error stack")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected catch stack run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_RethrowPreservesOriginalStack(t *testing.T) {
+	src := `
+let stack = ""
+
+fn inner() {
+  throw "boom"
+}
+
+fn outer() {
+  try {
+    inner()
+  } catch err {
+    throw err
+  }
+}
+
+try {
+  outer()
+} catch err {
+  stack = err.stack
+}
+
+if stack == "" {
+  panic("expected rethrow stack")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected rethrow stack run to succeed, got error: %v", err)
 	}
 }
 

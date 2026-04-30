@@ -164,10 +164,60 @@ func (m *Module) String() string {
 	return "<module " + name + ">"
 }
 
+type StackFrame struct {
+	Function string
+	File     string
+	Line     int
+	Native   bool
+}
+
 type ErrorValue struct {
 	Message string
+	Stack   []StackFrame
 }
 
 func (e *ErrorValue) Kind() ValueKind { return ErrorKind }
 func (e *ErrorValue) String() string  { return e.Message }
-func (e *ErrorValue) Error() string   { return e.Message }
+func (e *ErrorValue) Error() string {
+	if e == nil {
+		return ""
+	}
+	if stack := e.StackString(); stack != "" {
+		return stack
+	}
+	return e.Message
+}
+
+func (e *ErrorValue) StackString() string {
+	if e == nil {
+		return ""
+	}
+	if len(e.Stack) == 0 {
+		return e.Message
+	}
+	var b strings.Builder
+	b.WriteString(e.Message)
+	for _, frame := range e.Stack {
+		b.WriteString("\n  at ")
+		name := frame.Function
+		if name == "" {
+			name = "<anonymous>"
+		}
+		b.WriteString(name)
+		b.WriteString(" (")
+		switch {
+		case frame.Native:
+			b.WriteString("native")
+		case frame.File != "" && frame.Line > 0:
+			b.WriteString(frame.File)
+			b.WriteString(":")
+			b.WriteString(fmt.Sprintf("%d", frame.Line))
+		case frame.File != "":
+			b.WriteString(frame.File)
+		default:
+			b.WriteString("unknown")
+		}
+		b.WriteString(")")
+	}
+	return b.String()
+}

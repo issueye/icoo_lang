@@ -256,6 +256,10 @@ func (vm *VM) execGetProperty(name string) error {
 			vm.Push(runtime.StringValue{Value: value.Message})
 			return nil
 		}
+		if name == "stack" {
+			vm.Push(runtime.StringValue{Value: value.StackString()})
+			return nil
+		}
 		return runtimeError("undefined property: %s", name)
 	case *runtime.ObjectValue:
 		field, ok := value.Fields[name]
