@@ -45,6 +45,10 @@ func (a *Analyzer) visitDecl(decl ast.Decl) {
 		a.visitVarDecl(d)
 	case *ast.FnDecl:
 		a.visitFnDecl(d)
+	case *ast.ImportDecl:
+		a.visitImportDecl(d)
+	case *ast.ExportDecl:
+		a.visitExportDecl(d)
 	}
 }
 
@@ -79,6 +83,18 @@ func (a *Analyzer) visitFnDecl(d *ast.FnDecl) {
 
 	if d.Body != nil {
 		a.visitBlockStmt(d.Body)
+	}
+}
+
+func (a *Analyzer) visitImportDecl(d *ast.ImportDecl) {
+	if !a.scope.Define(Symbol{Name: d.Alias, IsConst: true}) {
+		a.report(d.Span(), "duplicate declaration: "+d.Alias)
+	}
+}
+
+func (a *Analyzer) visitExportDecl(d *ast.ExportDecl) {
+	if d.Decl != nil {
+		a.visitDecl(d.Decl)
 	}
 }
 

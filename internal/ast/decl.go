@@ -43,3 +43,26 @@ func (*FnDecl) decl() {}
 func (d *FnDecl) Span() token.Span {
 	return d.Span_
 }
+
+type ImportDecl struct {
+	Path  string
+	Alias string
+	Span_ token.Span
+}
+
+func (*ImportDecl) node() {}
+func (*ImportDecl) decl() {}
+func (d *ImportDecl) Span() token.Span {
+	return d.Span_
+}
+
+type ExportDecl struct {
+	Decl  Decl
+	Span_ token.Span
+}
+
+func (*ExportDecl) node() {}
+func (*ExportDecl) decl() {}
+func (d *ExportDecl) Span() token.Span {
+	return d.Span_
+}

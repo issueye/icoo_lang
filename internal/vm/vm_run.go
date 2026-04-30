@@ -6,10 +6,21 @@ import (
 )
 
 func (vm *VM) Run(closure *runtime.Closure) (runtime.Value, error) {
+	return vm.RunModule("", closure)
+}
+
+func (vm *VM) RunModule(path string, closure *runtime.Closure) (runtime.Value, error) {
 	vm.frames = vm.frames[:0]
 	vm.stack = vm.stack[:0]
+	module := &runtime.Module{
+		Path:    path,
+		Exports: make(map[string]runtime.Value),
+		Done:    true,
+	}
+	vm.lastModule = module
 	vm.frames = append(vm.frames, CallFrame{
 		Closure: closure,
+		Module:  module,
 		IP:      0,
 		Base:    0,
 	})
@@ -119,6 +130,35 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 				return nil, err
 			}
 			vm.Push(value)
+		case bytecode.OpImportModule:
+			spec, err := vm.readStringConstant(frame, chunk)
+			if err != nil {
+				return nil, err
+			}
+			if vm.loadModule == nil {
+				return nil, runtimeError("module loader is not configured")
+			}
+			importerPath := ""
+			if frame.Module != nil {
+				importerPath = frame.Module.Path
+			}
+			module, err := vm.loadModule(importerPath, spec)
+			if err != nil {
+				return nil, err
+			}
+			vm.Push(module)
+		case bytecode.OpExport:
+			name, err := vm.readStringConstant(frame, chunk)
+			if err != nil {
+				return nil, err
+			}
+			if frame.Module == nil {
+				return nil, runtimeError("export used without module context")
+			}
+			if frame.Module.Exports == nil {
+				frame.Module.Exports = make(map[string]runtime.Value)
+			}
+			frame.Module.Exports[name] = vm.Pop()
 		case bytecode.OpReturn:
 			result := vm.Pop()
 			frameBase := frame.Base

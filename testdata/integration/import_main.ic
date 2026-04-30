@@ -1,0 +1,4 @@
+import "./math.ic" as math
+
+println(math.version)
+println(math.add(2, 5))

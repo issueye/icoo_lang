@@ -6,18 +6,23 @@ import (
 	"icoo_lang/internal/runtime"
 )
 
+type ModuleLoader func(importerPath, spec string) (*runtime.Module, error)
+
 type CallFrame struct {
 	Closure *runtime.Closure
+	Module  *runtime.Module
 	IP      int
 	Base    int
 }
 
 type VM struct {
-	stack    []runtime.Value
-	frames   []CallFrame
-	globals  map[string]runtime.Value
-	builtins map[string]runtime.Value
-	modules  map[string]*runtime.Module
+	stack      []runtime.Value
+	frames     []CallFrame
+	globals    map[string]runtime.Value
+	builtins   map[string]runtime.Value
+	modules    map[string]*runtime.Module
+	loadModule ModuleLoader
+	lastModule *runtime.Module
 }
 
 func New() *VM {
@@ -55,6 +60,18 @@ func (vm *VM) Peek(distance int) runtime.Value {
 func (vm *VM) DefineBuiltin(name string, v runtime.Value) {
 	vm.builtins[name] = v
 	vm.globals[name] = v
+}
+
+func (vm *VM) SetModuleLoader(loader ModuleLoader) {
+	vm.loadModule = loader
+}
+
+func (vm *VM) Frames() []CallFrame {
+	return vm.frames
+}
+
+func (vm *VM) LastModule() *runtime.Module {
+	return vm.lastModule
 }
 
 func runtimeError(format string, args ...any) error {
