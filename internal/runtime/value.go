@@ -105,6 +105,7 @@ func (f *NativeFunction) String() string  { return "<native fn " + f.Name + ">" 
 type FunctionProto struct {
 	Name         string
 	Arity        int
+	Chunk        any
 	LocalCount   int
 	UpvalueCount int
 }
