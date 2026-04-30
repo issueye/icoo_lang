@@ -33,6 +33,10 @@ func (p *Parser) parseStatement() ast.Stmt {
 		return p.parseReturnStmt()
 	case token.Throw:
 		return p.parseThrowStmt()
+	case token.Go:
+		return p.parseGoStmt()
+	case token.Select:
+		return p.parseSelectStmt()
 	default:
 		return p.parseExprStmt()
 	}
@@ -260,5 +264,93 @@ func (p *Parser) parseExprStmt() ast.Stmt {
 	return &ast.ExprStmt{
 		Expr:  expr,
 		Span_: expr.Span(),
+	}
+}
+
+func (p *Parser) parseGoStmt() ast.Stmt {
+	startTok := p.expect(token.Go, "expected 'go'")
+	expr := p.parseExpression(PrecLowest)
+	return &ast.GoStmt{
+		Expr:  expr,
+		Span_: token.Span{Start: startTok.Span.Start, End: expr.Span().End},
+	}
+}
+
+func (p *Parser) parseSelectStmt() ast.Stmt {
+	startTok := p.expect(token.Select, "expected 'select'")
+	p.expect(token.LBrace, "expected '{' after select")
+	cases := make([]ast.SelectCase, 0, 4)
+	end := startTok.Span.End
+	for !p.check(token.RBrace) && !p.atEnd() {
+		selCase := p.parseSelectCase()
+		if selCase != nil {
+			cases = append(cases, *selCase)
+			end = selCase.Span_.End
+		}
+	}
+	endTok := p.expect(token.RBrace, "expected '}' after select cases")
+	_ = endTok
+	return &ast.SelectStmt{
+		Cases: cases,
+		Span_: token.Span{Start: startTok.Span.Start, End: end},
+	}
+}
+
+func (p *Parser) parseSelectCase() *ast.SelectCase {
+	switch {
+	case p.check(token.Else):
+		tok := p.advance()
+		body := p.parseBlockStmt()
+		if body == nil {
+			return nil
+		}
+		return &ast.SelectCase{
+			Kind:  ast.SelectElseCaseKind,
+			Body:  body,
+			Span_: token.Span{Start: tok.Span.Start, End: body.Span().End},
+		}
+	case p.check(token.Recv):
+		tok := p.advance()
+		ch := p.parseExpression(PrecLowest)
+		var bindName, okName string
+		p.expect(token.As, "expected 'as' after recv expression")
+		bindTok := p.expect(token.Ident, "expected binding name after 'as'")
+		bindName = bindTok.Lexeme
+		if p.match(token.Comma) {
+			okTok := p.expect(token.Ident, "expected second binding name after ','")
+			okName = okTok.Lexeme
+		}
+		body := p.parseBlockStmt()
+		if body == nil {
+			return nil
+		}
+		return &ast.SelectCase{
+			Kind:     ast.SelectRecvCaseKind,
+			Channel:  ch,
+			BindName: bindName,
+			OkName:   okName,
+			Body:     body,
+			Span_:    token.Span{Start: tok.Span.Start, End: body.Span().End},
+		}
+	case p.check(token.Send):
+		tok := p.advance()
+		ch := p.parseExpression(PrecLowest)
+		p.expect(token.Comma, "expected ',' after send channel")
+		val := p.parseExpression(PrecLowest)
+		body := p.parseBlockStmt()
+		if body == nil {
+			return nil
+		}
+		return &ast.SelectCase{
+			Kind:    ast.SelectSendCaseKind,
+			Channel: ch,
+			Value:   val,
+			Body:    body,
+			Span_:   token.Span{Start: tok.Span.Start, End: body.Span().End},
+		}
+	default:
+		p.errorAtCurrent("expected 'recv', 'send', or 'else' in select")
+		p.synchronize()
+		return nil
 	}
 }

@@ -118,6 +118,98 @@ func (vm *VM) execCompare(op bytecode.Opcode) error {
 func (vm *VM) execGetProperty(name string) error {
 	obj := vm.Pop()
 	switch value := obj.(type) {
+	case *runtime.ChannelValue:
+		switch name {
+		case "send":
+			vm.Push(&runtime.NativeFunction{
+				Name:  "channel.send",
+				Arity: 1,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					if value.IsClosed() {
+						return runtime.NullValue{}, runtimeError("send on closed channel")
+					}
+					value.Send(args[0])
+					return runtime.NullValue{}, nil
+				},
+			})
+			return nil
+		case "recv":
+			vm.Push(&runtime.NativeFunction{
+				Name:  "channel.recv",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					val, ok := value.Recv()
+					if !ok {
+						return runtime.NullValue{}, runtimeError("recv on closed channel")
+					}
+					return val, nil
+				},
+			})
+			return nil
+		case "trySend":
+			vm.Push(&runtime.NativeFunction{
+				Name:  "channel.trySend",
+				Arity: 1,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					ok := value.TrySend(args[0])
+					return runtime.BoolValue{Value: ok}, nil
+				},
+			})
+			return nil
+		case "tryRecv":
+			vm.Push(&runtime.NativeFunction{
+				Name:  "channel.tryRecv",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					val, ok := value.TryRecv()
+					return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+						"value": val,
+						"ok":    runtime.BoolValue{Value: ok},
+					}}, nil
+				},
+			})
+			return nil
+		case "close":
+			vm.Push(&runtime.NativeFunction{
+				Name:  "channel.close",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					value.Close()
+					return runtime.NullValue{}, nil
+				},
+			})
+			return nil
+		case "iter":
+			vm.Push(&runtime.NativeFunction{
+				Name:  "channel.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					return value, nil
+				},
+			})
+			return nil
+		case "next":
+			vm.Push(&runtime.NativeFunction{
+				Name:  "channel.next",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					v, ok := value.Recv()
+					result := &runtime.ObjectValue{Fields: map[string]runtime.Value{
+						"key":   runtime.NullValue{},
+						"value": v,
+						"item":  v,
+						"done":  runtime.BoolValue{Value: !ok},
+					}}
+					if !ok {
+						result.Fields["value"] = runtime.NullValue{}
+						result.Fields["item"] = runtime.NullValue{}
+					}
+					return result, nil
+				},
+			})
+			return nil
+		}
+		return runtimeError("undefined channel property: %s", name)
 	case runtime.StringValue:
 		if name == "iter" {
 			vm.Push(&runtime.NativeFunction{
@@ -445,4 +537,69 @@ func numberResult(left, right runtime.Value, value float64) runtime.Value {
 		return runtime.IntValue{Value: int64(value)}
 	}
 	return runtime.FloatValue{Value: value}
+}
+
+func (vm *VM) execChanSend() error {
+	value := vm.Pop()
+	ch := vm.Pop()
+	channel, ok := ch.(*runtime.ChannelValue)
+	if !ok {
+		return runtimeError("value is not a channel")
+	}
+	if !channel.Send(value) {
+		return runtimeError("send on closed channel")
+	}
+	vm.Push(runtime.NullValue{})
+	return nil
+}
+
+func (vm *VM) execChanRecv() error {
+	ch := vm.Pop()
+	channel, ok := ch.(*runtime.ChannelValue)
+	if !ok {
+		return runtimeError("value is not a channel")
+	}
+	val, ok := channel.Recv()
+	if !ok {
+		return runtimeError("recv on closed channel")
+	}
+	vm.Push(val)
+	return nil
+}
+
+func (vm *VM) execChanTrySend() error {
+	value := vm.Pop()
+	ch := vm.Pop()
+	channel, ok := ch.(*runtime.ChannelValue)
+	if !ok {
+		return runtimeError("value is not a channel")
+	}
+	success := channel.TrySend(value)
+	vm.Push(runtime.BoolValue{Value: success})
+	return nil
+}
+
+func (vm *VM) execChanTryRecv() error {
+	ch := vm.Pop()
+	channel, ok := ch.(*runtime.ChannelValue)
+	if !ok {
+		return runtimeError("value is not a channel")
+	}
+	val, success := channel.TryRecv()
+	vm.Push(&runtime.ObjectValue{Fields: map[string]runtime.Value{
+		"value": val,
+		"ok":    runtime.BoolValue{Value: success},
+	}})
+	return nil
+}
+
+func (vm *VM) execChanClose() error {
+	ch := vm.Pop()
+	channel, ok := ch.(*runtime.ChannelValue)
+	if !ok {
+		return runtimeError("value is not a channel")
+	}
+	channel.Close()
+	vm.Push(runtime.NullValue{})
+	return nil
 }

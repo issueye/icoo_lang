@@ -84,7 +84,7 @@ func (p *Parser) parseInfix(left ast.Expr, precedence Precedence) ast.Expr {
 	case token.LParen:
 		return p.finishCall(left, tok)
 	case token.Dot:
-		nameTok := p.expect(token.Ident, "expected property name after '.'")
+		nameTok := p.expectIdentOrKeyword("property name")
 		return &ast.MemberExpr{Object: left, Name: nameTok.Lexeme, Span_: token.Span{Start: left.Span().Start, End: nameTok.Span.End}}
 	case token.LBracket:
 		index := p.parseExpression(PrecLowest)
@@ -130,8 +130,8 @@ func (p *Parser) parseObjectLiteral() ast.Expr {
 	fields := make([]ast.ObjectField, 0, 4)
 	if !p.check(token.RBrace) {
 		for {
-			nameTok := p.expect(token.Ident, "expected object field name")
-			p.expect(token.Colon, "expected ':' after object field name")
+		nameTok := p.expectIdentOrKeyword("object field name")
+		p.expect(token.Colon, "expected ':' after object field name")
 			value := p.parseExpression(PrecLowest)
 			fields = append(fields, ast.ObjectField{Name: nameTok.Lexeme, Value: value, Span_: token.Span{Start: nameTok.Span.Start, End: value.Span().End}})
 			if !p.match(token.Comma) {

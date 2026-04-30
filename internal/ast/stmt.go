@@ -160,3 +160,43 @@ func (*ContinueStmt) stmt() {}
 func (s *ContinueStmt) Span() token.Span {
 	return s.Span_
 }
+
+type GoStmt struct {
+	Expr  Expr
+	Span_ token.Span
+}
+
+func (*GoStmt) node() {}
+func (*GoStmt) stmt() {}
+func (s *GoStmt) Span() token.Span {
+	return s.Span_
+}
+
+type SelectCaseKind int
+
+const (
+	SelectRecvCaseKind SelectCaseKind = iota
+	SelectSendCaseKind
+	SelectElseCaseKind
+)
+
+type SelectCase struct {
+	Kind     SelectCaseKind
+	Channel  Expr
+	Value    Expr
+	BindName string
+	OkName   string
+	Body     *BlockStmt
+	Span_    token.Span
+}
+
+type SelectStmt struct {
+	Cases []SelectCase
+	Span_ token.Span
+}
+
+func (*SelectStmt) node() {}
+func (*SelectStmt) stmt() {}
+func (s *SelectStmt) Span() token.Span {
+	return s.Span_
+}

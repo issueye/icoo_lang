@@ -63,6 +63,8 @@ const (
 	OpChanTrySend
 	OpChanTryRecv
 	OpChanClose
+
+	OpGo
 )
 
 func (op Opcode) String() string {
@@ -167,6 +169,8 @@ func (op Opcode) String() string {
 		return "OpChanTryRecv"
 	case OpChanClose:
 		return "OpChanClose"
+	case OpGo:
+		return "OpGo"
 	default:
 		return fmt.Sprintf("Opcode(%d)", byte(op))
 	}

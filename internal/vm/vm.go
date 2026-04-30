@@ -2,7 +2,10 @@ package vm
 
 import (
 	"fmt"
+	"os"
+	"sync"
 
+	"icoo_lang/internal/concurrency"
 	"icoo_lang/internal/runtime"
 )
 
@@ -22,14 +25,18 @@ type ExceptionHandler struct {
 }
 
 type VM struct {
-	stack      []runtime.Value
-	frames     []CallFrame
-	handlers   []ExceptionHandler
-	globals    map[string]runtime.Value
-	builtins   map[string]runtime.Value
-	modules    map[string]*runtime.Module
+	stack    []runtime.Value
+	frames   []CallFrame
+	handlers []ExceptionHandler
+	globals  map[string]runtime.Value
+	builtins map[string]runtime.Value
+	modules  map[string]*runtime.Module
+
 	loadModule ModuleLoader
 	lastModule *runtime.Module
+
+	pool     *concurrency.GoroutinePool
+	poolOnce sync.Once
 }
 
 func New() *VM {
@@ -42,6 +49,46 @@ func New() *VM {
 		modules:  make(map[string]*runtime.Module),
 	}
 	return vm
+}
+
+func (vm *VM) Pool() *concurrency.GoroutinePool {
+	vm.poolOnce.Do(func() {
+		vm.pool = concurrency.NewPool(8, vm.goExecutor)
+	})
+	return vm.pool
+}
+
+func (vm *VM) goExecutor(task *concurrency.GoTask) {
+	switch callee := task.Callee.(type) {
+	case *runtime.Closure:
+		sub := &VM{
+			stack:    make([]runtime.Value, 0, 64),
+			frames:   make([]CallFrame, 0, 8),
+			handlers: nil,
+			globals:  vm.globals,
+			builtins: vm.builtins,
+			modules:  vm.modules,
+		}
+		for _, arg := range task.Args {
+			sub.stack = append(sub.stack, arg)
+		}
+		sub.stack = append(sub.stack, callee)
+		base := len(sub.stack) - len(task.Args) - 1
+		sub.frames = append(sub.frames, CallFrame{
+			Closure: callee,
+			IP:      0,
+			Base:    base,
+		})
+		_, err := sub.runLoop()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "goroutine: %v\n", err)
+		}
+	case *runtime.NativeFunction:
+		_, err := callee.Fn(task.Args)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "goroutine: %v\n", err)
+		}
+	}
 }
 
 func (vm *VM) Push(v runtime.Value) {

@@ -295,6 +295,55 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 			if raised := vm.raise(err); raised != nil {
 				return nil, raised
 			}
+		case bytecode.OpGo:
+			argc := int(vm.readByte(frame, chunk))
+			callee := vm.Peek(argc)
+			args := make([]runtime.Value, argc)
+			start := len(vm.stack) - argc
+			for i := 0; i < argc; i++ {
+				args[i] = vm.stack[start+i]
+			}
+			vm.stack = vm.stack[:start-1]
+			switch fn := callee.(type) {
+			case *runtime.Closure:
+				vm.Pool().Submit(fn, args)
+			case *runtime.NativeFunction:
+				vm.Pool().Submit(fn, args)
+			default:
+				if raised := vm.raise(runtimeError("go requires a callable value, got %s", runtime.KindName(callee))); raised != nil {
+					return nil, raised
+				}
+			}
+		case bytecode.OpChanSend:
+			if err := vm.execChanSend(); err != nil {
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+			}
+		case bytecode.OpChanRecv:
+			if err := vm.execChanRecv(); err != nil {
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+			}
+		case bytecode.OpChanTrySend:
+			if err := vm.execChanTrySend(); err != nil {
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+			}
+		case bytecode.OpChanTryRecv:
+			if err := vm.execChanTryRecv(); err != nil {
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+			}
+		case bytecode.OpChanClose:
+			if err := vm.execChanClose(); err != nil {
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+			}
 		default:
 			return nil, runtimeError("unsupported opcode: %s", op.String())
 		}

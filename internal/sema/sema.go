@@ -144,6 +144,12 @@ func (a *Analyzer) visitStmt(stmt ast.Stmt) {
 		if a.loopDepth == 0 {
 			a.report(s.Span(), "continue used outside loop")
 		}
+	case *ast.GoStmt:
+		if s.Expr != nil {
+			a.visitExpr(s.Expr)
+		}
+	case *ast.SelectStmt:
+		a.visitSelectStmt(s)
 	}
 }
 
@@ -217,6 +223,39 @@ func (a *Analyzer) visitMatchStmt(stmt *ast.MatchStmt) {
 		}
 		if arm.Body != nil {
 			a.visitNestedBlockStmt(arm.Body)
+		}
+	}
+}
+
+func (a *Analyzer) visitSelectStmt(stmt *ast.SelectStmt) {
+	hasDefault := false
+	for i, selCase := range stmt.Cases {
+		if selCase.Kind == ast.SelectElseCaseKind {
+			if hasDefault {
+				a.report(selCase.Span_, "duplicate else/default case in select")
+			}
+			if i != len(stmt.Cases)-1 {
+				a.report(selCase.Span_, "else/default case must be last in select")
+			}
+			hasDefault = true
+		}
+		if selCase.Channel != nil {
+			a.visitExpr(selCase.Channel)
+		}
+		if selCase.Value != nil {
+			a.visitExpr(selCase.Value)
+		}
+		if selCase.Body != nil {
+			prevScope := a.scope
+			a.scope = NewScope(prevScope)
+			if selCase.BindName != "" && selCase.BindName != "_" {
+				a.scope.Define(Symbol{Name: selCase.BindName})
+			}
+			if selCase.OkName != "" && selCase.OkName != "_" {
+				a.scope.Define(Symbol{Name: selCase.OkName})
+			}
+			a.visitBlockStmt(selCase.Body)
+			a.scope = prevScope
 		}
 	}
 }

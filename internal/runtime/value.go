@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"strings"
+	"sync"
 )
 
 type ValueKind uint8
@@ -162,6 +163,89 @@ func (m *Module) String() string {
 		name = m.Name
 	}
 	return "<module " + name + ">"
+}
+
+type ChannelValue struct {
+	ch     chan Value
+	closed bool
+	mu     sync.Mutex
+}
+
+func NewChannelValue(size int) *ChannelValue {
+	if size < 0 {
+		size = 0
+	}
+	return &ChannelValue{ch: make(chan Value, size)}
+}
+
+func (c *ChannelValue) Kind() ValueKind { return ChannelKind }
+func (c *ChannelValue) String() string {
+	return fmt.Sprintf("<channel %d/%d>", len(c.ch), cap(c.ch))
+}
+
+func (c *ChannelValue) Send(v Value) bool {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return false
+	}
+	c.mu.Unlock()
+	c.ch <- v
+	return true
+}
+
+func (c *ChannelValue) Recv() (Value, bool) {
+	v, ok := <-c.ch
+	if !ok {
+		return NullValue{}, false
+	}
+	return v, true
+}
+
+func (c *ChannelValue) TrySend(v Value) bool {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return false
+	}
+	c.mu.Unlock()
+	select {
+	case c.ch <- v:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *ChannelValue) TryRecv() (Value, bool) {
+	select {
+	case v, ok := <-c.ch:
+		if !ok {
+			return NullValue{}, false
+		}
+		return v, true
+	default:
+		return NullValue{}, false
+	}
+}
+
+func (c *ChannelValue) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.closed {
+		c.closed = true
+		close(c.ch)
+	}
+}
+
+func (c *ChannelValue) IsClosed() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
+}
+
+func (c *ChannelValue) RawChannel() chan Value {
+	return c.ch
 }
 
 type StackFrame struct {

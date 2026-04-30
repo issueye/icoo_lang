@@ -1,0 +1,110 @@
+fn testChanOps() {
+  let ch = chan(2)
+  ch.send(10)
+  ch.send(20)
+  let a = ch.recv()
+  let b = ch.recv()
+  if a + b != 30 {
+    panic("chan ops failed")
+  }
+  println("chan ops: ok")
+}
+
+fn testTryOps() {
+  let ch = chan(1)
+  let ok = ch.trySend(5)
+  if !ok {
+    panic("trySend failed")
+  }
+  let result = ch.tryRecv()
+  if !result.ok {
+    panic("tryRecv failed")
+  }
+  if result.value != 5 {
+    panic("tryRecv wrong value")
+  }
+  let empty = ch.tryRecv()
+  if empty.ok {
+    panic("tryRecv should fail on empty")
+  }
+  println("try ops: ok")
+}
+
+fn testGoStmt() {
+  let ch = chan(1)
+  go fn() {
+    ch.send(99)
+  }()
+  let v = ch.recv()
+  if v != 99 {
+    panic("go stmt failed")
+  }
+  println("go stmt: ok")
+}
+
+fn testSelectRecv() {
+  let ch = chan(1)
+  ch.send(42)
+  let result = 0
+  select {
+    recv ch as v {
+      result = v
+    }
+  }
+  if result != 42 {
+    panic("select recv failed")
+  }
+  println("select recv: ok")
+}
+
+fn testSelectElse() {
+  let ch = chan(1)
+  let result = 0
+  select {
+    recv ch as v {
+      result = 1
+    }
+    else {
+      result = 99
+    }
+  }
+  if result != 99 {
+    panic("select else failed")
+  }
+  println("select else: ok")
+}
+
+fn testProducerConsumer() {
+  let ch = chan(3)
+  let done = chan(1)
+
+  go fn() {
+    let nums = [1, 2, 3, 4, 5]
+    for num in nums {
+      ch.send(num)
+    }
+    ch.close()
+  }()
+
+  go fn() {
+    let s = 0
+    for v in ch {
+      s = s + v
+    }
+    done.send(s)
+  }()
+
+  let sum = done.recv()
+  if sum != 15 {
+    panic("producer consumer sum failed")
+  }
+  println("producer-consumer: ok")
+}
+
+testChanOps()
+testTryOps()
+testGoStmt()
+testSelectRecv()
+testSelectElse()
+testProducerConsumer()
+println("ALL TESTS PASSED")

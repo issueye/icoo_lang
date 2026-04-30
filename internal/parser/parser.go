@@ -109,6 +109,18 @@ func (p *Parser) expect(tt token.Type, msg string) token.Token {
 	return token.Token{Type: token.Illegal, Span: p.current().Span}
 }
 
+func (p *Parser) expectIdentOrKeyword(msg string) token.Token {
+	tok := p.current()
+	if tok.Type == token.Ident {
+		return p.advance()
+	}
+	if _, isKeyword := token.Keywords[tok.Lexeme]; isKeyword {
+		return p.advance()
+	}
+	p.errorAtCurrent("expected " + msg + " after '.'")
+	return token.Token{Type: token.Illegal, Span: tok.Span}
+}
+
 func (p *Parser) atEnd() bool {
 	return p.current().Type == token.EOF
 }
@@ -119,7 +131,7 @@ func (p *Parser) synchronize() {
 			return
 		}
 		switch p.current().Type {
-		case token.Const, token.Let, token.Fn, token.If, token.While, token.Return, token.Try, token.Throw, token.Finally:
+		case token.Const, token.Let, token.Fn, token.If, token.While, token.Return, token.Try, token.Throw, token.Finally, token.Go, token.Select:
 			return
 		case token.RBrace:
 			return

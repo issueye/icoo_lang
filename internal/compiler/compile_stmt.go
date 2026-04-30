@@ -38,6 +38,10 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 			c.compileBreakStmt(s)
 		case *ast.ContinueStmt:
 			c.compileContinueStmt(s)
+		case *ast.GoStmt:
+			c.compileGoStmt(s)
+		case *ast.SelectStmt:
+			c.compileSelectStmt(s)
 		default:
 			c.errorf("unsupported statement")
 		}
@@ -483,4 +487,162 @@ func (c *Compiler) mustResolveLocal(name string) int {
 		return 0
 	}
 	return ref.Index
+}
+
+func (c *Compiler) compileGoStmt(stmt *ast.GoStmt) {
+	switch call := stmt.Expr.(type) {
+	case *ast.CallExpr:
+		c.compileExpr(call.Callee)
+		for _, arg := range call.Args {
+			c.compileExpr(arg)
+		}
+		c.emit(bytecode.OpGo)
+		c.emitByte(byte(len(call.Args)))
+	default:
+		c.compileExpr(stmt.Expr)
+		c.emit(bytecode.OpGo)
+		c.emitByte(0)
+	}
+}
+
+func (c *Compiler) compileSelectStmt(stmt *ast.SelectStmt) {
+	selectResultName := c.syntheticName("select")
+	c.beginScope()
+	defer c.endScope()
+
+	// Push __select builtin first (will be callee below cases array)
+	selectNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "__select"})
+	c.emit(bytecode.OpGetGlobal)
+	c.emitShort(selectNameIdx)
+
+	// Build cases array for __select
+	for _, selCase := range stmt.Cases {
+		switch selCase.Kind {
+		case ast.SelectRecvCaseKind:
+			c.emitStringConst("kind")
+			c.emitStringConst("recv")
+			c.emitStringConst("chan")
+			c.compileExpr(selCase.Channel)
+			c.emitStringConst("hasOk")
+			if selCase.OkName != "" {
+				c.emitInt(1)
+			} else {
+				c.emitInt(0)
+			}
+			c.emit(bytecode.OpObject)
+			c.emitShort(3)
+		case ast.SelectSendCaseKind:
+			c.emitStringConst("kind")
+			c.emitStringConst("send")
+			c.emitStringConst("chan")
+			c.compileExpr(selCase.Channel)
+			c.emitStringConst("value")
+			c.compileExpr(selCase.Value)
+			c.emit(bytecode.OpObject)
+			c.emitShort(3)
+		case ast.SelectElseCaseKind:
+			c.emitStringConst("kind")
+			c.emitStringConst("else")
+			c.emit(bytecode.OpObject)
+			c.emitShort(1)
+		}
+	}
+
+	// Build array
+	c.emit(bytecode.OpArray)
+	c.emitShort(uint16(len(stmt.Cases)))
+
+	// Call __select(cases): callee is below array on stack
+	c.emit(bytecode.OpCall)
+	c.emitByte(1)
+
+	// result = {index, value, ok} on stack
+	c.addLocal(selectResultName, true)
+
+	// Dispatch: for each case, check index and jump to body
+	endJumps := make([]int, 0, len(stmt.Cases))
+	for i, selCase := range stmt.Cases {
+		nextCaseJump := -1
+		if i < len(stmt.Cases)-1 {
+			c.emit(bytecode.OpGetLocal)
+			c.emitShort(uint16(c.mustResolveLocal(selectResultName)))
+			idxProp := c.current.chunk.AddConstant(runtime.StringValue{Value: "index"})
+			c.emit(bytecode.OpGetProperty)
+			c.emitShort(idxProp)
+			c.emitInt(int64(i))
+			c.emit(bytecode.OpEqual)
+			nextCaseJump = c.emitJump(bytecode.OpJumpIfFalse)
+			c.emit(bytecode.OpPop)
+		}
+
+		// Compile case body with bindings
+		c.beginScope()
+
+		switch selCase.Kind {
+		case ast.SelectRecvCaseKind:
+			if selCase.BindName != "_" {
+				c.emit(bytecode.OpGetLocal)
+				c.emitShort(uint16(c.mustResolveLocal(selectResultName)))
+				valProp := c.current.chunk.AddConstant(runtime.StringValue{Value: "value"})
+				c.emit(bytecode.OpGetProperty)
+				c.emitShort(valProp)
+				c.addLocal(selCase.BindName, false)
+			}
+			if selCase.OkName != "" && selCase.OkName != "_" {
+				c.emit(bytecode.OpGetLocal)
+				c.emitShort(uint16(c.mustResolveLocal(selectResultName)))
+				okProp := c.current.chunk.AddConstant(runtime.StringValue{Value: "ok"})
+				c.emit(bytecode.OpGetProperty)
+				c.emitShort(okProp)
+				c.addLocal(selCase.OkName, false)
+			}
+		case ast.SelectSendCaseKind:
+		case ast.SelectElseCaseKind:
+		}
+
+		// Compile case body with bindings
+		c.beginScope()
+
+		switch selCase.Kind {
+		case ast.SelectRecvCaseKind:
+			if selCase.BindName != "_" {
+				c.emit(bytecode.OpGetLocal)
+				c.emitShort(uint16(c.mustResolveLocal(selectResultName)))
+				valProp := c.current.chunk.AddConstant(runtime.StringValue{Value: "value"})
+				c.emit(bytecode.OpGetProperty)
+				c.emitShort(valProp)
+				c.addLocal(selCase.BindName, false)
+			}
+			if selCase.OkName != "" && selCase.OkName != "_" {
+				c.emit(bytecode.OpGetLocal)
+				c.emitShort(uint16(c.mustResolveLocal(selectResultName)))
+				okProp := c.current.chunk.AddConstant(runtime.StringValue{Value: "ok"})
+				c.emit(bytecode.OpGetProperty)
+				c.emitShort(okProp)
+				c.addLocal(selCase.OkName, false)
+			}
+		case ast.SelectSendCaseKind:
+			// No bindings for send case
+		case ast.SelectElseCaseKind:
+			// No bindings for else case
+		}
+
+		c.compileBlockStmt(selCase.Body, false)
+		c.endScope()
+
+		endJumps = append(endJumps, c.emitJump(bytecode.OpJump))
+
+		if nextCaseJump >= 0 {
+			c.patchJump(nextCaseJump)
+			c.emit(bytecode.OpPop)
+		}
+	}
+
+	for _, jump := range endJumps {
+		c.patchJump(jump)
+	}
+}
+
+func (c *Compiler) emitStringConst(s string) {
+	c.emitConstant(runtime.StringValue{Value: s})
 }
