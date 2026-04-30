@@ -225,13 +225,21 @@ func (c *Compiler) compileTryExpr(e *ast.TryExpr) {
 	c.emit(bytecode.OpCall)
 	c.emitByte(1)
 
-	// If true (is error), return the error
-	errorJump := c.emitJump(bytecode.OpJumpIfTrue)
+	// If the value is not an error, keep the original value as the expression result.
+	okJump := c.emitJump(bytecode.OpJumpIfFalse)
 	c.emit(bytecode.OpPop)
+
+	// ErrorValue propagates as an early return from the current function.
 	c.emit(bytecode.OpGetLocal)
 	c.emitShort(uint16(trySlot))
-	c.emit(bytecode.OpReturn)
-	c.patchJump(errorJump)
+	if ctx := c.currentFinallyContext(-1); ctx != nil {
+		c.emitExitThroughFinally(ctx, ExitActionReturn, -1, 0, -1, true)
+	} else {
+		c.emitExceptionScopeCleanup(-1)
+		c.emit(bytecode.OpReturn)
+	}
+
+	c.patchJump(okJump)
 	c.emit(bytecode.OpPop)
 
 	c.current.locals = c.current.locals[:len(c.current.locals)-1]
