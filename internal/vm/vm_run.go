@@ -13,6 +13,7 @@ func (vm *VM) RunModule(path string, closure *runtime.Closure) (runtime.Value, e
 	vm.frames = vm.frames[:0]
 	vm.stack = vm.stack[:0]
 	vm.handlers = vm.handlers[:0]
+	vm.openUpvalues = make(map[int]*runtime.Upvalue)
 	module := &runtime.Module{
 		Path:    path,
 		Exports: make(map[string]runtime.Value),
@@ -168,7 +169,69 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 				}
 				continue
 			}
-			vm.Push(value)
+			template, ok := value.(*runtime.Closure)
+			if !ok {
+				if raised := vm.raise(runtimeError("closure constant is not a closure")); raised != nil {
+					return nil, raised
+				}
+				continue
+			}
+			closure := &runtime.Closure{Proto: template.Proto}
+			upvalueCount := closure.Proto.UpvalueCount
+			if upvalueCount > 0 {
+				closure.Upvalues = make([]*runtime.Upvalue, upvalueCount)
+				for i := 0; i < upvalueCount; i++ {
+					isLocal := vm.readByte(frame, chunk)
+					uvIdx := int(vm.readByte(frame, chunk))
+					if isLocal == 1 {
+						closure.Upvalues[i] = vm.captureUpvalue(frame.Base + uvIdx)
+					} else {
+						currentClosure := frame.Closure
+						if currentClosure == nil || uvIdx >= len(currentClosure.Upvalues) {
+							if raised := vm.raise(runtimeError("invalid upvalue reference")); raised != nil {
+								return nil, raised
+							}
+							continue
+						}
+						closure.Upvalues[i] = currentClosure.Upvalues[uvIdx]
+					}
+				}
+			}
+			vm.Push(closure)
+		case bytecode.OpGetUpvalue:
+			uvIdx := int(vm.readShort(frame, chunk))
+			if frame.Closure == nil || uvIdx >= len(frame.Closure.Upvalues) {
+				if raised := vm.raise(runtimeError("invalid upvalue index")); raised != nil {
+					return nil, raised
+				}
+				continue
+			}
+			vm.Push(frame.Closure.Upvalues[uvIdx].Get())
+		case bytecode.OpSetUpvalue:
+			uvIdx := int(vm.readShort(frame, chunk))
+			if frame.Closure == nil || uvIdx >= len(frame.Closure.Upvalues) {
+				if raised := vm.raise(runtimeError("invalid upvalue index")); raised != nil {
+					return nil, raised
+				}
+				continue
+			}
+			frame.Closure.Upvalues[uvIdx].Set(vm.Peek(0))
+		case bytecode.OpCloseUpvalue:
+			uvIdx := int(vm.readShort(frame, chunk))
+			if frame.Closure == nil || uvIdx >= len(frame.Closure.Upvalues) {
+				continue
+			}
+			uv := frame.Closure.Upvalues[uvIdx]
+			if uv.Location != nil {
+				uv.Closed = *uv.Location
+				for slot, openUV := range vm.openUpvalues {
+					if openUV == uv {
+						delete(vm.openUpvalues, slot)
+						break
+					}
+				}
+				uv.Location = nil
+			}
 		case bytecode.OpImportModule:
 			spec, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
@@ -216,6 +279,7 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 		case bytecode.OpReturn:
 			result := vm.Pop()
 			frameBase := frame.Base
+			vm.closeUpvalues(frameBase)
 			vm.frames = vm.frames[:len(vm.frames)-1]
 			for len(vm.handlers) > 0 && vm.handlers[len(vm.handlers)-1].FrameIndex >= len(vm.frames) {
 				vm.handlers = vm.handlers[:len(vm.handlers)-1]

@@ -136,8 +136,29 @@ type FunctionProto struct {
 	UpvalueCount int
 }
 
+type Upvalue struct {
+	Location *Value
+	Closed   Value
+}
+
+func (uv *Upvalue) Get() Value {
+	if uv.Location != nil {
+		return *uv.Location
+	}
+	return uv.Closed
+}
+
+func (uv *Upvalue) Set(v Value) {
+	if uv.Location != nil {
+		*uv.Location = v
+	} else {
+		uv.Closed = v
+	}
+}
+
 type Closure struct {
-	Proto *FunctionProto
+	Proto    *FunctionProto
+	Upvalues []*Upvalue
 }
 
 func (c *Closure) Kind() ValueKind { return ClosureKind }

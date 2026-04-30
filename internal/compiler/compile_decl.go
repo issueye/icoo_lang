@@ -55,10 +55,14 @@ func (c *Compiler) compileFnDecl(d *ast.FnDecl) {
 	child.proto.LocalCount = len(child.locals)
 	c.current = prev
 
-	protoValue := &runtime.Closure{Proto: child.proto}
-	constIdx := c.current.chunk.AddConstant(protoValue)
-	c.emit(bytecode.OpClosure)
-	c.emitShort(constIdx)
+	if len(child.upvalues) > 0 {
+		c.compileClosureWiring(child)
+	} else {
+		protoValue := &runtime.Closure{Proto: child.proto}
+		constIdx := c.current.chunk.AddConstant(protoValue)
+		c.emit(bytecode.OpClosure)
+		c.emitShort(constIdx)
+	}
 
 	if c.current.scopeDepth > 0 {
 		c.addLocal(d.Name, true)

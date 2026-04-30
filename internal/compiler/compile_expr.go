@@ -103,6 +103,11 @@ func (c *Compiler) compileIdentExpr(e *ast.IdentExpr) {
 		c.emitShort(uint16(ref.Index))
 		return
 	}
+	if ref.Kind == VarUpvalue {
+		c.emit(bytecode.OpGetUpvalue)
+		c.emitShort(uint16(ref.Index))
+		return
+	}
 	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: ref.Name})
 	c.emit(bytecode.OpGetGlobal)
 	c.emitShort(nameIdx)
@@ -115,6 +120,11 @@ func (c *Compiler) compileAssignExpr(e *ast.AssignExpr) {
 		ref, _ := c.resolve(target.Name)
 		if ref.Kind == VarLocal {
 			c.emit(bytecode.OpSetLocal)
+			c.emitShort(uint16(ref.Index))
+			return
+		}
+		if ref.Kind == VarUpvalue {
+			c.emit(bytecode.OpSetUpvalue)
 			c.emitShort(uint16(ref.Index))
 			return
 		}
@@ -181,7 +191,11 @@ func (c *Compiler) compileFnExprExpr(e *ast.FnExpr) {
 	child.proto.LocalCount = len(child.locals)
 	c.current = prev
 
-	constIdx := c.current.chunk.AddConstant(&runtime.Closure{Proto: child.proto})
-	c.emit(bytecode.OpClosure)
-	c.emitShort(constIdx)
+	if len(child.upvalues) > 0 {
+		c.compileClosureWiring(child)
+	} else {
+		constIdx := c.current.chunk.AddConstant(&runtime.Closure{Proto: child.proto})
+		c.emit(bytecode.OpClosure)
+		c.emitShort(constIdx)
+	}
 }

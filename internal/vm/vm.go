@@ -32,6 +32,8 @@ type VM struct {
 	builtins map[string]runtime.Value
 	modules  map[string]*runtime.Module
 
+	openUpvalues map[int]*runtime.Upvalue
+
 	mu sync.RWMutex
 
 	loadModule ModuleLoader
@@ -43,12 +45,13 @@ type VM struct {
 
 func New() *VM {
 	vm := &VM{
-		stack:    make([]runtime.Value, 0, 256),
-		frames:   make([]CallFrame, 0, 64),
-		handlers: make([]ExceptionHandler, 0, 16),
-		globals:  make(map[string]runtime.Value),
-		builtins: make(map[string]runtime.Value),
-		modules:  make(map[string]*runtime.Module),
+		stack:        make([]runtime.Value, 0, 256),
+		frames:       make([]CallFrame, 0, 64),
+		handlers:     make([]ExceptionHandler, 0, 16),
+		globals:      make(map[string]runtime.Value),
+		builtins:     make(map[string]runtime.Value),
+		modules:      make(map[string]*runtime.Module),
+		openUpvalues: make(map[int]*runtime.Upvalue),
 	}
 	return vm
 }
@@ -145,4 +148,23 @@ func (vm *VM) LastModule() *runtime.Module {
 
 func runtimeError(format string, args ...any) error {
 	return fmt.Errorf(format, args...)
+}
+
+func (vm *VM) captureUpvalue(slot int) *runtime.Upvalue {
+	if uv, ok := vm.openUpvalues[slot]; ok {
+		return uv
+	}
+	uv := &runtime.Upvalue{Location: &vm.stack[slot]}
+	vm.openUpvalues[slot] = uv
+	return uv
+}
+
+func (vm *VM) closeUpvalues(fromSlot int) {
+	for slot, uv := range vm.openUpvalues {
+		if slot >= fromSlot && uv.Location != nil {
+			uv.Closed = *uv.Location
+			uv.Location = nil
+			delete(vm.openUpvalues, slot)
+		}
+	}
 }

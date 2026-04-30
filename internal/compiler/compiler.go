@@ -71,6 +71,7 @@ type FuncCompiler struct {
 	proto      *runtime.FunctionProto
 	chunk      *bytecode.Chunk
 	locals     []Local
+	upvalues   []UpvalueRef
 	scopeDepth int
 	loopStack  []LoopContext
 	tryStack   []*TryContext
