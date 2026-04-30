@@ -19,6 +19,8 @@ func (c *Compiler) compileDecl(decl ast.Decl) {
 			c.compileImportDecl(d)
 		case *ast.ExportDecl:
 			c.compileExportDecl(d)
+		case *ast.ClassDecl:
+			c.compileClassDecl(d)
 		default:
 			c.errorf("unsupported declaration")
 		}
@@ -115,7 +117,121 @@ func exportDeclName(decl ast.Decl) (string, error) {
 		return d.Name, nil
 	case *ast.FnDecl:
 		return d.Name, nil
+	case *ast.ClassDecl:
+		return d.Name, nil
 	default:
 		return "", fmt.Errorf("unsupported export declaration")
 	}
+}
+
+func (c *Compiler) compileClassDecl(d *ast.ClassDecl) {
+	constructorName := d.Name
+
+	var initMethod *ast.ClassMethod
+	for i := range d.Methods {
+		if d.Methods[i].Name == "init" {
+			initMethod = &d.Methods[i]
+			break
+		}
+	}
+
+	child := newFuncCompiler(c.current, constructorName)
+	if initMethod != nil {
+		child.proto.Arity = len(initMethod.Params)
+	}
+
+	prev := c.current
+	c.current = child
+
+	if initMethod != nil {
+		for _, param := range initMethod.Params {
+			c.addLocal(param.Name, false)
+		}
+	}
+
+	c.emit(bytecode.OpObject)
+	c.emitShort(0)
+	thisSlot := c.addLocal("this", false)
+
+	if initMethod != nil && initMethod.Body != nil {
+		c.compileBlockStmt(initMethod.Body, false)
+	}
+
+	for _, method := range d.Methods {
+		if method.Name == "init" {
+			continue
+		}
+
+		methodChild := newFuncCompiler(c.current, method.Name)
+		methodChild.proto.Arity = len(method.Params)
+
+		prev2 := c.current
+		c.current = methodChild
+
+		for _, param := range method.Params {
+			c.addLocal(param.Name, false)
+		}
+		if method.Body != nil {
+			c.compileBlockStmt(method.Body, false)
+		}
+		c.emitNull()
+		c.emit(bytecode.OpReturn)
+		methodChild.proto.LocalCount = len(methodChild.locals)
+
+		c.current = prev2
+
+		// Push method closure first
+		if len(methodChild.upvalues) > 0 {
+			closureValue := &runtime.Closure{Proto: methodChild.proto}
+			constIdx := c.current.chunk.AddConstant(closureValue)
+			c.emit(bytecode.OpClosure)
+			c.emitShort(constIdx)
+			for _, uv := range methodChild.upvalues {
+				if uv.IsLocal {
+					c.emitByte(1)
+				} else {
+					c.emitByte(0)
+				}
+				c.emitByte(byte(uv.Index))
+			}
+		} else {
+			protoValue := &runtime.Closure{Proto: methodChild.proto}
+			constIdx := c.current.chunk.AddConstant(protoValue)
+			c.emit(bytecode.OpClosure)
+			c.emitShort(constIdx)
+		}
+
+		// Push this (target for property assignment) AFTER closure
+		c.emit(bytecode.OpGetLocal)
+		c.emitShort(uint16(thisSlot))
+
+		methodNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: method.Name})
+		c.emit(bytecode.OpSetProperty)
+		c.emitShort(methodNameIdx)
+		c.emit(bytecode.OpPop)
+	}
+
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(thisSlot))
+	c.emit(bytecode.OpReturn)
+	child.proto.LocalCount = len(child.locals)
+	c.current = prev
+
+	if len(child.upvalues) > 0 {
+		c.compileClosureWiring(child)
+	} else {
+		protoValue := &runtime.Closure{Proto: child.proto}
+		constIdx := c.current.chunk.AddConstant(protoValue)
+		c.emit(bytecode.OpClosure)
+		c.emitShort(constIdx)
+	}
+
+	if c.current.scopeDepth > 0 {
+		c.addLocal(d.Name, true)
+		return
+	}
+
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: d.Name})
+	c.emit(bytecode.OpDefineGlobal)
+	c.emitShort(nameIdx)
 }

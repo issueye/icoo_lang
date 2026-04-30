@@ -1,0 +1,225 @@
+// ---- Basic class ----
+
+class Person {
+  init(name, age) {
+    this.name = name
+    this.age = age
+  }
+
+  greet() {
+    return "Hello " + this.name
+  }
+
+  getAge() {
+    return this.age
+  }
+}
+
+let p = Person("Alice", 30)
+if p.name != "Alice" {
+  panic("basic: name expected Alice")
+}
+if p.age != 30 {
+  panic("basic: age expected 30")
+}
+if p.greet() != "Hello Alice" {
+  panic("basic: greet failed")
+}
+if p.getAge() != 30 {
+  panic("basic: getAge failed")
+}
+println("basic class: ok")
+
+// ---- Multiple instances ----
+
+class Point {
+  init(x, y) {
+    this.x = x
+    this.y = y
+  }
+
+  sum() {
+    return this.x + this.y
+  }
+}
+
+let p1 = Point(1, 2)
+let p2 = Point(10, 20)
+if p1.sum() != 3 {
+  panic("multi: p1 sum failed")
+}
+if p2.sum() != 30 {
+  panic("multi: p2 sum failed")
+}
+println("multiple instances: ok")
+
+// ---- Method with params ----
+
+class Calculator {
+  init(base) {
+    this.base = base
+  }
+
+  add(n) {
+    return this.base + n
+  }
+
+  multiply(n) {
+    return this.base * n
+  }
+}
+
+let calc = Calculator(10)
+if calc.add(5) != 15 {
+  panic("calc: add failed")
+}
+if calc.multiply(3) != 30 {
+  panic("calc: multiply failed")
+}
+println("method with params: ok")
+
+// ---- Class without init ----
+
+class Empty {
+  getValue() {
+    return 42
+  }
+}
+
+let e = Empty()
+if e.getValue() != 42 {
+  panic("no init: getValue failed")
+}
+println("class without init: ok")
+
+// ---- Class with channel (go) ----
+
+class Worker {
+  init(ch) {
+    this.ch = ch
+  }
+
+  doWork(val) {
+    go fn() {
+      this.ch.send(val)
+    }()
+  }
+}
+
+let ch = chan(1)
+let w = Worker(ch)
+w.doWork(99)
+let result = ch.recv()
+if result != 99 {
+  panic("go: worker failed")
+}
+println("class with go: ok")
+
+// ---- Class with select ----
+
+class Selector {
+  init(ch) {
+    this.ch = ch
+  }
+
+  tryRead() {
+    let result = 0
+    select {
+      recv this.ch as v {
+        result = v
+      }
+      else {
+        result = -1
+      }
+    }
+    return result
+  }
+}
+
+let ch2 = chan(1)
+ch2.send(77)
+let sel = Selector(ch2)
+let val = sel.tryRead()
+if val != 77 {
+  panic("select: tryRead failed")
+}
+println("class with select: ok")
+
+// ---- Counter pattern ----
+
+class Counter {
+  init() {
+    this.count = 0
+  }
+
+  next() {
+    this.count = this.count + 1
+    return this.count
+  }
+
+  reset(n) {
+    this.count = n
+  }
+}
+
+let counter = Counter()
+if counter.next() != 1 {
+  panic("counter: step 1 failed")
+}
+if counter.next() != 2 {
+  panic("counter: step 2 failed")
+}
+if counter.next() != 3 {
+  panic("counter: step 3 failed")
+}
+counter.reset(0)
+if counter.next() != 1 {
+  panic("counter: reset failed")
+}
+println("counter pattern: ok")
+
+// ---- Producer-Consumer with class ----
+
+class Producer {
+  init(ch, nums) {
+    this.ch = ch
+    this.nums = nums
+  }
+
+  produce() {
+    for n in this.nums {
+      this.ch.send(n)
+    }
+    this.ch.close()
+  }
+}
+
+class Consumer {
+  init(ch) {
+    this.ch = ch
+  }
+
+  consume() {
+    let sum = 0
+    for v in this.ch {
+      sum = sum + v
+    }
+    return sum
+  }
+}
+
+let pcChan = chan(3)
+let prod = Producer(pcChan, [1, 2, 3, 4, 5])
+let cons = Consumer(pcChan)
+
+go fn() {
+  prod.produce()
+}()
+
+let sum = cons.consume()
+if sum != 15 {
+  panic("pc: sum expected 15")
+}
+println("producer-consumer with class: ok")
+
+println("ALL CLASS TESTS PASSED")

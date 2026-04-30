@@ -89,6 +89,18 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 			c.emitShort(uint16(len(e.Fields)))
 		case *ast.FnExpr:
 			c.compileFnExprExpr(e)
+		case *ast.ThisExpr:
+			ref, _ := c.resolve("this")
+			if ref.Kind == VarLocal {
+				c.emit(bytecode.OpGetLocal)
+				c.emitShort(uint16(ref.Index))
+			} else if ref.Kind == VarUpvalue {
+				c.emit(bytecode.OpGetUpvalue)
+				c.emitShort(uint16(ref.Index))
+			} else {
+				c.errorf("this used outside class context")
+				c.emitNull()
+			}
 		default:
 			c.errorf("unsupported expression")
 			c.emitNull()

@@ -50,6 +50,8 @@ func (a *Analyzer) visitDecl(decl ast.Decl) {
 		a.visitImportDecl(d)
 	case *ast.ExportDecl:
 		a.visitExportDecl(d)
+	case *ast.ClassDecl:
+		a.visitClassDecl(d)
 	}
 }
 
@@ -96,6 +98,45 @@ func (a *Analyzer) visitImportDecl(d *ast.ImportDecl) {
 func (a *Analyzer) visitExportDecl(d *ast.ExportDecl) {
 	if d.Decl != nil {
 		a.visitDecl(d.Decl)
+	}
+}
+
+func (a *Analyzer) visitClassDecl(d *ast.ClassDecl) {
+	if !a.scope.Define(Symbol{Name: d.Name, IsConst: true}) {
+		a.report(d.Span(), "duplicate declaration: "+d.Name)
+		return
+	}
+	hasInit := false
+	for _, method := range d.Methods {
+		if method.Name == "init" {
+			if hasInit {
+				a.report(method.Span_, "duplicate init method")
+			}
+			hasInit = true
+		}
+		a.visitFnInScope(method.Params, method.Body)
+	}
+}
+
+func (a *Analyzer) visitFnInScope(params []ast.Param, body *ast.BlockStmt) {
+	prevScope := a.scope
+	a.scope = NewScope(prevScope)
+	a.inFunction++
+	defer func() {
+		a.inFunction--
+		a.scope = prevScope
+	}()
+
+	// Define 'this' as a pre-defined local in method scope
+	a.scope.Define(Symbol{Name: "this"})
+
+	for _, param := range params {
+		if !a.scope.Define(Symbol{Name: param.Name}) {
+			a.report(param.Span(), "duplicate parameter: "+param.Name)
+		}
+	}
+	if body != nil {
+		a.visitBlockStmt(body)
 	}
 }
 
@@ -308,6 +349,10 @@ func (a *Analyzer) visitExpr(expr ast.Expr) {
 		}
 	case *ast.FnExpr:
 		a.visitFnExpr(e)
+	case *ast.ThisExpr:
+		if _, ok := a.scope.Resolve("this"); !ok {
+			a.report(e.Span(), "this used outside class method")
+		}
 	}
 }
 

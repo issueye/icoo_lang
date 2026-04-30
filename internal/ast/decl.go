@@ -66,3 +66,26 @@ func (*ExportDecl) decl() {}
 func (d *ExportDecl) Span() token.Span {
 	return d.Span_
 }
+
+type ClassMethod struct {
+	Name   string
+	Params []Param
+	Body   *BlockStmt
+	Span_  token.Span
+}
+
+func (m ClassMethod) Span() token.Span {
+	return m.Span_
+}
+
+type ClassDecl struct {
+	Name    string
+	Methods []ClassMethod
+	Span_   token.Span
+}
+
+func (*ClassDecl) node() {}
+func (*ClassDecl) decl() {}
+func (d *ClassDecl) Span() token.Span {
+	return d.Span_
+}

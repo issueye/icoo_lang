@@ -18,6 +18,8 @@ func (p *Parser) parseTopLevelNode() ast.Node {
 		return p.parseImportDecl()
 	case token.Export:
 		return p.parseExportDecl()
+	case token.Class:
+		return p.parseClassDecl()
 	default:
 		return p.parseStatement()
 	}
@@ -136,4 +138,31 @@ func moduleAliasFromPath(path string) string {
 		return "module"
 	}
 	return base
+}
+
+func (p *Parser) parseClassDecl() ast.Decl {
+	startTok := p.expect(token.Class, "expected 'class'")
+	nameTok := p.expect(token.Ident, "expected class name")
+	p.expect(token.LBrace, "expected '{' after class name")
+	methods := make([]ast.ClassMethod, 0, 4)
+	for !p.check(token.RBrace) && !p.atEnd() {
+		methodNameTok := p.expectIdentOrKeyword("method name")
+		methodParams := p.parseParamList()
+		methodBody := p.parseBlockStmt()
+		if methodBody == nil {
+			return nil
+		}
+		methods = append(methods, ast.ClassMethod{
+			Name:   methodNameTok.Lexeme,
+			Params: methodParams,
+			Body:   methodBody,
+			Span_:  token.Span{Start: methodNameTok.Span.Start, End: methodBody.Span().End},
+		})
+	}
+	endTok := p.expect(token.RBrace, "expected '}' after class body")
+	return &ast.ClassDecl{
+		Name:    nameTok.Lexeme,
+		Methods: methods,
+		Span_:   token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
+	}
 }

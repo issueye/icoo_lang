@@ -131,7 +131,7 @@ func (p *Parser) synchronize() {
 			return
 		}
 		switch p.current().Type {
-		case token.Const, token.Let, token.Fn, token.If, token.While, token.Return, token.Try, token.Throw, token.Finally, token.Go, token.Select:
+		case token.Const, token.Let, token.Fn, token.If, token.While, token.Return, token.Try, token.Throw, token.Finally, token.Go, token.Select, token.Class:
 			return
 		case token.RBrace:
 			return

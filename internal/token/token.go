@@ -67,6 +67,8 @@ const (
 	Select
 	Interface
 	TypeKw
+	Class
+	This
 	Null
 	True
 	False
@@ -98,6 +100,8 @@ var Keywords = map[string]Type{
 	"select":    Select,
 	"interface": Interface,
 	"type":      TypeKw,
+	"class":     Class,
+	"this":      This,
 	"null":      Null,
 	"true":      True,
 	"false":     False,
@@ -248,6 +252,10 @@ func (t Type) String() string {
 		return "Go"
 	case Select:
 		return "Select"
+	case Class:
+		return "Class"
+	case This:
+		return "This"
 	case Interface:
 		return "Interface"
 	case TypeKw:

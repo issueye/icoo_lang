@@ -182,3 +182,13 @@ func (*FnExpr) expr() {}
 func (e *FnExpr) Span() token.Span {
 	return e.Span_
 }
+
+type ThisExpr struct {
+	Span_ token.Span
+}
+
+func (*ThisExpr) node() {}
+func (*ThisExpr) expr() {}
+func (e *ThisExpr) Span() token.Span {
+	return e.Span_
+}

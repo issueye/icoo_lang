@@ -64,6 +64,9 @@ func (p *Parser) parsePrefix() ast.Expr {
 		return p.parseObjectLiteral()
 	case token.Fn:
 		return p.parseFnExpr()
+	case token.This:
+		tok := p.advance()
+		return &ast.ThisExpr{Span_: tok.Span}
 	default:
 		p.errorAtCurrent("expected expression")
 		return nil
