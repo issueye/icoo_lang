@@ -5,15 +5,14 @@ import (
 	"icoo_lang/internal/token"
 )
 
-func (p *Parser) parseTopLevelDecl() ast.Decl {
+func (p *Parser) parseTopLevelNode() ast.Node {
 	switch p.current().Type {
 	case token.Const, token.Let:
 		return p.parseVarDecl()
 	case token.Fn:
 		return p.parseFnDecl()
 	default:
-		p.errorAtCurrent("expected declaration")
-		return nil
+		return p.parseStatement()
 	}
 }
 

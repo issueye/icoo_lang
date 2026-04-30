@@ -23,7 +23,7 @@ type Expr interface {
 }
 
 type Program struct {
-	Decls []Decl
+	Nodes []Node
 	Span_ token.Span
 }
 

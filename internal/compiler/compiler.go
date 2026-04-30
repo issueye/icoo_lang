@@ -45,8 +45,15 @@ func Compile(program *ast.Program) (*CompiledModule, []error) {
 	fc := newFuncCompiler(nil, "__module_init__")
 	c.current = fc
 
-	for _, decl := range program.Decls {
-		c.compileDecl(decl)
+	for _, node := range program.Nodes {
+		switch n := node.(type) {
+		case ast.Decl:
+			c.compileDecl(n)
+		case ast.Stmt:
+			c.compileStmt(n)
+		default:
+			c.errorf("unsupported top-level node")
+		}
 	}
 
 	c.emitNull()
@@ -66,12 +73,21 @@ func newFuncCompiler(parent *FuncCompiler, name string) *FuncCompiler {
 		Name:  name,
 		Chunk: chunk,
 	}
-	return &FuncCompiler{
+	fc := &FuncCompiler{
 		parent: parent,
 		proto:  proto,
 		chunk:  chunk,
 		locals: make([]Local, 0, 16),
 	}
+	if parent != nil {
+		fc.locals = append(fc.locals, Local{
+			Name:  "<fn>",
+			Depth: 0,
+			Slot:  0,
+		})
+		fc.proto.LocalCount = 1
+	}
+	return fc
 }
 
 func (c *Compiler) errorf(format string, args ...any) {

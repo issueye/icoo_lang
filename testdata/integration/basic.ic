@@ -1,0 +1,19 @@
+const version = "icoo"
+
+fn add(a, b) {
+  return a + b
+}
+
+fn main() {
+  let arr = [1, 2, 3]
+  let user = {name: version, total: add(arr[0], arr[1])}
+
+  if user.total > 2 {
+    println(user.name)
+    println(user.total)
+  } else {
+    println("small")
+  }
+}
+
+main()

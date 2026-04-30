@@ -29,8 +29,13 @@ func (a *Analyzer) defineBuiltins() {
 }
 
 func (a *Analyzer) visitProgram(program *ast.Program) {
-	for _, decl := range program.Decls {
-		a.visitDecl(decl)
+	for _, node := range program.Nodes {
+		switch n := node.(type) {
+		case ast.Decl:
+			a.visitDecl(n)
+		case ast.Stmt:
+			a.visitStmt(n)
+		}
 	}
 }
 

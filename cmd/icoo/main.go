@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"icoo_lang/pkg/api"
 )
 
 func main() {
@@ -31,7 +33,16 @@ func runCheck(args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("check not implemented yet: %s\n", args[0])
+	rt := api.NewRuntime()
+	errs := rt.CheckFile(args[0])
+	if len(errs) > 0 {
+		for _, err := range errs {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		os.Exit(1)
+	}
+
+	fmt.Printf("ok: %s\n", args[0])
 }
 
 func runRun(args []string) {
@@ -40,7 +51,12 @@ func runRun(args []string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("run not implemented yet: %s\n", args[0])
+	rt := api.NewRuntime()
+	_, err := rt.RunFile(args[0])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 func printUsage() {

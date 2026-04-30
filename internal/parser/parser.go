@@ -18,14 +18,14 @@ func New(tokens []token.Token) *Parser {
 }
 
 func (p *Parser) ParseProgram() *ast.Program {
-	decls := make([]ast.Decl, 0, 16)
+	nodes := make([]ast.Node, 0, 16)
 	var start token.Span
 	var end token.Span
 	started := false
 
 	for !p.atEnd() {
-		decl := p.parseTopLevelDecl()
-		if decl == nil {
+		node := p.parseTopLevelNode()
+		if node == nil {
 			p.synchronize()
 			if p.atEnd() {
 				break
@@ -33,14 +33,14 @@ func (p *Parser) ParseProgram() *ast.Program {
 			continue
 		}
 		if !started {
-			start = decl.Span()
+			start = node.Span()
 			started = true
 		}
-		end = decl.Span()
-		decls = append(decls, decl)
+		end = node.Span()
+		nodes = append(nodes, node)
 	}
 
-	prog := &ast.Program{Decls: decls}
+	prog := &ast.Program{Nodes: nodes}
 	if started {
 		prog.Span_ = ast.MergeSpan(start, end)
 	}
