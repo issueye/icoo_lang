@@ -35,6 +35,9 @@
 - 顶层函数与变量声明
 - 基础 `import / export`
 - 统一迭代器协议（`iter()` / `next()`）
+- `std.io` 标准库模块导入
+- `std.time` 标准库模块导入
+- `std.math` 标准库模块导入
 
 ### 暂不纳入 MVP
 
@@ -57,7 +60,10 @@
 5. 支持数组、对象与 `for-in` 迭代
 6. 支持基础 `import/export`
 7. 支持 builtin：`print`、`println`、`len`、`typeOf`
-8. `go test ./...` 能通过核心包测试
+8. 支持 `import std.io as io`
+9. 支持 `import std.time as time`
+10. 支持 `import std.math as math`
+11. `go test ./...` 能通过核心包测试
 
 ---
 

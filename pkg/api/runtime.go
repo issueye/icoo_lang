@@ -98,6 +98,10 @@ func (r *Runtime) runModuleSource(path, src string) (runtime.Value, error) {
 }
 
 func (r *Runtime) loadModule(importerPath, spec string) (*runtime.Module, error) {
+	if mod, ok := stdlib.LoadModule(spec); ok {
+		return mod, nil
+	}
+
 	resolved, err := resolveModulePath(importerPath, spec)
 	if err != nil {
 		return nil, err

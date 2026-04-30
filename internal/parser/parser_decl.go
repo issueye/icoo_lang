@@ -60,10 +60,8 @@ func (p *Parser) parseFnDecl() ast.Decl {
 
 func (p *Parser) parseImportDecl() ast.Decl {
 	startTok := p.expect(token.Import, "expected 'import'")
-	pathTok := p.expect(token.String, "expected module path string")
-	path := strings.Trim(pathTok.Lexeme, "\"")
+	path, end := p.parseImportPath()
 	alias := moduleAliasFromPath(path)
-	end := pathTok.Span.End
 	if p.match(token.As) {
 		aliasTok := p.expect(token.Ident, "expected import alias")
 		alias = aliasTok.Lexeme
@@ -109,6 +107,23 @@ func (p *Parser) parseParamList() []ast.Param {
 		p.expect(token.Comma, "expected ',' or ')' in parameter list")
 	}
 	return params
+}
+
+func (p *Parser) parseImportPath() (string, token.Position) {
+	if p.check(token.String) {
+		pathTok := p.advance()
+		return strings.Trim(pathTok.Lexeme, "\""), pathTok.Span.End
+	}
+
+	first := p.expect(token.Ident, "expected module path")
+	parts := []string{first.Lexeme}
+	end := first.Span.End
+	for p.match(token.Dot) {
+		part := p.expect(token.Ident, "expected module path segment after '.'")
+		parts = append(parts, part.Lexeme)
+		end = part.Span.End
+	}
+	return strings.Join(parts, "."), end
 }
 
 func moduleAliasFromPath(path string) string {
