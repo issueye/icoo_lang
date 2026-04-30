@@ -159,6 +159,8 @@ BindingName     = Identifier | "_" ;
 
 ### 迭代器协议与 `for-in` 语义
 
+更多使用示例见 `docs/iterators.md`。
+
 Icoo 当前的 `for-in` 基于统一迭代器协议，而不是为数组单独做语法特判。
 
 任何可迭代值都需要暴露：
