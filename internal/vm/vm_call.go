@@ -26,8 +26,13 @@ func (vm *VM) callClosure(cl *runtime.Closure, argc int) error {
 		return runtimeError("expected %d arguments, got %d", cl.Proto.Arity, argc)
 	}
 	base := len(vm.stack) - argc - 1
+	var module *runtime.Module
+	if len(vm.frames) > 0 {
+		module = vm.frames[len(vm.frames)-1].Module
+	}
 	vm.frames = append(vm.frames, CallFrame{
 		Closure: cl,
+		Module:  module,
 		IP:      0,
 		Base:    base,
 	})
@@ -43,7 +48,15 @@ func (vm *VM) callNative(fn *runtime.NativeFunction, argc int) error {
 	result, err := fn.Fn(args)
 	if err != nil {
 		vm.stack = vm.stack[:base]
-		return err
+		exc := vm.errorToValue(err)
+		if len(exc.Stack) == 0 {
+			exc.Stack = vm.captureStack()
+		}
+		exc.Stack = append([]runtime.StackFrame{{
+			Function: fn.Name,
+			Native:   true,
+		}}, exc.Stack...)
+		return exc
 	}
 	vm.stack = vm.stack[:base]
 	vm.Push(result)

@@ -9,37 +9,39 @@ import (
 )
 
 func (c *Compiler) compileStmt(stmt ast.Stmt) {
-	switch s := stmt.(type) {
-	case *ast.DeclStmt:
-		c.compileDecl(s.Decl)
-	case *ast.BlockStmt:
-		c.compileBlockStmt(s, true)
-	case *ast.ExprStmt:
-		c.compileExpr(s.Expr)
-		c.emit(bytecode.OpPop)
-	case *ast.ReturnStmt:
-		c.compileReturnStmt(s)
-	case *ast.ThrowStmt:
-		c.compileThrowStmt(s)
-	case *ast.IfStmt:
-		c.compileIfStmt(s)
-	case *ast.WhileStmt:
-		c.compileWhileStmt(s)
-	case *ast.ForStmt:
-		c.compileForStmt(s)
-	case *ast.ForInStmt:
-		c.compileForInStmt(s)
-	case *ast.TryCatchStmt:
-		c.compileTryCatchStmt(s)
-	case *ast.MatchStmt:
-		c.compileMatchStmt(s)
-	case *ast.BreakStmt:
-		c.compileBreakStmt(s)
-	case *ast.ContinueStmt:
-		c.compileContinueStmt(s)
-	default:
-		c.errorf("unsupported statement")
-	}
+	c.withNodeLine(stmt.Span().Start.Line, func() {
+		switch s := stmt.(type) {
+		case *ast.DeclStmt:
+			c.compileDecl(s.Decl)
+		case *ast.BlockStmt:
+			c.compileBlockStmt(s, true)
+		case *ast.ExprStmt:
+			c.compileExpr(s.Expr)
+			c.emit(bytecode.OpPop)
+		case *ast.ReturnStmt:
+			c.compileReturnStmt(s)
+		case *ast.ThrowStmt:
+			c.compileThrowStmt(s)
+		case *ast.IfStmt:
+			c.compileIfStmt(s)
+		case *ast.WhileStmt:
+			c.compileWhileStmt(s)
+		case *ast.ForStmt:
+			c.compileForStmt(s)
+		case *ast.ForInStmt:
+			c.compileForInStmt(s)
+		case *ast.TryCatchStmt:
+			c.compileTryCatchStmt(s)
+		case *ast.MatchStmt:
+			c.compileMatchStmt(s)
+		case *ast.BreakStmt:
+			c.compileBreakStmt(s)
+		case *ast.ContinueStmt:
+			c.compileContinueStmt(s)
+		default:
+			c.errorf("unsupported statement")
+		}
+	})
 }
 
 func (c *Compiler) compileBlockStmt(block *ast.BlockStmt, newScope bool) {

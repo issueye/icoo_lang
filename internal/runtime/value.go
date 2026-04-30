@@ -214,6 +214,9 @@ func (e *ErrorValue) StackString() string {
 			b.WriteString(fmt.Sprintf("%d", frame.Line))
 		case frame.File != "":
 			b.WriteString(frame.File)
+		case frame.Line > 0:
+			b.WriteString("unknown:")
+			b.WriteString(fmt.Sprintf("%d", frame.Line))
 		default:
 			b.WriteString("unknown")
 		}

@@ -61,8 +61,9 @@ type CompiledModule struct {
 }
 
 type Compiler struct {
-	errors  []error
-	current *FuncCompiler
+	errors      []error
+	current     *FuncCompiler
+	currentLine int
 }
 
 type FuncCompiler struct {
@@ -130,15 +131,15 @@ func (c *Compiler) errorf(format string, args ...any) {
 }
 
 func (c *Compiler) emit(op bytecode.Opcode) {
-	c.current.chunk.Write(byte(op), 0)
+	c.current.chunk.Write(byte(op), c.currentLine)
 }
 
 func (c *Compiler) emitByte(b byte) {
-	c.current.chunk.Write(b, 0)
+	c.current.chunk.Write(b, c.currentLine)
 }
 
 func (c *Compiler) emitShort(v uint16) {
-	c.current.chunk.WriteShort(v, 0)
+	c.current.chunk.WriteShort(v, c.currentLine)
 }
 
 func (c *Compiler) emitConstant(v runtime.Value) uint16 {
@@ -220,6 +221,19 @@ func (c *Compiler) emitStoreTopToLocal(slot int) {
 func (c *Compiler) emitStoreIntToLocal(slot int, value int) {
 	c.emitInt(int64(value))
 	c.emitStoreTopToLocal(slot)
+}
+
+func (c *Compiler) withLine(line int, fn func()) {
+	prev := c.currentLine
+	if line > 0 {
+		c.currentLine = line
+	}
+	fn()
+	c.currentLine = prev
+}
+
+func (c *Compiler) withNodeLine(spanLine int, fn func()) {
+	c.withLine(spanLine, fn)
 }
 
 func (c *Compiler) patchAddressList(positions []int, value int) {

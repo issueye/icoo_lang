@@ -260,6 +260,20 @@ func (vm *VM) execGetProperty(name string) error {
 			vm.Push(runtime.StringValue{Value: value.StackString()})
 			return nil
 		}
+		if name == "frames" {
+			frames := make([]runtime.Value, 0, len(value.Stack))
+			for _, frame := range value.Stack {
+				fields := map[string]runtime.Value{
+					"function": runtime.StringValue{Value: frame.Function},
+					"file":     runtime.StringValue{Value: frame.File},
+					"line":     runtime.IntValue{Value: int64(frame.Line)},
+					"native":   runtime.BoolValue{Value: frame.Native},
+				}
+				frames = append(frames, &runtime.ObjectValue{Fields: fields})
+			}
+			vm.Push(&runtime.ArrayValue{Elements: frames})
+			return nil
+		}
 		return runtimeError("undefined property: %s", name)
 	case *runtime.ObjectValue:
 		field, ok := value.Fields[name]

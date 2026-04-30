@@ -11,87 +11,89 @@ import (
 )
 
 func (c *Compiler) compileExpr(expr ast.Expr) {
-	switch e := expr.(type) {
-	case *ast.IdentExpr:
-		c.compileIdentExpr(e)
-	case *ast.IntLiteral:
-		v, err := strconv.ParseInt(e.Raw, 10, 64)
-		if err != nil {
-			c.errorf("invalid int literal: %s", e.Raw)
+	c.withNodeLine(expr.Span().Start.Line, func() {
+		switch e := expr.(type) {
+		case *ast.IdentExpr:
+			c.compileIdentExpr(e)
+		case *ast.IntLiteral:
+			v, err := strconv.ParseInt(e.Raw, 10, 64)
+			if err != nil {
+				c.errorf("invalid int literal: %s", e.Raw)
+				c.emitNull()
+				return
+			}
+			c.emitConstant(runtime.IntValue{Value: v})
+		case *ast.FloatLiteral:
+			v, err := strconv.ParseFloat(e.Raw, 64)
+			if err != nil {
+				c.errorf("invalid float literal: %s", e.Raw)
+				c.emitNull()
+				return
+			}
+			c.emitConstant(runtime.FloatValue{Value: v})
+		case *ast.StringLiteral:
+			raw := strings.Trim(e.Raw, "\"")
+			c.emitConstant(runtime.StringValue{Value: raw})
+		case *ast.BoolLiteral:
+			if e.Value {
+				c.emit(bytecode.OpTrue)
+			} else {
+				c.emit(bytecode.OpFalse)
+			}
+		case *ast.NullLiteral:
 			c.emitNull()
-			return
-		}
-		c.emitConstant(runtime.IntValue{Value: v})
-	case *ast.FloatLiteral:
-		v, err := strconv.ParseFloat(e.Raw, 64)
-		if err != nil {
-			c.errorf("invalid float literal: %s", e.Raw)
-			c.emitNull()
-			return
-		}
-		c.emitConstant(runtime.FloatValue{Value: v})
-	case *ast.StringLiteral:
-		raw := strings.Trim(e.Raw, "\"")
-		c.emitConstant(runtime.StringValue{Value: raw})
-	case *ast.BoolLiteral:
-		if e.Value {
-			c.emit(bytecode.OpTrue)
-		} else {
-			c.emit(bytecode.OpFalse)
-		}
-	case *ast.NullLiteral:
-		c.emitNull()
-	case *ast.UnaryExpr:
-		c.compileExpr(e.Right)
-		switch e.Op {
-		case token.Minus:
-			c.emit(bytecode.OpNegate)
-		case token.Bang:
-			c.emit(bytecode.OpNot)
+		case *ast.UnaryExpr:
+			c.compileExpr(e.Right)
+			switch e.Op {
+			case token.Minus:
+				c.emit(bytecode.OpNegate)
+			case token.Bang:
+				c.emit(bytecode.OpNot)
+			default:
+				c.errorf("unsupported unary operator")
+			}
+		case *ast.BinaryExpr:
+			c.compileExpr(e.Left)
+			c.compileExpr(e.Right)
+			c.compileBinaryOp(e.Op)
+		case *ast.AssignExpr:
+			c.compileAssignExpr(e)
+		case *ast.CallExpr:
+			c.compileExpr(e.Callee)
+			for _, arg := range e.Args {
+				c.compileExpr(arg)
+			}
+			c.emit(bytecode.OpCall)
+			c.emitByte(byte(len(e.Args)))
+		case *ast.MemberExpr:
+			c.compileExpr(e.Object)
+			nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: e.Name})
+			c.emit(bytecode.OpGetProperty)
+			c.emitShort(nameIdx)
+		case *ast.IndexExpr:
+			c.compileExpr(e.Object)
+			c.compileExpr(e.Index)
+			c.emit(bytecode.OpGetIndex)
+		case *ast.ArrayLiteral:
+			for _, item := range e.Items {
+				c.compileExpr(item)
+			}
+			c.emit(bytecode.OpArray)
+			c.emitShort(uint16(len(e.Items)))
+		case *ast.ObjectLiteral:
+			for _, field := range e.Fields {
+				c.emitConstant(runtime.StringValue{Value: field.Name})
+				c.compileExpr(field.Value)
+			}
+			c.emit(bytecode.OpObject)
+			c.emitShort(uint16(len(e.Fields)))
+		case *ast.FnExpr:
+			c.compileFnExprExpr(e)
 		default:
-			c.errorf("unsupported unary operator")
+			c.errorf("unsupported expression")
+			c.emitNull()
 		}
-	case *ast.BinaryExpr:
-		c.compileExpr(e.Left)
-		c.compileExpr(e.Right)
-		c.compileBinaryOp(e.Op)
-	case *ast.AssignExpr:
-		c.compileAssignExpr(e)
-	case *ast.CallExpr:
-		c.compileExpr(e.Callee)
-		for _, arg := range e.Args {
-			c.compileExpr(arg)
-		}
-		c.emit(bytecode.OpCall)
-		c.emitByte(byte(len(e.Args)))
-	case *ast.MemberExpr:
-		c.compileExpr(e.Object)
-		nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: e.Name})
-		c.emit(bytecode.OpGetProperty)
-		c.emitShort(nameIdx)
-	case *ast.IndexExpr:
-		c.compileExpr(e.Object)
-		c.compileExpr(e.Index)
-		c.emit(bytecode.OpGetIndex)
-	case *ast.ArrayLiteral:
-		for _, item := range e.Items {
-			c.compileExpr(item)
-		}
-		c.emit(bytecode.OpArray)
-		c.emitShort(uint16(len(e.Items)))
-	case *ast.ObjectLiteral:
-		for _, field := range e.Fields {
-			c.emitConstant(runtime.StringValue{Value: field.Name})
-			c.compileExpr(field.Value)
-		}
-		c.emit(bytecode.OpObject)
-		c.emitShort(uint16(len(e.Fields)))
-	case *ast.FnExpr:
-		c.compileFnExprExpr(e)
-	default:
-		c.errorf("unsupported expression")
-		c.emitNull()
-	}
+	})
 }
 
 func (c *Compiler) compileIdentExpr(e *ast.IdentExpr) {

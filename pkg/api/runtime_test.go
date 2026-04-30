@@ -1,7 +1,9 @@
 package api
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -179,7 +181,7 @@ func TestRuntimeRunSource_UncaughtThrowStillReturnsHostError(t *testing.T) {
 	if _, err := rt.RunSource(src); err == nil {
 		t.Fatalf("expected uncaught throw to be returned to host")
 	} else {
-		if err.Error() != "boom\n  at __module_init__ (unknown)" {
+		if err.Error() != "boom\n  at __module_init__ (unknown:1)" {
 			t.Fatalf("unexpected uncaught throw stack: %q", err.Error())
 		}
 	}
@@ -189,6 +191,8 @@ func TestRuntimeRunSource_CatchCanReadErrorStack(t *testing.T) {
 	src := `
 let message = ""
 let stack = ""
+let frameCount = 0
+let topFunction = ""
 
 fn boom() {
   throw "boom"
@@ -199,6 +203,8 @@ try {
 } catch err {
   message = err.message
   stack = err.stack
+  frameCount = len(err.frames)
+  topFunction = err.frames[0].function
 }
 
 if message != "boom" {
@@ -206,6 +212,12 @@ if message != "boom" {
 }
 if stack == "" {
   panic("expected non-empty error stack")
+}
+if frameCount == 0 {
+  panic("expected structured frames")
+}
+if topFunction != "boom" {
+  panic("unexpected top frame function")
 }
 `
 
@@ -245,6 +257,42 @@ if stack == "" {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected rethrow stack run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunFile_UncaughtErrorIncludesSourceLines(t *testing.T) {
+	src := `
+fn inner() {
+  len(1)
+}
+
+fn outer() {
+  inner()
+}
+
+outer()
+`
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "stack_lines.ic")
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatalf("write temp script: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(path); err == nil {
+		t.Fatalf("expected uncaught runtime error")
+	} else {
+		msg := err.Error()
+		if !strings.Contains(msg, "at len (native)") {
+			t.Fatalf("expected native len frame, got: %q", msg)
+		}
+		if !strings.Contains(msg, "at inner ("+path+":3)") {
+			t.Fatalf("expected inner frame with source line, got: %q", msg)
+		}
+		if !strings.Contains(msg, "at outer ("+path+":7)") {
+			t.Fatalf("expected outer frame with source line, got: %q", msg)
+		}
 	}
 }
 

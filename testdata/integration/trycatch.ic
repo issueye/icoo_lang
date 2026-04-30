@@ -32,6 +32,12 @@ try {
   if err.stack == "" {
     panic("expected non-empty throw stack")
   }
+  if len(err.frames) == 0 {
+    panic("expected structured throw frames")
+  }
+  if err.frames[0].function != "__module_init__" {
+    panic("unexpected top throw frame function")
+  }
 }
 
 if thrown != "boom" {

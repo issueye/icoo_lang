@@ -9,18 +9,20 @@ import (
 )
 
 func (c *Compiler) compileDecl(decl ast.Decl) {
-	switch d := decl.(type) {
-	case *ast.VarDecl:
-		c.compileVarDecl(d)
-	case *ast.FnDecl:
-		c.compileFnDecl(d)
-	case *ast.ImportDecl:
-		c.compileImportDecl(d)
-	case *ast.ExportDecl:
-		c.compileExportDecl(d)
-	default:
-		c.errorf("unsupported declaration")
-	}
+	c.withNodeLine(decl.Span().Start.Line, func() {
+		switch d := decl.(type) {
+		case *ast.VarDecl:
+			c.compileVarDecl(d)
+		case *ast.FnDecl:
+			c.compileFnDecl(d)
+		case *ast.ImportDecl:
+			c.compileImportDecl(d)
+		case *ast.ExportDecl:
+			c.compileExportDecl(d)
+		default:
+			c.errorf("unsupported declaration")
+		}
+	})
 }
 
 func (c *Compiler) compileVarDecl(d *ast.VarDecl) {
