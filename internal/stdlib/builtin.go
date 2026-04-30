@@ -20,6 +20,7 @@ func RegisterBuiltins(machine *vm.VM) {
 	machine.DefineBuiltin("error", &runtime.NativeFunction{Name: "error", Arity: -1, Fn: builtinError})
 	machine.DefineBuiltin("__select", &runtime.NativeFunction{Name: "__select", Arity: 1, Fn: builtinSelect})
 	machine.DefineBuiltin("satisfies", &runtime.NativeFunction{Name: "satisfies", Arity: 2, Fn: builtinSatisfies})
+	machine.DefineBuiltin("_tryCheck", &runtime.NativeFunction{Name: "_tryCheck", Arity: 1, Fn: builtinTryCheck})
 }
 
 func builtinPrint(args []runtime.Value) (runtime.Value, error) {
@@ -241,4 +242,9 @@ func builtinSatisfies(args []runtime.Value) (runtime.Value, error) {
 		_ = fn
 	}
 	return runtime.BoolValue{Value: true}, nil
+}
+
+func builtinTryCheck(args []runtime.Value) (runtime.Value, error) {
+	_, isError := args[0].(*runtime.ErrorValue)
+	return runtime.BoolValue{Value: isError}, nil
 }

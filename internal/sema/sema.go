@@ -35,7 +35,7 @@ func AnalyzeWithGlobals(program *ast.Program, globalNames []string) []diag.Diagn
 }
 
 func (a *Analyzer) defineBuiltins() {
-	builtins := []string{"print", "println", "len", "typeOf", "chan", "satisfies", "panic", "error"}
+	builtins := []string{"print", "println", "len", "typeOf", "chan", "satisfies", "panic", "error", "_tryCheck"}
 	for _, name := range builtins {
 		a.scope.Define(Symbol{Name: name})
 	}

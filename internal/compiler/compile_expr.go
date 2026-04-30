@@ -213,29 +213,29 @@ func (c *Compiler) compileLogicalExpr(e *ast.BinaryExpr) {
 func (c *Compiler) compileTryExpr(e *ast.TryExpr) {
 	c.compileExpr(e.Expr)
 
-	trySlot := c.syntheticName("try")
-	c.addLocal(trySlot, false)
+	c.beginScope()
+	trySlot := c.addLocal(c.syntheticName("try"), false)
 
-	c.emit(bytecode.OpDup)
-	errorStrIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "error"})
-	typeOfIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "typeOf"})
+	// _tryCheck(val) → returns true if val is ErrorValue
+	checkIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "_tryCheck"})
 	c.emit(bytecode.OpGetGlobal)
-	c.emitShort(typeOfIdx)
+	c.emitShort(checkIdx)
 	c.emit(bytecode.OpGetLocal)
-	c.emitShort(uint16(c.mustResolveLocal(trySlot)))
+	c.emitShort(uint16(trySlot))
 	c.emit(bytecode.OpCall)
 	c.emitByte(1)
-	c.emit(bytecode.OpConstant)
-	c.emitShort(errorStrIdx)
-	c.emit(bytecode.OpEqual)
-	notErrorJump := c.emitJump(bytecode.OpJumpIfFalse)
+
+	// If true (is error), return the error
+	errorJump := c.emitJump(bytecode.OpJumpIfTrue)
 	c.emit(bytecode.OpPop)
 	c.emit(bytecode.OpGetLocal)
-	c.emitShort(uint16(c.mustResolveLocal(trySlot)))
+	c.emitShort(uint16(trySlot))
 	c.emit(bytecode.OpReturn)
-	c.patchJump(notErrorJump)
+	c.patchJump(errorJump)
 	c.emit(bytecode.OpPop)
-	c.emit(bytecode.OpPop)
+
+	c.current.locals = c.current.locals[:len(c.current.locals)-1]
+	c.current.scopeDepth--
 }
 
 func (c *Compiler) compileFnExprExpr(e *ast.FnExpr) {
