@@ -33,7 +33,7 @@ func precedenceOf(tt token.Type) Precedence {
 		return PrecTerm
 	case token.Star, token.Slash, token.Percent:
 		return PrecFactor
-	case token.LParen, token.Dot, token.LBracket:
+	case token.LParen, token.Dot, token.LBracket, token.Question:
 		return PrecPostfix
 	default:
 		return PrecLowest

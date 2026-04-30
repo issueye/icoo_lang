@@ -89,3 +89,54 @@ func (*ClassDecl) decl() {}
 func (d *ClassDecl) Span() token.Span {
 	return d.Span_
 }
+
+type TypeExpr interface {
+	Node
+	typeExpr()
+}
+
+type SimpleTypeExpr struct {
+	Name  string
+	Span_ token.Span
+}
+
+func (*SimpleTypeExpr) node()     {}
+func (*SimpleTypeExpr) typeExpr() {}
+func (e *SimpleTypeExpr) Span() token.Span { return e.Span_ }
+
+type FuncTypeExpr struct {
+	Params []TypeExpr
+	Return TypeExpr
+	Span_  token.Span
+}
+
+func (*FuncTypeExpr) node()     {}
+func (*FuncTypeExpr) typeExpr() {}
+func (e *FuncTypeExpr) Span() token.Span { return e.Span_ }
+
+type TypeDecl struct {
+	Name    string
+	TypeDef TypeExpr
+	Span_   token.Span
+}
+
+func (*TypeDecl) node() {}
+func (*TypeDecl) decl() {}
+func (d *TypeDecl) Span() token.Span { return d.Span_ }
+
+type InterfaceMethod struct {
+	Name       string
+	ParamTypes []TypeExpr
+	ReturnType TypeExpr
+	Span_      token.Span
+}
+
+type InterfaceDecl struct {
+	Name    string
+	Methods []InterfaceMethod
+	Span_   token.Span
+}
+
+func (*InterfaceDecl) node() {}
+func (*InterfaceDecl) decl() {}
+func (d *InterfaceDecl) Span() token.Span { return d.Span_ }

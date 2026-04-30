@@ -113,6 +113,9 @@ func (l *Lexer) NextToken() token.Token {
 	case '%':
 		l.advance()
 		return l.makeToken(token.Percent, "%", start)
+	case '?':
+		l.advance()
+		return l.makeToken(token.Question, "?", start)
 	case '!':
 		l.advance()
 		if l.peek() == '=' {

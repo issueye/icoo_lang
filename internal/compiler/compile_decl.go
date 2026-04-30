@@ -21,6 +21,10 @@ func (c *Compiler) compileDecl(decl ast.Decl) {
 			c.compileExportDecl(d)
 		case *ast.ClassDecl:
 			c.compileClassDecl(d)
+		case *ast.TypeDecl:
+			c.compileTypeDecl(d)
+		case *ast.InterfaceDecl:
+			c.compileInterfaceDecl(d)
 		default:
 			c.errorf("unsupported declaration")
 		}
@@ -119,9 +123,45 @@ func exportDeclName(decl ast.Decl) (string, error) {
 		return d.Name, nil
 	case *ast.ClassDecl:
 		return d.Name, nil
+	case *ast.TypeDecl:
+		return d.Name, nil
+	case *ast.InterfaceDecl:
+		return d.Name, nil
 	default:
 		return "", fmt.Errorf("unsupported export declaration")
 	}
+}
+
+func (c *Compiler) compileTypeDecl(d *ast.TypeDecl) {
+	if c.current.scopeDepth > 0 {
+		c.addLocal(d.Name, true)
+		return
+	}
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: d.Name})
+	c.emit(bytecode.OpDefineGlobal)
+	c.emitShort(nameIdx)
+}
+
+func (c *Compiler) compileInterfaceDecl(d *ast.InterfaceDecl) {
+	methods := make([]runtime.InterfaceMethodSig, 0, len(d.Methods))
+	for _, m := range d.Methods {
+		methods = append(methods, runtime.InterfaceMethodSig{
+			Name:       m.Name,
+			ParamCount: len(m.ParamTypes),
+		})
+	}
+	ifaceValue := &runtime.InterfaceValue{Name: d.Name, Methods: methods}
+	constIdx := c.current.chunk.AddConstant(ifaceValue)
+	c.emit(bytecode.OpConstant)
+	c.emitShort(constIdx)
+
+	if c.current.scopeDepth > 0 {
+		c.addLocal(d.Name, true)
+		return
+	}
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: d.Name})
+	c.emit(bytecode.OpDefineGlobal)
+	c.emitShort(nameIdx)
 }
 
 func (c *Compiler) compileClassDecl(d *ast.ClassDecl) {

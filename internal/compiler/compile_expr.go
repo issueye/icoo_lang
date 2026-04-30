@@ -105,6 +105,8 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 				c.errorf("this used outside class context")
 				c.emitNull()
 			}
+		case *ast.TryExpr:
+			c.compileTryExpr(e)
 		default:
 			c.errorf("unsupported expression")
 			c.emitNull()
@@ -194,20 +196,46 @@ func (c *Compiler) compileLogicalExpr(e *ast.BinaryExpr) {
 	c.compileExpr(e.Left)
 
 	if e.Op == token.AndAnd {
-		// Short-circuit AND: push left, if falsy keep it, else push right
 		c.emit(bytecode.OpDup)
 		endJump := c.emitJump(bytecode.OpJumpIfFalse)
 		c.emit(bytecode.OpPop)
 		c.compileExpr(e.Right)
 		c.patchJump(endJump)
 	} else {
-		// Short-circuit OR: push left, if truthy keep it, else push right
 		c.emit(bytecode.OpDup)
 		endJump := c.emitJump(bytecode.OpJumpIfTrue)
 		c.emit(bytecode.OpPop)
 		c.compileExpr(e.Right)
 		c.patchJump(endJump)
 	}
+}
+
+func (c *Compiler) compileTryExpr(e *ast.TryExpr) {
+	c.compileExpr(e.Expr)
+
+	trySlot := c.syntheticName("try")
+	c.addLocal(trySlot, false)
+
+	c.emit(bytecode.OpDup)
+	errorStrIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "error"})
+	typeOfIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "typeOf"})
+	c.emit(bytecode.OpGetGlobal)
+	c.emitShort(typeOfIdx)
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(trySlot)))
+	c.emit(bytecode.OpCall)
+	c.emitByte(1)
+	c.emit(bytecode.OpConstant)
+	c.emitShort(errorStrIdx)
+	c.emit(bytecode.OpEqual)
+	notErrorJump := c.emitJump(bytecode.OpJumpIfFalse)
+	c.emit(bytecode.OpPop)
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(trySlot)))
+	c.emit(bytecode.OpReturn)
+	c.patchJump(notErrorJump)
+	c.emit(bytecode.OpPop)
+	c.emit(bytecode.OpPop)
 }
 
 func (c *Compiler) compileFnExprExpr(e *ast.FnExpr) {

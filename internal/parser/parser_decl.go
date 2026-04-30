@@ -20,6 +20,10 @@ func (p *Parser) parseTopLevelNode() ast.Node {
 		return p.parseExportDecl()
 	case token.Class:
 		return p.parseClassDecl()
+	case token.TypeKw:
+		return p.parseTypeDecl()
+	case token.Interface:
+		return p.parseInterfaceDecl()
 	default:
 		return p.parseStatement()
 	}
@@ -165,4 +169,109 @@ func (p *Parser) parseClassDecl() ast.Decl {
 		Methods: methods,
 		Span_:   token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
 	}
+}
+
+func (p *Parser) parseTypeDecl() ast.Decl {
+	startTok := p.expect(token.TypeKw, "expected 'type'")
+	nameTok := p.expect(token.Ident, "expected type name")
+	p.expect(token.Assign, "expected '=' in type declaration")
+	typeExpr := p.parseTypeExpr()
+	return &ast.TypeDecl{
+		Name:    nameTok.Lexeme,
+		TypeDef: typeExpr,
+		Span_:   token.Span{Start: startTok.Span.Start, End: typeExpr.Span().End},
+	}
+}
+
+func (p *Parser) parseInterfaceDecl() ast.Decl {
+	startTok := p.expect(token.Interface, "expected 'interface'")
+	nameTok := p.expect(token.Ident, "expected interface name")
+	p.expect(token.LBrace, "expected '{' after interface name")
+	methods := make([]ast.InterfaceMethod, 0, 4)
+	for !p.check(token.RBrace) && !p.atEnd() {
+		methodNameTok := p.expectIdentOrKeyword("method name")
+		p.expect(token.LParen, "expected '('")
+		paramTypes := p.parseParamTypeList()
+		p.expect(token.RParen, "expected ')'")
+		var returnType ast.TypeExpr
+		if p.check(token.Ident) || p.check(token.Fn) || p.check(token.LBracket) {
+			returnType = p.parseTypeExpr()
+		}
+		methods = append(methods, ast.InterfaceMethod{
+			Name:       methodNameTok.Lexeme,
+			ParamTypes: paramTypes,
+			ReturnType: returnType,
+			Span_:      token.Span{Start: methodNameTok.Span.Start},
+		})
+	}
+	endTok := p.expect(token.RBrace, "expected '}' after interface body")
+	return &ast.InterfaceDecl{
+		Name:    nameTok.Lexeme,
+		Methods: methods,
+		Span_:   token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
+	}
+}
+
+func (p *Parser) parseParamTypeList() []ast.TypeExpr {
+	types := make([]ast.TypeExpr, 0, 4)
+	if p.check(token.RParen) {
+		return types
+	}
+	for {
+		p.expectIdentOrKeyword("parameter name")
+		types = append(types, p.parseTypeExpr())
+		if !p.match(token.Comma) {
+			break
+		}
+	}
+	return types
+}
+
+func (p *Parser) parseTypeExpr() ast.TypeExpr {
+	switch p.current().Type {
+	case token.Fn:
+		return p.parseFuncTypeExpr()
+	case token.LBracket:
+		return p.parseArrayTypeExpr()
+	default:
+		nameTok := p.expectIdentOrKeyword("type name")
+		return &ast.SimpleTypeExpr{Name: nameTok.Lexeme, Span_: nameTok.Span}
+	}
+}
+
+func (p *Parser) parseFuncTypeExpr() ast.TypeExpr {
+	startTok := p.expect(token.Fn, "expected 'fn'")
+	p.expect(token.LParen, "expected '('")
+	params := p.parseTypeExprList()
+	p.expect(token.RParen, "expected ')'")
+	var returnType ast.TypeExpr
+	if p.check(token.Ident) || p.check(token.Fn) || p.check(token.LBracket) {
+		returnType = p.parseTypeExpr()
+	}
+	return &ast.FuncTypeExpr{
+		Params: params,
+		Return: returnType,
+		Span_:  token.Span{Start: startTok.Span.Start},
+	}
+}
+
+func (p *Parser) parseArrayTypeExpr() ast.TypeExpr {
+	startTok := p.expect(token.LBracket, "expected '['")
+	elemType := p.parseTypeExpr()
+	p.expect(token.RBracket, "expected ']'")
+	return &ast.SimpleTypeExpr{Name: "[]" + elemType.(*ast.SimpleTypeExpr).Name, Span_: startTok.Span}
+}
+
+func (p *Parser) parseTypeExprList() []ast.TypeExpr {
+	types := make([]ast.TypeExpr, 0, 4)
+	if p.check(token.RParen) {
+		return types
+	}
+	for {
+		types = append(types, p.parseTypeExpr())
+		if !p.match(token.Comma) {
+			break
+		}
+	}
+	return types
 }

@@ -22,6 +22,7 @@ const (
 	ChannelKind
 	ErrorKind
 	IteratorKind
+	InterfaceKind
 )
 
 type Value interface {
@@ -103,6 +104,19 @@ type ObjectIterator struct {
 
 func (v *ObjectIterator) Kind() ValueKind { return IteratorKind }
 func (v *ObjectIterator) String() string  { return "<object_iterator>" }
+
+type InterfaceMethodSig struct {
+	Name       string
+	ParamCount int
+}
+
+type InterfaceValue struct {
+	Name    string
+	Methods []InterfaceMethodSig
+}
+
+func (v *InterfaceValue) Kind() ValueKind { return InterfaceKind }
+func (v *InterfaceValue) String() string  { return "<interface " + v.Name + ">" }
 
 type ObjectValue struct {
 	Fields map[string]Value

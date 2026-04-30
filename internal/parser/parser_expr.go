@@ -91,8 +91,11 @@ func (p *Parser) parseInfix(left ast.Expr, precedence Precedence) ast.Expr {
 		return &ast.MemberExpr{Object: left, Name: nameTok.Lexeme, Span_: token.Span{Start: left.Span().Start, End: nameTok.Span.End}}
 	case token.LBracket:
 		index := p.parseExpression(PrecLowest)
-		endTok := p.expect(token.RBracket, "expected ']' after index")
+		endTok := 		p.expect(token.RBracket, "expected ']' after index")
 		return &ast.IndexExpr{Object: left, Index: index, Span_: token.Span{Start: left.Span().Start, End: endTok.Span.End}}
+	case token.Question:
+		tok := p.advance()
+		return &ast.TryExpr{Expr: left, Span_: token.Span{Start: left.Span().Start, End: tok.Span.End}}
 	default:
 		p.errorAtCurrent("unexpected infix operator")
 		return left

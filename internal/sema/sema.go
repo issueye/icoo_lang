@@ -35,7 +35,7 @@ func AnalyzeWithGlobals(program *ast.Program, globalNames []string) []diag.Diagn
 }
 
 func (a *Analyzer) defineBuiltins() {
-	builtins := []string{"print", "println", "len", "typeOf", "chan", "panic", "error"}
+	builtins := []string{"print", "println", "len", "typeOf", "chan", "satisfies", "panic", "error"}
 	for _, name := range builtins {
 		a.scope.Define(Symbol{Name: name})
 	}
@@ -64,6 +64,10 @@ func (a *Analyzer) visitDecl(decl ast.Decl) {
 		a.visitExportDecl(d)
 	case *ast.ClassDecl:
 		a.visitClassDecl(d)
+	case *ast.TypeDecl:
+		a.visitTypeDecl(d)
+	case *ast.InterfaceDecl:
+		a.visitInterfaceDecl(d)
 	}
 }
 
@@ -139,7 +143,6 @@ func (a *Analyzer) visitFnInScope(params []ast.Param, body *ast.BlockStmt) {
 		a.scope = prevScope
 	}()
 
-	// Define 'this' as a pre-defined local in method scope
 	a.scope.Define(Symbol{Name: "this"})
 
 	for _, param := range params {
@@ -149,6 +152,18 @@ func (a *Analyzer) visitFnInScope(params []ast.Param, body *ast.BlockStmt) {
 	}
 	if body != nil {
 		a.visitBlockStmt(body)
+	}
+}
+
+func (a *Analyzer) visitTypeDecl(d *ast.TypeDecl) {
+	if !a.scope.Define(Symbol{Name: d.Name, IsConst: true}) {
+		a.report(d.Span(), "duplicate declaration: "+d.Name)
+	}
+}
+
+func (a *Analyzer) visitInterfaceDecl(d *ast.InterfaceDecl) {
+	if !a.scope.Define(Symbol{Name: d.Name, IsConst: true}) {
+		a.report(d.Span(), "duplicate declaration: "+d.Name)
 	}
 }
 
@@ -365,6 +380,8 @@ func (a *Analyzer) visitExpr(expr ast.Expr) {
 		if _, ok := a.scope.Resolve("this"); !ok {
 			a.report(e.Span(), "this used outside class method")
 		}
+	case *ast.TryExpr:
+		a.visitExpr(e.Expr)
 	}
 }
 

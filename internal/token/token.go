@@ -45,6 +45,7 @@ const (
 	StarAssign  // *=
 	SlashAssign // /=
 	Arrow       // =>
+	Question    // ?
 
 	Fn
 	Return
@@ -214,6 +215,8 @@ func (t Type) String() string {
 		return "SlashAssign"
 	case Arrow:
 		return "Arrow"
+	case Question:
+		return "Question"
 	case Fn:
 		return "Fn"
 	case Return:

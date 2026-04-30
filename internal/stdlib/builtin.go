@@ -19,6 +19,7 @@ func RegisterBuiltins(machine *vm.VM) {
 	machine.DefineBuiltin("panic", &runtime.NativeFunction{Name: "panic", Arity: 1, Fn: builtinPanic})
 	machine.DefineBuiltin("error", &runtime.NativeFunction{Name: "error", Arity: -1, Fn: builtinError})
 	machine.DefineBuiltin("__select", &runtime.NativeFunction{Name: "__select", Arity: 1, Fn: builtinSelect})
+	machine.DefineBuiltin("satisfies", &runtime.NativeFunction{Name: "satisfies", Arity: 2, Fn: builtinSatisfies})
 }
 
 func builtinPrint(args []runtime.Value) (runtime.Value, error) {
@@ -214,4 +215,30 @@ func builtinSelect(args []runtime.Value) (runtime.Value, error) {
 		result.Fields["value"] = runtime.NullValue{}
 	}
 	return result, nil
+}
+
+func builtinSatisfies(args []runtime.Value) (runtime.Value, error) {
+	obj, ok := args[0].(*runtime.ObjectValue)
+	if !ok {
+		return runtime.BoolValue{Value: false}, nil
+	}
+	iface, ok := args[1].(*runtime.InterfaceValue)
+	if !ok {
+		return nil, fmt.Errorf("satisfies: second argument must be an interface")
+	}
+	for _, method := range iface.Methods {
+		field, exists := obj.Fields[method.Name]
+		if !exists {
+			return runtime.BoolValue{Value: false}, nil
+		}
+		fn, ok := field.(*runtime.Closure)
+		if !ok {
+			_, okNative := field.(*runtime.NativeFunction)
+			if !okNative {
+				return runtime.BoolValue{Value: false}, nil
+			}
+		}
+		_ = fn
+	}
+	return runtime.BoolValue{Value: true}, nil
 }

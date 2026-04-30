@@ -86,6 +86,8 @@ func KindName(v Value) string {
 		return "error"
 	case IteratorKind:
 		return "iterator"
+	case InterfaceKind:
+		return "interface"
 	default:
 		return "unknown"
 	}
