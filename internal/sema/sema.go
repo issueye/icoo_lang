@@ -356,6 +356,10 @@ func (a *Analyzer) visitExpr(expr ast.Expr) {
 		a.visitExpr(e.Right)
 	case *ast.AssignExpr:
 		a.visitAssignExpr(e)
+	case *ast.TernaryExpr:
+		a.visitExpr(e.Cond)
+		a.visitExpr(e.Then)
+		a.visitExpr(e.Else)
 	case *ast.CallExpr:
 		a.visitExpr(e.Callee)
 		for _, arg := range e.Args {

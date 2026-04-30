@@ -107,6 +107,19 @@ func (e *AssignExpr) Span() token.Span {
 	return e.Span_
 }
 
+type TernaryExpr struct {
+	Cond  Expr
+	Then  Expr
+	Else  Expr
+	Span_ token.Span
+}
+
+func (*TernaryExpr) node() {}
+func (*TernaryExpr) expr() {}
+func (e *TernaryExpr) Span() token.Span {
+	return e.Span_
+}
+
 type CallExpr struct {
 	Callee Expr
 	Args   []Expr

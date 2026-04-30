@@ -62,6 +62,8 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 			c.compileBinaryOp(e.Op)
 		case *ast.AssignExpr:
 			c.compileAssignExpr(e)
+		case *ast.TernaryExpr:
+			c.compileTernaryExpr(e)
 		case *ast.CallExpr:
 			c.compileExpr(e.Callee)
 			for _, arg := range e.Args {
@@ -112,6 +114,18 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 			c.emitNull()
 		}
 	})
+}
+
+func (c *Compiler) compileTernaryExpr(e *ast.TernaryExpr) {
+	c.compileExpr(e.Cond)
+	elseJump := c.emitJump(bytecode.OpJumpIfFalse)
+	c.emit(bytecode.OpPop)
+	c.compileExpr(e.Then)
+	endJump := c.emitJump(bytecode.OpJump)
+	c.patchJump(elseJump)
+	c.emit(bytecode.OpPop)
+	c.compileExpr(e.Else)
+	c.patchJump(endJump)
 }
 
 func (c *Compiler) compileIdentExpr(e *ast.IdentExpr) {

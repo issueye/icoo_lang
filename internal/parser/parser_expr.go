@@ -12,7 +12,7 @@ func (p *Parser) parseExpression(precedence Precedence) ast.Expr {
 	}
 
 	for !p.atEnd() && !p.check(token.RParen) && !p.check(token.RBracket) && !p.check(token.RBrace) {
-		nextPrec := precedenceOf(p.current().Type)
+		nextPrec := p.currentPrecedence()
 		if nextPrec <= precedence {
 			break
 		}
@@ -23,6 +23,93 @@ func (p *Parser) parseExpression(precedence Precedence) ast.Expr {
 	}
 
 	return left
+}
+
+func (p *Parser) currentPrecedence() Precedence {
+	if p.check(token.Question) {
+		if p.isTernaryQuestion() {
+			return PrecTernary
+		}
+		return PrecPostfix
+	}
+	return precedenceOf(p.current().Type)
+}
+
+func (p *Parser) isTernaryQuestion() bool {
+	if !p.startsExpression(p.peek(1).Type) {
+		return false
+	}
+
+	parenDepth := 0
+	bracketDepth := 0
+	braceDepth := 0
+	for offset := 1; ; offset++ {
+		tok := p.peek(offset)
+		if offset > 1 && parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && p.isTernaryScanBoundary(tok.Type) {
+			return false
+		}
+		switch tok.Type {
+		case token.EOF:
+			return false
+		case token.LParen:
+			parenDepth++
+		case token.RParen:
+			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 {
+				return false
+			}
+			parenDepth--
+		case token.LBracket:
+			bracketDepth++
+		case token.RBracket:
+			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 {
+				return false
+			}
+			bracketDepth--
+		case token.LBrace:
+			braceDepth++
+		case token.RBrace:
+			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 {
+				return false
+			}
+			braceDepth--
+		case token.Colon:
+			return parenDepth == 0 && bracketDepth == 0 && braceDepth == 0
+		case token.Comma, token.Semicolon:
+			if parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 {
+				return false
+			}
+		}
+	}
+}
+
+func (p *Parser) isTernaryScanBoundary(tt token.Type) bool {
+	switch tt {
+	case token.Const, token.Let, token.Fn,
+		token.Return, token.If, token.Else,
+		token.For, token.While, token.Match,
+		token.Break, token.Continue,
+		token.Import, token.Export,
+		token.Try, token.Catch, token.Finally, token.Throw,
+		token.Go, token.Select,
+		token.Interface, token.TypeKw, token.Class:
+		return true
+	default:
+		return false
+	}
+}
+
+func (p *Parser) startsExpression(tt token.Type) bool {
+	switch tt {
+	case token.Ident, token.Underscore,
+		token.Int, token.Float, token.String,
+		token.True, token.False, token.Null,
+		token.Bang, token.Minus,
+		token.LParen, token.LBracket, token.LBrace,
+		token.Fn, token.This:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Parser) parsePrefix() ast.Expr {
@@ -94,6 +181,12 @@ func (p *Parser) parseInfix(left ast.Expr, precedence Precedence) ast.Expr {
 		endTok := p.expect(token.RBracket, "expected ']' after index")
 		return &ast.IndexExpr{Object: left, Index: index, Span_: token.Span{Start: left.Span().Start, End: endTok.Span.End}}
 	case token.Question:
+		if precedence == PrecTernary {
+			thenExpr := p.parseExpression(PrecLowest)
+			p.expect(token.Colon, "expected ':' in ternary expression")
+			elseExpr := p.parseExpression(PrecTernary - 1)
+			return &ast.TernaryExpr{Cond: left, Then: thenExpr, Else: elseExpr, Span_: token.Span{Start: left.Span().Start, End: elseExpr.Span().End}}
+		}
 		return &ast.TryExpr{Expr: left, Span_: token.Span{Start: left.Span().Start, End: tok.Span.End}}
 	default:
 		p.errorAtCurrent("unexpected infix operator")

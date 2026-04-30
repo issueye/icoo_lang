@@ -7,6 +7,7 @@ type Precedence int
 const (
 	PrecLowest Precedence = iota
 	PrecAssign
+	PrecTernary
 	PrecOr
 	PrecAnd
 	PrecEquality
@@ -33,7 +34,7 @@ func precedenceOf(tt token.Type) Precedence {
 		return PrecTerm
 	case token.Star, token.Slash, token.Percent:
 		return PrecFactor
-	case token.LParen, token.Dot, token.LBracket, token.Question:
+	case token.LParen, token.Dot, token.LBracket:
 		return PrecPostfix
 	default:
 		return PrecLowest
