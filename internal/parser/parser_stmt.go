@@ -93,6 +93,22 @@ func (p *Parser) parseWhileStmt() ast.Stmt {
 
 func (p *Parser) parseForStmt() ast.Stmt {
 	startTok := p.expect(token.For, "expected 'for'")
+	if (p.check(token.Ident) || p.check(token.Underscore)) && p.peek(1).Type == token.In {
+		nameTok := p.advance()
+		p.expect(token.In, "expected 'in' in for-in loop")
+		iterable := p.parseExpression(PrecLowest)
+		body := p.parseBlockStmt()
+		if body == nil {
+			return nil
+		}
+		return &ast.ForInStmt{
+			Name:     nameTok.Lexeme,
+			Iterable: iterable,
+			Body:     body,
+			Span_:    token.Span{Start: startTok.Span.Start, End: body.Span().End},
+		}
+	}
+
 	var cond ast.Expr
 	if !p.check(token.LBrace) {
 		cond = p.parseExpression(PrecLowest)

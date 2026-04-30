@@ -1,8 +1,11 @@
 package compiler
 
 import (
+	"fmt"
+
 	"icoo_lang/internal/ast"
 	"icoo_lang/internal/bytecode"
+	"icoo_lang/internal/runtime"
 )
 
 func (c *Compiler) compileStmt(stmt ast.Stmt) {
@@ -27,6 +30,8 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 		c.compileWhileStmt(s)
 	case *ast.ForStmt:
 		c.compileForStmt(s)
+	case *ast.ForInStmt:
+		c.compileForInStmt(s)
 	case *ast.BreakStmt:
 		c.compileBreakStmt(s)
 	case *ast.ContinueStmt:
@@ -68,6 +73,61 @@ func (c *Compiler) compileForStmt(stmt *ast.ForStmt) {
 	c.compileLoop(stmt.Cond, stmt.Body)
 }
 
+func (c *Compiler) compileForInStmt(stmt *ast.ForInStmt) {
+	c.beginScope()
+	defer c.endScope()
+
+	iterName := c.syntheticName("iter")
+	indexName := c.syntheticName("idx")
+
+	c.compileExpr(stmt.Iterable)
+	c.addLocal(iterName, true)
+	c.emitConstant(runtime.IntValue{Value: -1})
+	c.addLocal(indexName, false)
+
+	loopStart := len(c.current.chunk.Code)
+
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(indexName)))
+	c.emitConstant(runtime.IntValue{Value: 1})
+	c.emit(bytecode.OpAdd)
+	c.emit(bytecode.OpSetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(indexName)))
+	c.emit(bytecode.OpPop)
+
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(indexName)))
+	lenNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "len"})
+	c.emit(bytecode.OpGetGlobal)
+	c.emitShort(lenNameIdx)
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(iterName)))
+	c.emit(bytecode.OpCall)
+	c.emitByte(1)
+	c.emit(bytecode.OpLess)
+	exitJump := c.emitJump(bytecode.OpJumpIfFalse)
+	c.emit(bytecode.OpPop)
+
+	c.beginLoop(loopStart)
+	c.beginScope()
+	if stmt.Name != "_" {
+		c.emit(bytecode.OpGetLocal)
+		c.emitShort(uint16(c.mustResolveLocal(iterName)))
+		c.emit(bytecode.OpGetLocal)
+		c.emitShort(uint16(c.mustResolveLocal(indexName)))
+		c.emit(bytecode.OpGetIndex)
+		c.addLocal(stmt.Name, false)
+	}
+	c.compileBlockStmt(stmt.Body, false)
+	c.endScope()
+
+	loop := c.endLoop()
+	c.emitLoop(loop.ContinueTarget)
+	c.patchJump(exitJump)
+	c.emit(bytecode.OpPop)
+	c.patchBreakJumps(loop)
+}
+
 func (c *Compiler) compileLoop(cond ast.Expr, body *ast.BlockStmt) {
 	loopStart := len(c.current.chunk.Code)
 	exitJump := -1
@@ -95,6 +155,7 @@ func (c *Compiler) compileBreakStmt(_ *ast.BreakStmt) {
 		return
 	}
 	loop := &c.current.loopStack[len(c.current.loopStack)-1]
+	c.emitLoopScopeCleanup(loop.ScopeDepth)
 	jump := c.emitJump(bytecode.OpJump)
 	loop.BreakJumps = append(loop.BreakJumps, jump)
 }
@@ -105,5 +166,19 @@ func (c *Compiler) compileContinueStmt(_ *ast.ContinueStmt) {
 		return
 	}
 	loop := c.current.loopStack[len(c.current.loopStack)-1]
+	c.emitLoopScopeCleanup(loop.ScopeDepth)
 	c.emitLoop(loop.ContinueTarget)
+}
+
+func (c *Compiler) syntheticName(prefix string) string {
+	return fmt.Sprintf("<%s_%d>", prefix, len(c.current.locals))
+}
+
+func (c *Compiler) mustResolveLocal(name string) int {
+	ref, ok := c.resolve(name)
+	if !ok || ref.Kind != VarLocal {
+		c.errorf("internal compiler error: local not found: %s", name)
+		return 0
+	}
+	return ref.Index
 }

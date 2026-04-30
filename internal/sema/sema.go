@@ -125,11 +125,9 @@ func (a *Analyzer) visitStmt(stmt ast.Stmt) {
 	case *ast.WhileStmt:
 		a.visitLoopStmt(s.Cond, s.Body)
 	case *ast.ForStmt:
-		if s.Cond != nil {
-			a.visitLoopStmt(s.Cond, s.Body)
-		} else {
-			a.visitLoopStmt(nil, s.Body)
-		}
+		a.visitLoopStmt(s.Cond, s.Body)
+	case *ast.ForInStmt:
+		a.visitForInStmt(s)
 	case *ast.BreakStmt:
 		if a.loopDepth == 0 {
 			a.report(s.Span(), "break used outside loop")
@@ -149,6 +147,23 @@ func (a *Analyzer) visitLoopStmt(cond ast.Expr, body *ast.BlockStmt) {
 		a.loopDepth++
 		defer func() { a.loopDepth-- }()
 		a.visitNestedBlockStmt(body)
+	}
+}
+
+func (a *Analyzer) visitForInStmt(stmt *ast.ForInStmt) {
+	if stmt.Iterable != nil {
+		a.visitExpr(stmt.Iterable)
+	}
+	prevScope := a.scope
+	a.scope = NewScope(prevScope)
+	defer func() { a.scope = prevScope }()
+	if stmt.Name != "_" {
+		a.scope.Define(Symbol{Name: stmt.Name})
+	}
+	a.loopDepth++
+	defer func() { a.loopDepth-- }()
+	if stmt.Body != nil {
+		a.visitBlockStmt(stmt.Body)
 	}
 }
 

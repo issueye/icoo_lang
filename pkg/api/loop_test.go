@@ -46,6 +46,41 @@ for {
 	}
 }
 
+func TestRuntimeRunSource_ForInArray(t *testing.T) {
+	src := `
+let arr = [1, 2, 3, 4]
+let sum = 0
+
+for item in arr {
+  sum = sum + item
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected for-in loop run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ForInArrayWithContinue(t *testing.T) {
+	src := `
+let arr = [1, 2, 3, 4]
+let sum = 0
+
+for item in arr {
+  if item == 2 {
+    continue
+  }
+  sum = sum + item
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected for-in continue run to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeCheckSource_RejectsBreakOutsideLoop(t *testing.T) {
 	src := `break`
 

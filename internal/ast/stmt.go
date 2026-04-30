@@ -83,6 +83,19 @@ func (s *ForStmt) Span() token.Span {
 	return s.Span_
 }
 
+type ForInStmt struct {
+	Name     string
+	Iterable Expr
+	Body     *BlockStmt
+	Span_    token.Span
+}
+
+func (*ForInStmt) node() {}
+func (*ForInStmt) stmt() {}
+func (s *ForInStmt) Span() token.Span {
+	return s.Span_
+}
+
 type BreakStmt struct {
 	Span_ token.Span
 }

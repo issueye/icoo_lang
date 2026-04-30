@@ -1,0 +1,11 @@
+let arr = [1, 2, 3, 4]
+let sum = 0
+
+for item in arr {
+  if item == 2 {
+    continue
+  }
+  sum = sum + item
+}
+
+println(sum)

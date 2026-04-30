@@ -157,3 +157,13 @@ func (c *Compiler) patchBreakJumps(loop LoopContext) {
 		c.patchJump(jump)
 	}
 }
+
+func (c *Compiler) emitLoopScopeCleanup(scopeDepth int) {
+	for i := len(c.current.locals) - 1; i >= 0; i-- {
+		local := c.current.locals[i]
+		if local.Depth <= scopeDepth {
+			break
+		}
+		c.emitPopLocal()
+	}
+}
