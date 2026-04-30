@@ -25,6 +25,8 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 		}
 		c.emitExceptionScopeCleanup(-1)
 		c.emit(bytecode.OpReturn)
+	case *ast.ThrowStmt:
+		c.compileThrowStmt(s)
 	case *ast.IfStmt:
 		c.compileIfStmt(s)
 	case *ast.WhileStmt:
@@ -210,6 +212,15 @@ func (c *Compiler) compileTryCatchStmt(stmt *ast.TryCatchStmt) {
 	c.endScope()
 
 	c.patchJump(endJump)
+}
+
+func (c *Compiler) compileThrowStmt(stmt *ast.ThrowStmt) {
+	if stmt.Value != nil {
+		c.compileExpr(stmt.Value)
+	} else {
+		c.emitNull()
+	}
+	c.emit(bytecode.OpThrow)
 }
 
 func (c *Compiler) compileLoop(cond ast.Expr, body *ast.BlockStmt) {

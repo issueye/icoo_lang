@@ -46,6 +46,17 @@ func (s *ReturnStmt) Span() token.Span {
 	return s.Span_
 }
 
+type ThrowStmt struct {
+	Value Expr
+	Span_ token.Span
+}
+
+func (*ThrowStmt) node() {}
+func (*ThrowStmt) stmt() {}
+func (s *ThrowStmt) Span() token.Span {
+	return s.Span_
+}
+
 type IfStmt struct {
 	Cond Expr
 	Then *BlockStmt

@@ -24,10 +24,35 @@ if outer == "" {
   panic("expected runtime error to be caught")
 }
 
+let thrown = ""
+try {
+  throw "boom"
+} catch err {
+  thrown = err.message
+}
+
+if thrown != "boom" {
+  panic("expected string throw to be caught")
+}
+
+let normalized = ""
+try {
+  throw 123
+} catch err {
+  if typeOf(err) != "error" {
+    panic("expected throw normalization to error")
+  }
+  normalized = err.message
+}
+
+if normalized != "123" {
+  panic("unexpected normalized throw message")
+}
+
 let nested = ""
 try {
   try {
-    panic("inner")
+    throw "inner"
   } catch err {
     nested = err.message
   }
@@ -35,12 +60,12 @@ try {
   panic("outer handler should not run")
 }
 
-if nested != "panic: inner" {
+if nested != "inner" {
   panic("unexpected nested catch result")
 }
 
 fn boom() {
-  panic("fn boom")
+  throw "fn boom"
 }
 
 let fromCall = ""
@@ -50,6 +75,6 @@ try {
   fromCall = err.message
 }
 
-if fromCall != "panic: fn boom" {
-  panic("expected cross-function panic to be caught")
+if fromCall != "fn boom" {
+  panic("expected cross-function throw to be caught")
 }

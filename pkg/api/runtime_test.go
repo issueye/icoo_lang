@@ -83,6 +83,53 @@ if message == "" {
 	}
 }
 
+func TestRuntimeRunSource_TryCatchCatchesThrowString(t *testing.T) {
+	src := `
+let message = ""
+
+try {
+  throw "boom"
+} catch err {
+  message = err.message
+}
+
+if message != "boom" {
+  panic("unexpected caught throw message")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected throw string run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_TryCatchNormalizesThrowValue(t *testing.T) {
+	src := `
+let kind = ""
+let message = ""
+
+try {
+  throw 123
+} catch err {
+  kind = typeOf(err)
+  message = err.message
+}
+
+if kind != "error" {
+  panic("unexpected normalized throw kind")
+}
+if message != "123" {
+  panic("unexpected normalized throw message")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected throw normalization run to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_TryCatchPrefersInnerHandler(t *testing.T) {
 	src := `
 let out = ""
@@ -122,6 +169,15 @@ len(1)
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err == nil {
 		t.Fatalf("expected uncaught runtime error to be returned to host")
+	}
+}
+
+func TestRuntimeRunSource_UncaughtThrowStillReturnsHostError(t *testing.T) {
+	src := `throw "boom"`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatalf("expected uncaught throw to be returned to host")
 	}
 }
 

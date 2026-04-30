@@ -114,6 +114,10 @@ func (a *Analyzer) visitStmt(stmt ast.Stmt) {
 		if s.Value != nil {
 			a.visitExpr(s.Value)
 		}
+	case *ast.ThrowStmt:
+		if s.Value != nil {
+			a.visitExpr(s.Value)
+		}
 	case *ast.IfStmt:
 		a.visitExpr(s.Cond)
 		if s.Then != nil {

@@ -61,6 +61,7 @@ const (
 	Export
 	Try
 	Catch
+	Throw
 	Go
 	Select
 	Interface
@@ -90,6 +91,7 @@ var Keywords = map[string]Type{
 	"export":    Export,
 	"try":       Try,
 	"catch":     Catch,
+	"throw":     Throw,
 	"go":        Go,
 	"select":    Select,
 	"interface": Interface,
@@ -236,6 +238,8 @@ func (t Type) String() string {
 		return "Try"
 	case Catch:
 		return "Catch"
+	case Throw:
+		return "Throw"
 	case Go:
 		return "Go"
 	case Select:

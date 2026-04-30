@@ -119,7 +119,7 @@ func (p *Parser) synchronize() {
 			return
 		}
 		switch p.current().Type {
-		case token.Const, token.Let, token.Fn, token.If, token.While, token.Return, token.Try:
+		case token.Const, token.Let, token.Fn, token.If, token.While, token.Return, token.Try, token.Throw:
 			return
 		case token.RBrace:
 			return

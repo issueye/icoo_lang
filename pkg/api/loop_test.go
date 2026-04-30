@@ -66,6 +66,37 @@ len(1)
 	}
 }
 
+func TestRuntimeRunSource_ThrowInsideLoopTryIsCaught(t *testing.T) {
+	src := `
+let i = 0
+let sum = 0
+
+for i < 4 {
+  i = i + 1
+
+  try {
+    if i == 2 {
+      throw "skip"
+    }
+    sum = sum + i
+  } catch err {
+    if err.message != "skip" {
+      panic("unexpected loop throw message")
+    }
+  }
+}
+
+if sum != 8 {
+  panic("unexpected loop throw sum")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected loop throw catch run to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_InfiniteForWithBreak(t *testing.T) {
 	src := `
 let i = 0

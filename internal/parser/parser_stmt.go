@@ -31,6 +31,8 @@ func (p *Parser) parseStatement() ast.Stmt {
 		return p.parseContinueStmt()
 	case token.Return:
 		return p.parseReturnStmt()
+	case token.Throw:
+		return p.parseThrowStmt()
 	default:
 		return p.parseExprStmt()
 	}
@@ -216,6 +218,15 @@ func (p *Parser) parseReturnStmt() ast.Stmt {
 	}
 	value := p.parseExpression(PrecLowest)
 	return &ast.ReturnStmt{
+		Value: value,
+		Span_: token.Span{Start: startTok.Span.Start, End: value.Span().End},
+	}
+}
+
+func (p *Parser) parseThrowStmt() ast.Stmt {
+	startTok := p.expect(token.Throw, "expected 'throw'")
+	value := p.parseExpression(PrecLowest)
+	return &ast.ThrowStmt{
 		Value: value,
 		Span_: token.Span{Start: startTok.Span.Start, End: value.Span().End},
 	}
