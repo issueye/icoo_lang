@@ -1,52 +1,53 @@
 package stdlib
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"icoo_lang/internal/runtime"
+
+	toml "github.com/pelletier/go-toml/v2"
 )
 
-func loadStdJSONModule() *runtime.Module {
+func loadStdTOMLModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.json",
-		Path: "std.json",
+		Name: "std.toml",
+		Path: "std.toml",
 		Exports: map[string]runtime.Value{
-			"encode":     &runtime.NativeFunction{Name: "encode", Arity: 1, Fn: jsonEncode},
-			"decode":     &runtime.NativeFunction{Name: "decode", Arity: 1, Fn: jsonDecode},
-			"fromFile":   &runtime.NativeFunction{Name: "fromFile", Arity: 1, Fn: jsonFromFile},
-			"saveToFile": &runtime.NativeFunction{Name: "saveToFile", Arity: 2, Fn: jsonSaveToFile},
+			"encode":     &runtime.NativeFunction{Name: "encode", Arity: 1, Fn: tomlEncode},
+			"decode":     &runtime.NativeFunction{Name: "decode", Arity: 1, Fn: tomlDecode},
+			"fromFile":   &runtime.NativeFunction{Name: "fromFile", Arity: 1, Fn: tomlFromFile},
+			"saveToFile": &runtime.NativeFunction{Name: "saveToFile", Arity: 2, Fn: tomlSaveToFile},
 		},
 		Done: true,
 	}
 }
 
-func jsonEncode(args []runtime.Value) (runtime.Value, error) {
+func tomlEncode(args []runtime.Value) (runtime.Value, error) {
 	plain, err := runtimeToPlainValue(args[0])
 	if err != nil {
 		return nil, err
 	}
-	data, err := json.Marshal(plain)
+	data, err := toml.Marshal(plain)
 	if err != nil {
 		return nil, err
 	}
 	return runtime.StringValue{Value: string(data)}, nil
 }
 
-func jsonDecode(args []runtime.Value) (runtime.Value, error) {
+func tomlDecode(args []runtime.Value) (runtime.Value, error) {
 	text, ok := args[0].(runtime.StringValue)
 	if !ok {
 		return nil, fmt.Errorf("decode expects string")
 	}
 	var decoded any
-	if err := json.Unmarshal([]byte(text.Value), &decoded); err != nil {
+	if err := toml.Unmarshal([]byte(text.Value), &decoded); err != nil {
 		return nil, err
 	}
 	return plainToRuntimeValue(decoded), nil
 }
 
-func jsonFromFile(args []runtime.Value) (runtime.Value, error) {
+func tomlFromFile(args []runtime.Value) (runtime.Value, error) {
 	path, err := requireStringArg("fromFile", args[0])
 	if err != nil {
 		return nil, err
@@ -55,15 +56,15 @@ func jsonFromFile(args []runtime.Value) (runtime.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jsonDecode([]runtime.Value{runtime.StringValue{Value: string(data)}})
+	return tomlDecode([]runtime.Value{runtime.StringValue{Value: string(data)}})
 }
 
-func jsonSaveToFile(args []runtime.Value) (runtime.Value, error) {
+func tomlSaveToFile(args []runtime.Value) (runtime.Value, error) {
 	path, err := requireStringArg("saveToFile", args[0])
 	if err != nil {
 		return nil, err
 	}
-	encoded, err := jsonEncode([]runtime.Value{args[1]})
+	encoded, err := tomlEncode([]runtime.Value{args[1]})
 	if err != nil {
 		return nil, err
 	}

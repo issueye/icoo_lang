@@ -132,11 +132,17 @@ func (v *ObjectValue) String() string {
 }
 
 type NativeFunc func(args []Value) (Value, error)
+type NativeFuncWithContext func(ctx *NativeContext, args []Value) (Value, error)
+
+type NativeContext struct {
+	CallDetached func(callee Value, args []Value) (Value, error)
+}
 
 type NativeFunction struct {
 	Name  string
 	Arity int
 	Fn    NativeFunc
+	CtxFn NativeFuncWithContext
 }
 
 func (f *NativeFunction) Kind() ValueKind { return NativeFunctionKind }

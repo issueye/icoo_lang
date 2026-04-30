@@ -45,7 +45,15 @@ func (vm *VM) callNative(fn *runtime.NativeFunction, argc int) error {
 	}
 	base := len(vm.stack) - argc - 1
 	args := append([]runtime.Value(nil), vm.stack[base+1:base+1+argc]...)
-	result, err := fn.Fn(args)
+	var (
+		result runtime.Value
+		err    error
+	)
+	if fn.CtxFn != nil {
+		result, err = fn.CtxFn(vm.nativeContext(), args)
+	} else {
+		result, err = fn.Fn(args)
+	}
 	if err != nil {
 		vm.stack = vm.stack[:base]
 		exc := vm.errorToValue(err)

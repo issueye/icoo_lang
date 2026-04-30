@@ -1,8 +1,12 @@
 package api
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -284,10 +288,10 @@ for key, value in json {
   }
 }
 
-if keys != "decodeencode" {
+if keys != "decodeencodefromFilesaveToFile" {
   panic("unexpected std.json iteration order")
 }
-if count != 2 {
+if count != 4 {
   panic("unexpected std.json export count")
 }
 `
@@ -386,6 +390,767 @@ fs.exists(1)
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err == nil {
 		t.Fatal("expected std.fs.exists to reject non-string argument")
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdExecModule(t *testing.T) {
+	src := `
+import std.exec as exec
+
+let result = exec.run("go", ["env", "GOOS"])
+if !result.ok {
+  panic("expected exec.run success")
+}
+if result.stdout == "" {
+  panic("expected exec output")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.exec import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdExecModule(t *testing.T) {
+	src := `
+import std.exec as exec
+
+let keys = ""
+let count = 0
+for key, value in exec {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.exec export kind")
+  }
+}
+
+if keys != "run" {
+  panic("unexpected std.exec iteration order")
+}
+if count != 1 {
+  panic("unexpected std.exec export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.exec iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExecRejectsNonStringArrayArgs(t *testing.T) {
+	src := `
+import std.exec as exec
+
+exec.run("go", [1])
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.exec.run to reject non-string array args")
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdOSModule(t *testing.T) {
+	dir := t.TempDir()
+	nested := filepath.Join(dir, "a", "b")
+	envKey := "ICOO_STD_OS_TEST"
+	src := `
+import std.fs as fs
+import std.os as os
+
+os.setEnv("` + envKey + `", "ok")
+if os.getEnv("` + envKey + `") != "ok" {
+  panic("expected env value")
+}
+if os.getEnv("ICOO_STD_OS_MISSING") != null {
+  panic("missing env should be null")
+}
+if typeOf(os.args()) != "array" {
+  panic("args should be array")
+}
+if typeOf(os.cwd()) != "string" {
+  panic("cwd should be string")
+}
+if typeOf(os.tempDir()) != "string" {
+  panic("tempDir should be string")
+}
+os.mkdirAll("` + nested + `")
+if !fs.exists("` + nested + `") {
+  panic("mkdirAll should create directories")
+}
+os.removeAll("` + dir + `")
+if fs.exists("` + dir + `") {
+  panic("removeAll should remove directory tree")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.os import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdOSModule(t *testing.T) {
+	src := `
+import std.os as os
+
+let keys = ""
+let count = 0
+for key, value in os {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.os export kind")
+  }
+}
+
+if keys != "argscwdgetEnvmkdirAllremoveremoveAllsetEnvtempDir" {
+  panic("unexpected std.os iteration order")
+}
+if count != 8 {
+  panic("unexpected std.os export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.os iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdHostModule(t *testing.T) {
+	src := `
+import std.host as host
+
+if host.goos() != "` + runtime.GOOS + `" {
+  panic("unexpected host goos")
+}
+if host.arch() != "` + runtime.GOARCH + `" {
+  panic("unexpected host arch")
+}
+if host.hostname() == "" {
+  panic("expected hostname")
+}
+if host.numCPU() < 1 {
+  panic("expected cpu count")
+}
+if host.pid() < 1 {
+  panic("expected pid")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.host import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdHostModule(t *testing.T) {
+	src := `
+import std.host as host
+
+let keys = ""
+let count = 0
+for key, value in host {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.host export kind")
+  }
+}
+
+if keys != "archgooshostnamenumCPUpid" {
+  panic("unexpected std.host iteration order")
+}
+if count != 5 {
+  panic("unexpected std.host export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.host iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdJSONFileRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "data.json")
+	src := `
+import std.fs as fs
+import std.json as json
+
+json.saveToFile("` + path + `", {name: "icoo", nums: [1, 2], ok: true})
+if !fs.exists("` + path + `") {
+  panic("expected json file to exist")
+}
+let value = json.fromFile("` + path + `")
+if value.name != "icoo" {
+  panic("unexpected json file object field")
+}
+if value.nums[1] != 2 {
+  panic("unexpected json file array item")
+}
+if value.ok != true {
+  panic("unexpected json file bool field")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.json file round trip to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdYAMLModule(t *testing.T) {
+	src := `
+import std.yaml as yaml
+
+let text = yaml.encode({name: "icoo", nums: [1, 2], ok: true})
+let value = yaml.decode(text)
+
+if typeOf(text) != "string" {
+  panic("yaml.encode should return string")
+}
+if value.name != "icoo" {
+  panic("unexpected decoded yaml object field")
+}
+if value.nums[0] != 1 {
+  panic("unexpected decoded yaml array item")
+}
+if value.ok != true {
+  panic("unexpected decoded yaml bool field")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.yaml import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdYAMLModule(t *testing.T) {
+	src := `
+import std.yaml as yaml
+
+let keys = ""
+let count = 0
+for key, value in yaml {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.yaml export kind")
+  }
+}
+
+if keys != "decodeencodefromFilesaveToFile" {
+  panic("unexpected std.yaml iteration order")
+}
+if count != 4 {
+  panic("unexpected std.yaml export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.yaml iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdYAMLFileRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "data.yaml")
+	src := `
+import std.fs as fs
+import std.yaml as yaml
+
+yaml.saveToFile("` + path + `", {name: "icoo", nums: [1, 2], ok: true})
+if !fs.exists("` + path + `") {
+  panic("expected yaml file to exist")
+}
+let value = yaml.fromFile("` + path + `")
+if value.name != "icoo" {
+  panic("unexpected yaml file object field")
+}
+if value.nums[1] != 2 {
+  panic("unexpected yaml file array item")
+}
+if value.ok != true {
+  panic("unexpected yaml file bool field")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.yaml file round trip to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdTOMLModule(t *testing.T) {
+	src := `
+import std.toml as toml
+
+let text = toml.encode({name: "icoo", port: 8080, ok: true})
+let value = toml.decode(text)
+
+if typeOf(text) != "string" {
+  panic("toml.encode should return string")
+}
+if value.name != "icoo" {
+  panic("unexpected decoded toml object field")
+}
+if value.port != 8080 {
+  panic("unexpected decoded toml number field")
+}
+if value.ok != true {
+  panic("unexpected decoded toml bool field")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.toml import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdTOMLModule(t *testing.T) {
+	src := `
+import std.toml as toml
+
+let keys = ""
+let count = 0
+for key, value in toml {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.toml export kind")
+  }
+}
+
+if keys != "decodeencodefromFilesaveToFile" {
+  panic("unexpected std.toml iteration order")
+}
+if count != 4 {
+  panic("unexpected std.toml export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.toml iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdTOMLFileRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "data.toml")
+	src := `
+import std.fs as fs
+import std.toml as toml
+
+toml.saveToFile("` + path + `", {name: "icoo", port: 8080, ok: true})
+if !fs.exists("` + path + `") {
+  panic("expected toml file to exist")
+}
+let value = toml.fromFile("` + path + `")
+if value.name != "icoo" {
+  panic("unexpected toml file object field")
+}
+if value.port != 8080 {
+  panic("unexpected toml file number field")
+}
+if value.ok != true {
+  panic("unexpected toml file bool field")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.toml file round trip to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdXMLModule(t *testing.T) {
+	src := `
+import std.xml as xml
+
+let node = {
+  name: "root",
+  attrs: {id: "1"},
+  children: [
+    {name: "item", text: "hello"}
+  ]
+}
+let text = xml.encode(node)
+let value = xml.decode(text)
+
+if typeOf(text) != "string" {
+  panic("xml.encode should return string")
+}
+if value.name != "root" {
+  panic("unexpected decoded xml root name")
+}
+if value.attrs.id != "1" {
+  panic("unexpected decoded xml attr")
+}
+if value.children[0].name != "item" {
+  panic("unexpected decoded xml child name")
+}
+if value.children[0].text != "hello" {
+  panic("unexpected decoded xml child text")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.xml import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdXMLModule(t *testing.T) {
+	src := `
+import std.xml as xml
+
+let keys = ""
+let count = 0
+for key, value in xml {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.xml export kind")
+  }
+}
+
+if keys != "decodeencodefromFilesaveToFile" {
+  panic("unexpected std.xml iteration order")
+}
+if count != 4 {
+  panic("unexpected std.xml export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.xml iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdXMLFileRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "data.xml")
+	src := `
+import std.fs as fs
+import std.xml as xml
+
+xml.saveToFile("` + path + `", {
+  name: "root",
+  attrs: {id: "7"},
+  children: [
+    {name: "item", text: "hello"}
+  ]
+})
+if !fs.exists("` + path + `") {
+  panic("expected xml file to exist")
+}
+let value = xml.fromFile("` + path + `")
+if value.name != "root" {
+  panic("unexpected xml file root name")
+}
+if value.attrs.id != "7" {
+  panic("unexpected xml file attr")
+}
+if value.children[0].text != "hello" {
+  panic("unexpected xml file child text")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.xml file round trip to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdHTTPModule(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer server.Close()
+
+	src := `
+import std.http as http
+
+let resp = http.get("` + server.URL + `")
+if !resp.ok {
+  panic("expected http.get success")
+}
+if resp.status != 200 {
+  panic("expected 200 status")
+}
+if resp.body != "hello" {
+  panic("unexpected response body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPRequestSupportsMethodHeadersAndBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.Header.Get("Accept") != "text/plain" {
+			http.Error(w, "bad header", http.StatusBadRequest)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	src := `
+import std.http as http
+
+let resp = http.request({
+  url: "` + server.URL + `",
+  method: "POST",
+  headers: {Accept: "text/plain"},
+  body: "payload",
+  timeoutMs: 5000
+})
+if !resp.ok {
+  panic("expected http.request success")
+}
+if resp.body != "payload" {
+  panic("unexpected echoed request body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http request to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPDownload(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "download.txt")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("download-body"))
+	}))
+	defer server.Close()
+
+	src := `
+import std.fs as fs
+import std.http as http
+
+let resp = http.download("` + server.URL + `", "` + path + `")
+if !resp.ok {
+  panic("expected http.download success")
+}
+if !fs.exists("` + path + `") {
+  panic("expected downloaded file")
+}
+if fs.readFile("` + path + `") != "download-body" {
+  panic("unexpected downloaded contents")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http download to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdHTTPModule(t *testing.T) {
+	src := `
+import std.http as http
+
+let keys = ""
+let count = 0
+for key, value in http {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.http export kind")
+  }
+}
+
+if keys != "deletedownloadgetgetJSONlistenpostputrequestrequestJSON" {
+  panic("unexpected std.http iteration order")
+}
+if count != 9 {
+  panic("unexpected std.http export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPShortcutMethods(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write([]byte("post:" + string(body)))
+		case http.MethodPut:
+			body, _ := io.ReadAll(r.Body)
+			_, _ = w.Write([]byte("put:" + string(body)))
+		case http.MethodDelete:
+			_, _ = w.Write([]byte("delete"))
+		default:
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	src := `
+import std.http as http
+
+let postResp = http.post("` + server.URL + `", "A")
+let putResp = http.put("` + server.URL + `", "B")
+let deleteResp = http.delete("` + server.URL + `")
+
+if postResp.body != "post:A" {
+  panic("unexpected post response")
+}
+if putResp.body != "put:B" {
+  panic("unexpected put response")
+}
+if deleteResp.body != "delete" {
+  panic("unexpected delete response")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http shortcut methods to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPJSONHelpers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"ok":true,"value":7}`))
+		case http.MethodPost:
+			body, _ := io.ReadAll(r.Body)
+			w.Header().Set("X-Seen-Accept", r.Header.Get("Accept"))
+			w.Header().Set("X-Seen-Content-Type", r.Header.Get("Content-Type"))
+			_, _ = w.Write(body)
+		default:
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+		}
+	}))
+	defer server.Close()
+
+	src := `
+import std.http as http
+
+let getResp = http.getJSON("` + server.URL + `")
+if getResp.json.ok != true {
+  panic("unexpected getJSON bool")
+}
+if getResp.json.value != 7 {
+  panic("unexpected getJSON number")
+}
+
+let postResp = http.requestJSON({
+  url: "` + server.URL + `",
+  method: "POST",
+  json: {name: "icoo", count: 2}
+})
+if postResp.json.name != "icoo" {
+  panic("unexpected requestJSON object field")
+}
+if postResp.json.count != 2 {
+  panic("unexpected requestJSON number field")
+}
+if postResp.headers["X-Seen-Accept"] != "application/json" {
+  panic("expected requestJSON accept header")
+}
+if postResp.headers["X-Seen-Content-Type"] != "application/json" {
+  panic("expected requestJSON content type header")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http JSON helpers to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPListen(t *testing.T) {
+	src := `
+import std.http as http
+
+let server = http.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      status: 201,
+      body: req.method + ":" + req.path + ":" + req.query.name
+    }
+  }
+})
+
+let resp = http.get(server.url + "/hello?name=icoo")
+server.close()
+
+if resp.status != 201 {
+  panic("unexpected http.listen status")
+}
+if resp.body != "GET:/hello:icoo" {
+  panic("unexpected http.listen body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http listen to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPListenJSONResponse(t *testing.T) {
+	src := `
+import std.http as http
+
+let server = http.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      status: 200,
+      json: {path: req.path, ok: true}
+    }
+  }
+})
+
+let resp = http.getJSON(server.url + "/json")
+server.close()
+
+if resp.json.path != "/json" {
+  panic("unexpected http.listen json path")
+}
+if resp.json.ok != true {
+  panic("unexpected http.listen json bool")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http listen JSON response to succeed, got: %v", err)
 	}
 }
 
