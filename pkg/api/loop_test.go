@@ -276,6 +276,31 @@ if keys != "ab" {
 	}
 }
 
+func TestRuntimeRunSource_CustomObjectIterOverride(t *testing.T) {
+	src := `
+let obj = {
+  label: "fallback",
+  iter: fn() {
+    return ["x", "y"].iter()
+  }
+}
+
+let out = ""
+for item in obj {
+  out = out + item
+}
+
+if out != "xy" {
+  panic("custom iter should override default object iteration")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected custom object iter override to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_MatchLiteralAndWildcard(t *testing.T) {
 	src := `
 let x = 2

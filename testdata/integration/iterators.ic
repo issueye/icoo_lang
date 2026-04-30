@@ -24,3 +24,17 @@ for item in iter {
 }
 
 println(sum)
+
+let custom = {
+  label: "fallback",
+  iter: fn() {
+    return ["x", "y"].iter()
+  }
+}
+let customOut = ""
+
+for item in custom {
+  customOut = customOut + item
+}
+
+println(customOut)
