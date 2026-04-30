@@ -389,6 +389,215 @@ fs.exists(1)
 	}
 }
 
+func TestRuntimeRunSource_ImportsStdCryptoModule(t *testing.T) {
+	src := `
+import std.crypto as crypto
+
+if crypto.sha256("abc") != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
+  panic("unexpected sha256 result")
+}
+if crypto.sha512("abc") != "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f" {
+  panic("unexpected sha512 result")
+}
+if crypto.hmacSHA256("key", "abc") != "9c196e32dc0175f86f4b1cb89289d6619de6bee699e4c378e68309ed97a1a6ab" {
+  panic("unexpected hmacSHA256 result")
+}
+if crypto.base64Decode(crypto.base64Encode("hello")) != "hello" {
+  panic("unexpected base64 round trip")
+}
+if crypto.hexDecode(crypto.hexEncode("hello")) != "hello" {
+  panic("unexpected hex round trip")
+}
+if typeOf(crypto.randomBytes(16)) != "string" {
+  panic("randomBytes should return string")
+}
+let encrypted = crypto.aesGCMEncrypt("1234567890123456", "secret")
+if crypto.aesGCMDecrypt("1234567890123456", encrypted.nonce, encrypted.ciphertext) != "secret" {
+  panic("unexpected aes-gcm round trip")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.crypto import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdCryptoModule(t *testing.T) {
+	src := `
+import std.crypto as crypto
+
+let keys = ""
+let count = 0
+for key, value in crypto {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.crypto export kind")
+  }
+}
+
+if keys != "aesGCMDecryptaesGCMEncryptbase64Decodebase64EncodehexDecodehexEncodehmacSHA256hmacSHA512randomBytessha256sha512" {
+  panic("unexpected std.crypto iteration order")
+}
+if count != 11 {
+  panic("unexpected std.crypto export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.crypto iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdCryptoRejectsInvalidArgs(t *testing.T) {
+	src := `
+import std.crypto as crypto
+
+crypto.aesGCMEncrypt("bad", "secret")
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.crypto.aesGCMEncrypt to reject invalid key")
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdUUIDModule(t *testing.T) {
+	src := `
+import std.uuid as uuid
+
+let first = uuid.v4()
+let second = uuid.v4()
+if typeOf(first) != "string" {
+  panic("uuid.v4 should return string")
+}
+if !uuid.isValid(first) {
+  panic("uuid.v4 should return valid uuid")
+}
+if first == second {
+  panic("uuid.v4 should generate unique values")
+}
+if uuid.isValid("not-a-uuid") {
+  panic("invalid uuid should be rejected")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.uuid import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdUUIDModule(t *testing.T) {
+	src := `
+import std.uuid as uuid
+
+let keys = ""
+let count = 0
+for key, value in uuid {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.uuid export kind")
+  }
+}
+
+if keys != "isValidv4" {
+  panic("unexpected std.uuid iteration order")
+}
+if count != 2 {
+  panic("unexpected std.uuid export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.uuid iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdUUIDRejectsNonStringArgs(t *testing.T) {
+	src := `
+import std.uuid as uuid
+
+uuid.isValid(1)
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.uuid.isValid to reject non-string argument")
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdCompressModule(t *testing.T) {
+	src := `
+import std.compress as compress
+
+let gzipText = compress.gzipCompress("hello compression")
+if typeOf(gzipText) != "string" {
+  panic("gzipCompress should return string")
+}
+if compress.gzipDecompress(gzipText) != "hello compression" {
+  panic("unexpected gzip round trip")
+}
+let zlibText = compress.zlibCompress("hello compression")
+if typeOf(zlibText) != "string" {
+  panic("zlibCompress should return string")
+}
+if compress.zlibDecompress(zlibText) != "hello compression" {
+  panic("unexpected zlib round trip")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.compress import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdCompressModule(t *testing.T) {
+	src := `
+import std.compress as compress
+
+let keys = ""
+let count = 0
+for key, value in compress {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.compress export kind")
+  }
+}
+
+if keys != "gzipCompressgzipDecompresszlibCompresszlibDecompress" {
+  panic("unexpected std.compress iteration order")
+}
+if count != 4 {
+  panic("unexpected std.compress export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.compress iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdCompressRejectsInvalidInput(t *testing.T) {
+	src := `
+import std.compress as compress
+
+compress.gzipDecompress("not-base64")
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.compress.gzipDecompress to reject invalid input")
+	}
+}
+
 func TestRuntimeCheckSource_ParsesImportExport(t *testing.T) {
 	src := `
 import "./math.ic" as math

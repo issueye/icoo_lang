@@ -15,6 +15,12 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 	case "std.fs":
 		return loadStdFSModule(), true
 	default:
+	case "std.crypto":
+		return loadStdCryptoModule(), true
+	case "std.uuid":
+		return loadStdUUIDModule(), true
+	case "std.compress":
+		return loadStdCompressModule(), true
 		return nil, false
 	}
 }
