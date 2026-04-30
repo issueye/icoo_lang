@@ -15,9 +15,16 @@ type CallFrame struct {
 	Base    int
 }
 
+type ExceptionHandler struct {
+	FrameIndex int
+	StackDepth int
+	CatchIP    int
+}
+
 type VM struct {
 	stack      []runtime.Value
 	frames     []CallFrame
+	handlers   []ExceptionHandler
 	globals    map[string]runtime.Value
 	builtins   map[string]runtime.Value
 	modules    map[string]*runtime.Module
@@ -29,6 +36,7 @@ func New() *VM {
 	vm := &VM{
 		stack:    make([]runtime.Value, 0, 256),
 		frames:   make([]CallFrame, 0, 64),
+		handlers: make([]ExceptionHandler, 0, 16),
 		globals:  make(map[string]runtime.Value),
 		builtins: make(map[string]runtime.Value),
 		modules:  make(map[string]*runtime.Module),

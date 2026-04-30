@@ -97,6 +97,19 @@ func (s *ForInStmt) Span() token.Span {
 	return s.Span_
 }
 
+type TryCatchStmt struct {
+	Try       *BlockStmt
+	CatchName string
+	Catch     *BlockStmt
+	Span_     token.Span
+}
+
+func (*TryCatchStmt) node() {}
+func (*TryCatchStmt) stmt() {}
+func (s *TryCatchStmt) Span() token.Span {
+	return s.Span_
+}
+
 type MatchArm struct {
 	Pattern Expr
 	IsWildcard bool

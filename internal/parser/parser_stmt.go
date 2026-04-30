@@ -23,6 +23,8 @@ func (p *Parser) parseStatement() ast.Stmt {
 		return p.parseForStmt()
 	case token.Match:
 		return p.parseMatchStmt()
+	case token.Try:
+		return p.parseTryCatchStmt()
 	case token.Break:
 		return p.parseBreakStmt()
 	case token.Continue:
@@ -174,6 +176,26 @@ func (p *Parser) parseMatchStmt() ast.Stmt {
 		Value: value,
 		Arms:  arms,
 		Span_: token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
+	}
+}
+
+func (p *Parser) parseTryCatchStmt() ast.Stmt {
+	startTok := p.expect(token.Try, "expected 'try'")
+	tryBlock := p.parseBlockStmt()
+	if tryBlock == nil {
+		return nil
+	}
+	p.expect(token.Catch, "expected 'catch' after try block")
+	catchName := p.expect(token.Ident, "expected catch binding name").Lexeme
+	catchBlock := p.parseBlockStmt()
+	if catchBlock == nil {
+		return nil
+	}
+	return &ast.TryCatchStmt{
+		Try:       tryBlock,
+		CatchName: catchName,
+		Catch:     catchBlock,
+		Span_:     token.Span{Start: startTok.Span.Start, End: catchBlock.Span().End},
 	}
 }
 

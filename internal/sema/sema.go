@@ -128,6 +128,8 @@ func (a *Analyzer) visitStmt(stmt ast.Stmt) {
 		a.visitLoopStmt(s.Cond, s.Body)
 	case *ast.ForInStmt:
 		a.visitForInStmt(s)
+	case *ast.TryCatchStmt:
+		a.visitTryCatchStmt(s)
 	case *ast.MatchStmt:
 		a.visitMatchStmt(s)
 	case *ast.BreakStmt:
@@ -171,6 +173,21 @@ func (a *Analyzer) visitForInStmt(stmt *ast.ForInStmt) {
 	defer func() { a.loopDepth-- }()
 	if stmt.Body != nil {
 		a.visitBlockStmt(stmt.Body)
+	}
+}
+
+func (a *Analyzer) visitTryCatchStmt(stmt *ast.TryCatchStmt) {
+	if stmt.Try != nil {
+		a.visitNestedBlockStmt(stmt.Try)
+	}
+	prevScope := a.scope
+	a.scope = NewScope(prevScope)
+	defer func() { a.scope = prevScope }()
+	if stmt.CatchName != "" {
+		a.scope.Define(Symbol{Name: stmt.CatchName, IsConst: true})
+	}
+	if stmt.Catch != nil {
+		a.visitBlockStmt(stmt.Catch)
 	}
 }
 

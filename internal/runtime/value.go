@@ -170,3 +170,4 @@ type ErrorValue struct {
 
 func (e *ErrorValue) Kind() ValueKind { return ErrorKind }
 func (e *ErrorValue) String() string  { return e.Message }
+func (e *ErrorValue) Error() string   { return e.Message }

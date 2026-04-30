@@ -1,0 +1,55 @@
+let status = ""
+let outer = ""
+
+try {
+  panic("boom")
+} catch err {
+  if typeOf(err) != "error" {
+    panic("expected panic catch to receive error")
+  }
+  status = err.message
+}
+
+if status != "panic: boom" {
+  panic("unexpected panic catch message")
+}
+
+try {
+  len(1)
+} catch err {
+  outer = err.message
+}
+
+if outer == "" {
+  panic("expected runtime error to be caught")
+}
+
+let nested = ""
+try {
+  try {
+    panic("inner")
+  } catch err {
+    nested = err.message
+  }
+} catch err {
+  panic("outer handler should not run")
+}
+
+if nested != "panic: inner" {
+  panic("unexpected nested catch result")
+}
+
+fn boom() {
+  panic("fn boom")
+}
+
+let fromCall = ""
+try {
+  boom()
+} catch err {
+  fromCall = err.message
+}
+
+if fromCall != "panic: fn boom" {
+  panic("expected cross-function panic to be caught")
+}

@@ -23,6 +23,7 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 		} else {
 			c.emitNull()
 		}
+		c.emitExceptionScopeCleanup(-1)
 		c.emit(bytecode.OpReturn)
 	case *ast.IfStmt:
 		c.compileIfStmt(s)
@@ -32,6 +33,8 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 		c.compileForStmt(s)
 	case *ast.ForInStmt:
 		c.compileForInStmt(s)
+	case *ast.TryCatchStmt:
+		c.compileTryCatchStmt(s)
 	case *ast.MatchStmt:
 		c.compileMatchStmt(s)
 	case *ast.BreakStmt:
@@ -184,6 +187,31 @@ func (c *Compiler) compileMatchStmt(stmt *ast.MatchStmt) {
 	}
 }
 
+func (c *Compiler) compileTryCatchStmt(stmt *ast.TryCatchStmt) {
+	c.emit(bytecode.OpPushExceptionHandler)
+	catchAddrPos := len(c.current.chunk.Code)
+	c.emitByte(0xff)
+	c.emitByte(0xff)
+	c.current.tryStack = append(c.current.tryStack, TryContext{ScopeDepth: c.current.scopeDepth})
+
+	c.compileBlockStmt(stmt.Try, true)
+	c.current.tryStack = c.current.tryStack[:len(c.current.tryStack)-1]
+	c.emit(bytecode.OpPopExceptionHandler)
+	endJump := c.emitJump(bytecode.OpJump)
+
+	catchTarget := len(c.current.chunk.Code)
+	c.patchAddress(catchAddrPos, catchTarget)
+
+	c.beginScope()
+	if stmt.CatchName != "" {
+		c.addLocal(stmt.CatchName, true)
+	}
+	c.compileBlockStmt(stmt.Catch, false)
+	c.endScope()
+
+	c.patchJump(endJump)
+}
+
 func (c *Compiler) compileLoop(cond ast.Expr, body *ast.BlockStmt) {
 	loopStart := len(c.current.chunk.Code)
 	exitJump := -1
@@ -211,6 +239,7 @@ func (c *Compiler) compileBreakStmt(_ *ast.BreakStmt) {
 		return
 	}
 	loop := &c.current.loopStack[len(c.current.loopStack)-1]
+	c.emitExceptionScopeCleanup(loop.ScopeDepth)
 	c.emitLoopScopeCleanup(loop.ScopeDepth)
 	jump := c.emitJump(bytecode.OpJump)
 	loop.BreakJumps = append(loop.BreakJumps, jump)
@@ -222,6 +251,7 @@ func (c *Compiler) compileContinueStmt(_ *ast.ContinueStmt) {
 		return
 	}
 	loop := c.current.loopStack[len(c.current.loopStack)-1]
+	c.emitExceptionScopeCleanup(loop.ScopeDepth)
 	c.emitLoopScopeCleanup(loop.ScopeDepth)
 	c.emitLoop(loop.ContinueTarget)
 }

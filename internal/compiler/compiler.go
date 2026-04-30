@@ -21,6 +21,10 @@ type LoopContext struct {
 	ScopeDepth     int
 }
 
+type TryContext struct {
+	ScopeDepth int
+}
+
 type CompiledModule struct {
 	Proto *runtime.FunctionProto
 	Chunk *bytecode.Chunk
@@ -38,6 +42,7 @@ type FuncCompiler struct {
 	locals     []Local
 	scopeDepth int
 	loopStack  []LoopContext
+	tryStack   []TryContext
 }
 
 func Compile(program *ast.Program) (*CompiledModule, []error) {
@@ -125,6 +130,11 @@ func (c *Compiler) emitJump(op bytecode.Opcode) int {
 	return pos
 }
 
+func (c *Compiler) patchAddress(pos int, value int) {
+	c.current.chunk.Code[pos] = byte(value >> 8)
+	c.current.chunk.Code[pos+1] = byte(value)
+}
+
 func (c *Compiler) patchJump(pos int) {
 	jump := len(c.current.chunk.Code) - pos - 2
 	c.current.chunk.Code[pos] = byte(jump >> 8)
@@ -155,6 +165,16 @@ func (c *Compiler) endLoop() LoopContext {
 func (c *Compiler) patchBreakJumps(loop LoopContext) {
 	for _, jump := range loop.BreakJumps {
 		c.patchJump(jump)
+	}
+}
+
+func (c *Compiler) emitExceptionScopeCleanup(scopeDepth int) {
+	for i := len(c.current.tryStack) - 1; i >= 0; i-- {
+		ctx := c.current.tryStack[i]
+		if ctx.ScopeDepth <= scopeDepth {
+			break
+		}
+		c.emit(bytecode.OpPopExceptionHandler)
 	}
 }
 

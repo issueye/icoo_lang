@@ -251,6 +251,12 @@ func (vm *VM) execGetProperty(name string) error {
 			})
 			return nil
 		}
+	case *runtime.ErrorValue:
+		if name == "message" {
+			vm.Push(runtime.StringValue{Value: value.Message})
+			return nil
+		}
+		return runtimeError("undefined property: %s", name)
 	case *runtime.ObjectValue:
 		field, ok := value.Fields[name]
 		if ok {

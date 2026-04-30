@@ -12,6 +12,7 @@ func (vm *VM) Run(closure *runtime.Closure) (runtime.Value, error) {
 func (vm *VM) RunModule(path string, closure *runtime.Closure) (runtime.Value, error) {
 	vm.frames = vm.frames[:0]
 	vm.stack = vm.stack[:0]
+	vm.handlers = vm.handlers[:0]
 	module := &runtime.Module{
 		Path:    path,
 		Exports: make(map[string]runtime.Value),
@@ -38,7 +39,10 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 			idx := vm.readShort(frame, chunk)
 			value, err := chunk.GetConstant(idx)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			vm.Push(value)
 		case bytecode.OpNull:
@@ -60,46 +64,69 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 		case bytecode.OpGetGlobal:
 			name, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			value, ok := vm.globals[name]
 			if !ok {
-				return nil, runtimeError("undefined global: %s", name)
+				if raised := vm.raise(runtimeError("undefined global: %s", name)); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			vm.Push(value)
 		case bytecode.OpDefineGlobal:
 			name, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			vm.globals[name] = vm.Pop()
 		case bytecode.OpSetGlobal:
 			name, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			if _, ok := vm.globals[name]; !ok {
-				return nil, runtimeError("undefined global: %s", name)
+				if raised := vm.raise(runtimeError("undefined global: %s", name)); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			vm.globals[name] = vm.Peek(0)
 		case bytecode.OpAdd:
 			if err := vm.execAdd(); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpSub, bytecode.OpMul, bytecode.OpDiv, bytecode.OpMod:
 			if err := vm.execBinaryNumeric(op); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpNegate:
 			if err := vm.execNegate(); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpNot:
 			v := vm.Pop()
 			vm.Push(runtime.BoolValue{Value: !runtime.IsTruthy(v)})
 		case bytecode.OpEqual, bytecode.OpNotEqual, bytecode.OpGreater, bytecode.OpGreaterEqual, bytecode.OpLess, bytecode.OpLessEqual:
 			if err := vm.execCompare(op); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpJump:
 			offset := int(vm.readShort(frame, chunk))
@@ -121,22 +148,33 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 			argc := int(vm.readByte(frame, chunk))
 			callee := vm.Peek(argc)
 			if err := vm.CallValue(callee, argc); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpClosure:
 			idx := vm.readShort(frame, chunk)
 			value, err := chunk.GetConstant(idx)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			vm.Push(value)
 		case bytecode.OpImportModule:
 			spec, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			if vm.loadModule == nil {
-				return nil, runtimeError("module loader is not configured")
+				if raised := vm.raise(runtimeError("module loader is not configured")); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			importerPath := ""
 			if frame.Module != nil {
@@ -144,16 +182,25 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 			}
 			module, err := vm.loadModule(importerPath, spec)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			vm.Push(module)
 		case bytecode.OpExport:
 			name, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			if frame.Module == nil {
-				return nil, runtimeError("export used without module context")
+				if raised := vm.raise(runtimeError("export used without module context")); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			if frame.Module.Exports == nil {
 				frame.Module.Exports = make(map[string]runtime.Value)
@@ -163,6 +210,9 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 			result := vm.Pop()
 			frameBase := frame.Base
 			vm.frames = vm.frames[:len(vm.frames)-1]
+			for len(vm.handlers) > 0 && vm.handlers[len(vm.handlers)-1].FrameIndex >= len(vm.frames) {
+				vm.handlers = vm.handlers[:len(vm.handlers)-1]
+			}
 			vm.stack = vm.stack[:frameBase]
 			if len(vm.frames) == 0 {
 				return result, nil
@@ -183,7 +233,10 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 				keyValue := vm.Pop()
 				key, ok := keyValue.(runtime.StringValue)
 				if !ok {
-					return nil, runtimeError("object key must be string")
+					if raised := vm.raise(runtimeError("object key must be string")); raised != nil {
+						return nil, raised
+					}
+					continue
 				}
 				fields[key.Value] = value
 			}
@@ -191,26 +244,56 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 		case bytecode.OpGetProperty:
 			name, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			if err := vm.execGetProperty(name); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpSetProperty:
 			name, err := vm.readStringConstant(frame, chunk)
 			if err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+				continue
 			}
 			if err := vm.execSetProperty(name); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpGetIndex:
 			if err := vm.execGetIndex(); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
 			}
 		case bytecode.OpSetIndex:
 			if err := vm.execSetIndex(); err != nil {
-				return nil, err
+				if raised := vm.raise(err); raised != nil {
+					return nil, raised
+				}
+			}
+		case bytecode.OpPushExceptionHandler:
+			catchIP := int(vm.readShort(frame, chunk))
+			vm.handlers = append(vm.handlers, ExceptionHandler{FrameIndex: len(vm.frames) - 1, StackDepth: len(vm.stack), CatchIP: catchIP})
+		case bytecode.OpPopExceptionHandler:
+			if len(vm.handlers) > 0 {
+				vm.handlers = vm.handlers[:len(vm.handlers)-1]
+			}
+		case bytecode.OpThrow:
+			value := vm.Pop()
+			err, ok := value.(*runtime.ErrorValue)
+			if !ok {
+				err = &runtime.ErrorValue{Message: value.String()}
+			}
+			if raised := vm.raise(err); raised != nil {
+				return nil, raised
 			}
 		default:
 			return nil, runtimeError("unsupported opcode: %s", op.String())

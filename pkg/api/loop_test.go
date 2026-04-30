@@ -32,6 +32,40 @@ if sum != 25 {
 	}
 }
 
+func TestRuntimeRunSource_BreakContinueAcrossTryDoNotLeakHandlers(t *testing.T) {
+	src := `
+let i = 0
+let sum = 0
+
+for i < 6 {
+  i = i + 1
+
+  try {
+    if i == 2 {
+      continue
+    }
+    if i == 5 {
+      break
+    }
+    sum = sum + i
+  } catch err {
+    panic(err.message)
+  }
+}
+
+if sum != 8 {
+  panic("unexpected try loop sum")
+}
+
+len(1)
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatalf("expected final uncaught runtime error after loop")
+	}
+}
+
 func TestRuntimeRunSource_InfiniteForWithBreak(t *testing.T) {
 	src := `
 let i = 0
