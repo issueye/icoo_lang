@@ -84,10 +84,11 @@ func (s *ForStmt) Span() token.Span {
 }
 
 type ForInStmt struct {
-	Name     string
-	Iterable Expr
-	Body     *BlockStmt
-	Span_    token.Span
+	Name      string
+	ValueName string
+	Iterable  Expr
+	Body      *BlockStmt
+	Span_     token.Span
 }
 
 func (*ForInStmt) node() {}

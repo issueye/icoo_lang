@@ -96,7 +96,7 @@ func (v *ArrayIterator) Kind() ValueKind { return IteratorKind }
 func (v *ArrayIterator) String() string  { return "<array_iterator>" }
 
 type ObjectIterator struct {
-	Keys  []string
+	Items []Value
 	Index int
 }
 

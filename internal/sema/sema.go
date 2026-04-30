@@ -162,6 +162,11 @@ func (a *Analyzer) visitForInStmt(stmt *ast.ForInStmt) {
 	if stmt.Name != "_" {
 		a.scope.Define(Symbol{Name: stmt.Name})
 	}
+	if stmt.ValueName != "" && stmt.ValueName != "_" {
+		if !a.scope.Define(Symbol{Name: stmt.ValueName}) {
+			a.report(stmt.Span(), "duplicate for-in binding: "+stmt.ValueName)
+		}
+	}
 	a.loopDepth++
 	defer func() { a.loopDepth-- }()
 	if stmt.Body != nil {

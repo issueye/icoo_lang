@@ -47,12 +47,19 @@ export const answer = 42
 	if err := os.WriteFile(mainPath, []byte(`import "./math.ic" as math
 
 let keys = ""
-for key in math {
+let score = 0
+for key, value in math {
   keys = keys + key
+  if key == "answer" {
+    score = score + value
+  }
 }
 
 if keys != "answerversion" {
   panic("unexpected module iteration order")
+}
+if score != 42 {
+  panic("unexpected module iteration values")
 }
 `), 0o644); err != nil {
 		t.Fatalf("write main module: %v", err)

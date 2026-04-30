@@ -1,29 +1,50 @@
 let text = "ab"
 let out = ""
+let textIndexSum = 0
 
-for ch in text {
+for idx, ch in text {
+  textIndexSum = textIndexSum + idx
   out = out + ch
 }
 
 println(out)
+println(textIndexSum)
 
 let obj = {b: 2, a: 1}
 let keys = ""
+let total = 0
 
-for key in obj {
+for key, value in obj {
   keys = keys + key
+  total = total + value
 }
 
 println(keys)
+println(total)
 
-let iter = [1, 2, 3].iter()
+let arr = [1, 2, 3]
+let arrIndexSum = 0
 let sum = 0
 
-for item in iter {
-  sum = sum + item
+for idx, value in arr {
+  arrIndexSum = arrIndexSum + idx
+  sum = sum + value
 }
 
+println(arrIndexSum)
 println(sum)
+
+let iter = [7, 8].iter()
+let iterIndexSum = 0
+let iterValueSum = 0
+
+for idx, value in iter {
+  iterIndexSum = iterIndexSum + idx
+  iterValueSum = iterValueSum + value
+}
+
+println(iterIndexSum)
+println(iterValueSum)
 
 let custom = {
   label: "fallback",

@@ -24,6 +24,8 @@
 - `return`
 - `if / else`
 - `while`
+- `for`
+- `for in`
 - 基础表达式
 - 函数调用
 - 数组字面量
@@ -31,16 +33,15 @@
 - 成员访问
 - 下标访问
 - 顶层函数与变量声明
+- 基础 `import / export`
+- 统一迭代器协议（`iter()` / `next()`）
 
 ### 暂不纳入 MVP
 
-- `match`
 - `try / catch`
 - `go`
 - `select`
-- `for in`
 - `type / interface`
-- 完整模块系统
 - 完整闭包优化
 
 ---
@@ -52,10 +53,11 @@
 1. `icoo check demo.ic` 能完成词法、语法、基础语义检查
 2. `icoo run demo.ic` 能运行最小脚本
 3. 支持函数定义与调用
-4. 支持 `if/else` 与 `while`
-5. 支持数组与对象
-6. 支持 builtin：`print`、`println`、`len`、`typeOf`
-7. `go test ./...` 能通过核心包测试
+4. 支持 `if/else`、`for` 与 `while`
+5. 支持数组、对象与 `for-in` 迭代
+6. 支持基础 `import/export`
+7. 支持 builtin：`print`、`println`、`len`、`typeOf`
+8. `go test ./...` 能通过核心包测试
 
 ---
 

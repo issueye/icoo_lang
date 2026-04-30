@@ -149,9 +149,120 @@ IfStmt          = "if" Expression Block [ "else" ( Block | IfStmt ) ] ;
 WhileStmt       = "while" Expression Block ;
 
 ForStmt         = "for" (
-                    Expression? ";" Expression? ";" Expression?
-                  | Identifier "in" Expression
-                  ) Block ;
+                    [ ForInBinding ] "in" Expression
+                  | Expression
+                  )? Block ;
+
+ForInBinding    = BindingName [ "," BindingName ] ;
+BindingName     = Identifier | "_" ;
+```
+
+### 迭代器协议与 `for-in` 语义
+
+Icoo 当前的 `for-in` 基于统一迭代器协议，而不是为数组单独做语法特判。
+
+任何可迭代值都需要暴露：
+
+- `iter()`：返回一个迭代器对象
+- `next()`：返回一步迭代结果对象
+
+内建迭代器的 `next()` 返回值统一为：
+
+```icoo
+{
+  key: <当前键或索引，结束时为 null>,
+  value: <当前值，结束时为 null>,
+  item: <单绑定 for-in 使用的值，结束时为 null>,
+  done: <是否结束>
+}
+```
+
+`for-in` 支持两种绑定形式：
+
+```icoo
+for item in iterable {
+  // 绑定 step.item
+}
+
+for key, value in iterable {
+  // 分别绑定 step.key 和 step.value
+}
+```
+
+其中 `_` 表示忽略该绑定：
+
+```icoo
+for _, value in arr {
+  println(value)
+}
+```
+
+当前内建可迭代对象的行为如下：
+
+- `array`
+  - `key` 为从 `0` 开始的索引
+  - `value` 为数组元素
+  - `item == value`
+- `string`
+  - 按 Unicode rune 逐个迭代
+  - `key` 为从 `0` 开始的 rune 索引
+  - `value` 为单个字符组成的字符串
+  - `item == value`
+- `object`
+  - 默认按字段名排序后的稳定顺序迭代
+  - `key` 为字段名
+  - `value` 为字段值
+  - `item` 为 `{ key, value }`
+- `module`
+  - 默认按导出名排序后的稳定顺序迭代
+  - `key` 为导出名
+  - `value` 为导出值
+  - `item` 为 `{ key, value }`
+- `iterator`
+  - 迭代器本身也可再次参与 `for-in`
+  - `iter()` 直接返回自身
+
+对象还支持覆盖默认迭代行为。如果对象自身存在 `iter` 字段，优先使用该字段：
+
+```icoo
+let obj = {
+  label: "fallback",
+  iter: fn() {
+    return ["x", "y"].iter()
+  }
+}
+
+for item in obj {
+  println(item)
+}
+```
+
+示例：
+
+```icoo
+let arr = [4, 5, 6]
+for idx, value in arr {
+  println(idx)
+  println(value)
+}
+
+let text = "ab"
+for idx, ch in text {
+  println(idx)
+  println(ch)
+}
+
+let obj = {b: 2, a: 1}
+for key, value in obj {
+  println(key)
+  println(value)
+}
+
+let iter = [7, 8].iter()
+for idx, value in iter {
+  println(idx)
+  println(value)
+}
 ```
 
 ### match
@@ -979,6 +1090,7 @@ const (
 	NativeFunctionKind
 	ClosureKind
 	ModuleKind
+	IteratorKind
 	ChannelKind
 	ErrorKind
 )
@@ -994,8 +1106,11 @@ const (
 复合值类型建议：
 - `ArrayValue { Elements []Value }`
 - `ObjectValue { Fields map[string]Value }`
+- `StringIterator { Runes []rune, Index int }`
+- `ArrayIterator { Array *ArrayValue, Index int }`
+- `ObjectIterator { Items []Value, Index int }`
 
-其中数组和对象建议使用引用语义。
+其中数组、对象和迭代器建议使用引用语义。
 
 ### FunctionProto / Closure
 

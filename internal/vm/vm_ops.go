@@ -147,14 +147,19 @@ func (vm *VM) execGetProperty(name string) error {
 				Fn: func(args []runtime.Value) (runtime.Value, error) {
 					if value.Index >= len(value.Runes) {
 						return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"key":   runtime.NullValue{},
 							"value": runtime.NullValue{},
+							"item":  runtime.NullValue{},
 							"done":  runtime.BoolValue{Value: true},
 						}}, nil
 					}
-					item := runtime.StringValue{Value: string(value.Runes[value.Index])}
+					idx := value.Index
+					item := runtime.StringValue{Value: string(value.Runes[idx])}
 					value.Index++
 					return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+						"key":   runtime.IntValue{Value: int64(idx)},
 						"value": item,
+						"item":  item,
 						"done":  runtime.BoolValue{Value: false},
 					}}, nil
 				},
@@ -190,14 +195,19 @@ func (vm *VM) execGetProperty(name string) error {
 				Fn: func(args []runtime.Value) (runtime.Value, error) {
 					if value.Array == nil || value.Index >= len(value.Array.Elements) {
 						return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"key":   runtime.NullValue{},
 							"value": runtime.NullValue{},
+							"item":  runtime.NullValue{},
 							"done":  runtime.BoolValue{Value: true},
 						}}, nil
 					}
-					item := value.Array.Elements[value.Index]
+					idx := value.Index
+					item := value.Array.Elements[idx]
 					value.Index++
 					return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+						"key":   runtime.IntValue{Value: int64(idx)},
 						"value": item,
+						"item":  item,
 						"done":  runtime.BoolValue{Value: false},
 					}}, nil
 				},
@@ -220,16 +230,21 @@ func (vm *VM) execGetProperty(name string) error {
 				Name:  "iterator.next",
 				Arity: 0,
 				Fn: func(args []runtime.Value) (runtime.Value, error) {
-					if value.Index >= len(value.Keys) {
+					if value.Index >= len(value.Items) {
 						return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"key":   runtime.NullValue{},
 							"value": runtime.NullValue{},
+							"item":  runtime.NullValue{},
 							"done":  runtime.BoolValue{Value: true},
 						}}, nil
 					}
-					item := runtime.StringValue{Value: value.Keys[value.Index]}
+					item := value.Items[value.Index]
 					value.Index++
+					pair, _ := item.(*runtime.ObjectValue)
 					return &runtime.ObjectValue{Fields: map[string]runtime.Value{
-						"value": item,
+						"key":   pair.Fields["key"],
+						"value": pair.Fields["value"],
+						"item":  item,
 						"done":  runtime.BoolValue{Value: false},
 					}}, nil
 				},
@@ -252,7 +267,14 @@ func (vm *VM) execGetProperty(name string) error {
 						keys = append(keys, key)
 					}
 					sort.Strings(keys)
-					return &runtime.ObjectIterator{Keys: keys}, nil
+					items := make([]runtime.Value, 0, len(keys))
+					for _, key := range keys {
+						items = append(items, &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"key":   runtime.StringValue{Value: key},
+							"value": value.Fields[key],
+						}})
+					}
+					return &runtime.ObjectIterator{Items: items}, nil
 				},
 			})
 			return nil
@@ -269,7 +291,14 @@ func (vm *VM) execGetProperty(name string) error {
 						keys = append(keys, key)
 					}
 					sort.Strings(keys)
-					return &runtime.ObjectIterator{Keys: keys}, nil
+					items := make([]runtime.Value, 0, len(keys))
+					for _, key := range keys {
+						items = append(items, &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"key":   runtime.StringValue{Value: key},
+							"value": value.Exports[key],
+						}})
+					}
+					return &runtime.ObjectIterator{Items: items}, nil
 				},
 			})
 			return nil

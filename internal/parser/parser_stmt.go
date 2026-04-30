@@ -95,19 +95,39 @@ func (p *Parser) parseWhileStmt() ast.Stmt {
 
 func (p *Parser) parseForStmt() ast.Stmt {
 	startTok := p.expect(token.For, "expected 'for'")
-	if (p.check(token.Ident) || p.check(token.Underscore)) && p.peek(1).Type == token.In {
-		nameTok := p.advance()
-		p.expect(token.In, "expected 'in' in for-in loop")
-		iterable := p.parseExpression(PrecLowest)
-		body := p.parseBlockStmt()
-		if body == nil {
-			return nil
+	if p.check(token.Ident) || p.check(token.Underscore) {
+		if p.peek(1).Type == token.In {
+			nameTok := p.advance()
+			p.expect(token.In, "expected 'in' in for-in loop")
+			iterable := p.parseExpression(PrecLowest)
+			body := p.parseBlockStmt()
+			if body == nil {
+				return nil
+			}
+			return &ast.ForInStmt{
+				Name:     nameTok.Lexeme,
+				Iterable: iterable,
+				Body:     body,
+				Span_:    token.Span{Start: startTok.Span.Start, End: body.Span().End},
+			}
 		}
-		return &ast.ForInStmt{
-			Name:     nameTok.Lexeme,
-			Iterable: iterable,
-			Body:     body,
-			Span_:    token.Span{Start: startTok.Span.Start, End: body.Span().End},
+		if p.peek(1).Type == token.Comma && (p.peek(2).Type == token.Ident || p.peek(2).Type == token.Underscore) && p.peek(3).Type == token.In {
+			nameTok := p.advance()
+			p.expect(token.Comma, "expected ',' in for-in binding list")
+			valueTok := p.advance()
+			p.expect(token.In, "expected 'in' in for-in loop")
+			iterable := p.parseExpression(PrecLowest)
+			body := p.parseBlockStmt()
+			if body == nil {
+				return nil
+			}
+			return &ast.ForInStmt{
+				Name:      nameTok.Lexeme,
+				ValueName: valueTok.Lexeme,
+				Iterable:  iterable,
+				Body:      body,
+				Span_:     token.Span{Start: startTok.Span.Start, End: body.Span().End},
+			}
 		}
 	}
 

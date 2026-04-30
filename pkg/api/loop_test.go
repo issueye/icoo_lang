@@ -120,13 +120,18 @@ func TestRuntimeRunSource_ForInObjectKeys(t *testing.T) {
 	src := `
 let obj = {b: 2, a: 1, c: 3}
 let keys = ""
+let total = 0
 
-for key in obj {
-  keys = keys + key
+for pair in obj {
+  keys = keys + pair.key
+  total = total + pair.value
 }
 
 if keys != "abc" {
   panic("unexpected object iteration order")
+}
+if total != 6 {
+  panic("unexpected object iteration values")
 }
 `
 
@@ -146,11 +151,17 @@ let third = iter.next()
 if first.done {
   panic("first step should not be done")
 }
+if first.key != 0 {
+  panic("unexpected first key")
+}
 if first.value != 4 {
   panic("unexpected first value")
 }
 if second.done {
   panic("second step should not be done")
+}
+if second.key != 1 {
+  panic("unexpected second key")
 }
 if second.value != 5 {
   panic("unexpected second value")
@@ -176,11 +187,17 @@ let third = iter.next()
 if first.done {
   panic("first string step should not be done")
 }
+if first.key != 0 {
+  panic("unexpected first string key")
+}
 if first.value != "a" {
   panic("unexpected first string step")
 }
 if second.done {
   panic("second string step should not be done")
+}
+if second.key != 1 {
+  panic("unexpected second string key")
 }
 if second.value != "b" {
   panic("unexpected second string step")
@@ -206,14 +223,26 @@ let third = iter.next()
 if first.done {
   panic("first object step should not be done")
 }
-if first.value != "x" {
+if first.key != "x" {
   panic("unexpected first object key")
+}
+if first.value != 2 {
+  panic("unexpected first object value")
+}
+if first.item.key != "x" {
+  panic("unexpected first object item key")
+}
+if first.item.value != 2 {
+  panic("unexpected first object item value")
 }
 if second.done {
   panic("second object step should not be done")
 }
-if second.value != "z" {
+if second.key != "z" {
   panic("unexpected second object key")
+}
+if second.value != 1 {
+  panic("unexpected second object value")
 }
 if !third.done {
   panic("third object step should be done")
@@ -223,6 +252,81 @@ if !third.done {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected object iterator protocol to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ForInObjectKeyValueBindings(t *testing.T) {
+	src := `
+let obj = {b: 2, a: 1, c: 3}
+let keys = ""
+let total = 0
+
+for key, value in obj {
+  keys = keys + key
+  total = total + value
+}
+
+if keys != "abc" {
+  panic("unexpected object key bindings")
+}
+if total != 6 {
+  panic("unexpected object value bindings")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected object key/value for-in to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ForInArrayKeyValueBindings(t *testing.T) {
+	src := `
+let arr = [4, 5, 6]
+let idxSum = 0
+let valueSum = 0
+
+for idx, value in arr {
+  idxSum = idxSum + idx
+  valueSum = valueSum + value
+}
+
+if idxSum != 3 {
+  panic("unexpected array index bindings")
+}
+if valueSum != 15 {
+  panic("unexpected array value bindings")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected array key/value for-in to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ForInStringKeyValueBindings(t *testing.T) {
+	src := `
+let text = "ab"
+let idxSum = 0
+let out = ""
+
+for idx, ch in text {
+  idxSum = idxSum + idx
+  out = out + ch
+}
+
+if idxSum != 1 {
+  panic("unexpected string index bindings")
+}
+if out != "ab" {
+  panic("unexpected string value bindings")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected string key/value for-in to succeed, got error: %v", err)
 	}
 }
 
@@ -246,6 +350,31 @@ if sum != 6 {
 	}
 }
 
+func TestRuntimeRunSource_DirectIteratorKeyValueBindings(t *testing.T) {
+	src := `
+let iter = [7, 8].iter()
+let idxSum = 0
+let valueSum = 0
+
+for idx, value in iter {
+  idxSum = idxSum + idx
+  valueSum = valueSum + value
+}
+
+if idxSum != 1 {
+  panic("unexpected direct iterator index bindings")
+}
+if valueSum != 15 {
+  panic("unexpected direct iterator value bindings")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected direct iterator key/value for-in to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_MixedIteratorKinds(t *testing.T) {
 	src := `
 let text = "ab"
@@ -258,8 +387,8 @@ for ch in text {
 let obj = {b: 2, a: 1}
 let keys = ""
 
-for key in obj {
-  keys = keys + key
+for pair in obj {
+  keys = keys + pair.key
 }
 
 if out != "ab" {
@@ -298,6 +427,35 @@ if out != "xy" {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected custom object iter override to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ModuleLikePairIterationShape(t *testing.T) {
+	src := `
+let obj = {answer: 42}
+let iter = obj.iter()
+let first = iter.next()
+
+if first.done {
+  panic("first pair step should not be done")
+}
+if first.key != "answer" {
+  panic("unexpected pair key")
+}
+if first.value != 42 {
+  panic("unexpected pair value")
+}
+if first.item.key != "answer" {
+  panic("unexpected pair item key")
+}
+if first.item.value != 42 {
+  panic("unexpected pair item value")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected pair iteration shape to succeed, got error: %v", err)
 	}
 }
 

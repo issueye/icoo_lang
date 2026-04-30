@@ -111,12 +111,29 @@ func (c *Compiler) compileForInStmt(stmt *ast.ForInStmt) {
 	exitJump := c.emitJump(bytecode.OpJumpIfTrue)
 	c.emit(bytecode.OpPop)
 
-	if stmt.Name != "_" {
+	if stmt.ValueName != "" {
+		if stmt.Name != "_" {
+			c.emit(bytecode.OpGetLocal)
+			c.emitShort(uint16(c.mustResolveLocal(stepName)))
+			keyNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "key"})
+			c.emit(bytecode.OpGetProperty)
+			c.emitShort(keyNameIdx)
+			c.addLocal(stmt.Name, false)
+		}
+		if stmt.ValueName != "_" {
+			c.emit(bytecode.OpGetLocal)
+			c.emitShort(uint16(c.mustResolveLocal(stepName)))
+			valueFieldIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "value"})
+			c.emit(bytecode.OpGetProperty)
+			c.emitShort(valueFieldIdx)
+			c.addLocal(stmt.ValueName, false)
+		}
+	} else if stmt.Name != "_" {
 		c.emit(bytecode.OpGetLocal)
 		c.emitShort(uint16(c.mustResolveLocal(stepName)))
-		valueNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "value"})
+		itemNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "item"})
 		c.emit(bytecode.OpGetProperty)
-		c.emitShort(valueNameIdx)
+		c.emitShort(itemNameIdx)
 		c.addLocal(stmt.Name, false)
 	}
 
