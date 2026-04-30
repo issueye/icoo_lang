@@ -78,6 +78,8 @@ func KindName(v Value) string {
 		return "channel"
 	case ErrorKind:
 		return "error"
+	case IteratorKind:
+		return "iterator"
 	default:
 		return "unknown"
 	}

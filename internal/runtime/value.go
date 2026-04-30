@@ -20,6 +20,7 @@ const (
 	ModuleKind
 	ChannelKind
 	ErrorKind
+	IteratorKind
 )
 
 type Value interface {
@@ -65,6 +66,14 @@ type StringValue struct {
 func (v StringValue) Kind() ValueKind { return StringKind }
 func (v StringValue) String() string  { return v.Value }
 
+type StringIterator struct {
+	Runes []rune
+	Index int
+}
+
+func (v *StringIterator) Kind() ValueKind { return IteratorKind }
+func (v *StringIterator) String() string  { return "<string_iterator>" }
+
 type ArrayValue struct {
 	Elements []Value
 }
@@ -77,6 +86,22 @@ func (v *ArrayValue) String() string {
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
 }
+
+type ArrayIterator struct {
+	Array *ArrayValue
+	Index int
+}
+
+func (v *ArrayIterator) Kind() ValueKind { return IteratorKind }
+func (v *ArrayIterator) String() string  { return "<array_iterator>" }
+
+type ObjectIterator struct {
+	Keys  []string
+	Index int
+}
+
+func (v *ObjectIterator) Kind() ValueKind { return IteratorKind }
+func (v *ObjectIterator) String() string  { return "<object_iterator>" }
 
 type ObjectValue struct {
 	Fields map[string]Value

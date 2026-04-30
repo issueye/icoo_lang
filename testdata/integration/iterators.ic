@@ -1,0 +1,26 @@
+let text = "ab"
+let out = ""
+
+for ch in text {
+  out = out + ch
+}
+
+println(out)
+
+let obj = {b: 2, a: 1}
+let keys = ""
+
+for key in obj {
+  keys = keys + key
+}
+
+println(keys)
+
+let iter = [1, 2, 3].iter()
+let sum = 0
+
+for item in iter {
+  sum = sum + item
+}
+
+println(sum)

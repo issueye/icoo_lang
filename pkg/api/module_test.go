@@ -33,6 +33,37 @@ let name = math.version
 	}
 }
 
+func TestRuntimeRunFile_IteratesModuleExports(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "math.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`export const version = "icoo"
+export const answer = 42
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "./math.ic" as math
+
+let keys = ""
+for key in math {
+  keys = keys + key
+}
+
+if keys != "answerversion" {
+  panic("unexpected module iteration order")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected module iteration run to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeCheckSource_ParsesImportExport(t *testing.T) {
 	src := `
 import "./math.ic" as math

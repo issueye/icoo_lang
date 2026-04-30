@@ -21,6 +21,8 @@ func (p *Parser) parseStatement() ast.Stmt {
 		return p.parseWhileStmt()
 	case token.For:
 		return p.parseForStmt()
+	case token.Match:
+		return p.parseMatchStmt()
 	case token.Break:
 		return p.parseBreakStmt()
 	case token.Continue:
@@ -121,6 +123,37 @@ func (p *Parser) parseForStmt() ast.Stmt {
 		Cond:  cond,
 		Body:  body,
 		Span_: token.Span{Start: startTok.Span.Start, End: body.Span().End},
+	}
+}
+
+func (p *Parser) parseMatchStmt() ast.Stmt {
+	startTok := p.expect(token.Match, "expected 'match'")
+	value := p.parseExpression(PrecLowest)
+	p.expect(token.LBrace, "expected '{' after match value")
+	arms := make([]ast.MatchArm, 0, 4)
+	for !p.check(token.RBrace) && !p.atEnd() {
+		armStart := p.current().Span.Start
+		isWildcard := p.match(token.Underscore)
+		var pattern ast.Expr
+		if !isWildcard {
+			pattern = p.parseExpression(PrecLowest)
+		}
+		body := p.parseBlockStmt()
+		if body == nil {
+			return nil
+		}
+		arms = append(arms, ast.MatchArm{
+			Pattern: pattern,
+			IsWildcard: isWildcard,
+			Body: body,
+			Span_: token.Span{Start: armStart, End: body.Span().End},
+		})
+	}
+	endTok := p.expect(token.RBrace, "expected '}' after match arms")
+	return &ast.MatchStmt{
+		Value: value,
+		Arms:  arms,
+		Span_: token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
 	}
 }
 

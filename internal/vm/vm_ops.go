@@ -1,6 +1,8 @@
 package vm
 
 import (
+	"sort"
+
 	"icoo_lang/internal/bytecode"
 	"icoo_lang/internal/runtime"
 )
@@ -116,23 +118,170 @@ func (vm *VM) execCompare(op bytecode.Opcode) error {
 func (vm *VM) execGetProperty(name string) error {
 	obj := vm.Pop()
 	switch value := obj.(type) {
+	case runtime.StringValue:
+		if name == "iter" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "string.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					return &runtime.StringIterator{Runes: []rune(value.Value)}, nil
+				},
+			})
+			return nil
+		}
+	case *runtime.StringIterator:
+		if name == "iter" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "iterator.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					return value, nil
+				},
+			})
+			return nil
+		}
+		if name == "next" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "iterator.next",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					if value.Index >= len(value.Runes) {
+						return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"value": runtime.NullValue{},
+							"done":  runtime.BoolValue{Value: true},
+						}}, nil
+					}
+					item := runtime.StringValue{Value: string(value.Runes[value.Index])}
+					value.Index++
+					return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+						"value": item,
+						"done":  runtime.BoolValue{Value: false},
+					}}, nil
+				},
+			})
+			return nil
+		}
+	case *runtime.ArrayValue:
+		if name == "iter" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "array.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					return &runtime.ArrayIterator{Array: value}, nil
+				},
+			})
+			return nil
+		}
+	case *runtime.ArrayIterator:
+		if name == "iter" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "iterator.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					return value, nil
+				},
+			})
+			return nil
+		}
+		if name == "next" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "iterator.next",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					if value.Array == nil || value.Index >= len(value.Array.Elements) {
+						return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"value": runtime.NullValue{},
+							"done":  runtime.BoolValue{Value: true},
+						}}, nil
+					}
+					item := value.Array.Elements[value.Index]
+					value.Index++
+					return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+						"value": item,
+						"done":  runtime.BoolValue{Value: false},
+					}}, nil
+				},
+			})
+			return nil
+		}
+	case *runtime.ObjectIterator:
+		if name == "iter" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "iterator.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					return value, nil
+				},
+			})
+			return nil
+		}
+		if name == "next" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "iterator.next",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					if value.Index >= len(value.Keys) {
+						return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+							"value": runtime.NullValue{},
+							"done":  runtime.BoolValue{Value: true},
+						}}, nil
+					}
+					item := runtime.StringValue{Value: value.Keys[value.Index]}
+					value.Index++
+					return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+						"value": item,
+						"done":  runtime.BoolValue{Value: false},
+					}}, nil
+				},
+			})
+			return nil
+		}
 	case *runtime.ObjectValue:
 		field, ok := value.Fields[name]
-		if !ok {
-			return runtimeError("undefined property: %s", name)
+		if ok {
+			vm.Push(field)
+			return nil
 		}
-		vm.Push(field)
-		return nil
+		if name == "iter" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "object.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					keys := make([]string, 0, len(value.Fields))
+					for key := range value.Fields {
+						keys = append(keys, key)
+					}
+					sort.Strings(keys)
+					return &runtime.ObjectIterator{Keys: keys}, nil
+				},
+			})
+			return nil
+		}
+		return runtimeError("undefined property: %s", name)
 	case *runtime.Module:
+		if name == "iter" {
+			vm.Push(&runtime.NativeFunction{
+				Name:  "module.iter",
+				Arity: 0,
+				Fn: func(args []runtime.Value) (runtime.Value, error) {
+					keys := make([]string, 0, len(value.Exports))
+					for key := range value.Exports {
+						keys = append(keys, key)
+					}
+					sort.Strings(keys)
+					return &runtime.ObjectIterator{Keys: keys}, nil
+				},
+			})
+			return nil
+		}
 		field, ok := value.Exports[name]
 		if !ok {
 			return runtimeError("undefined export: %s", name)
 		}
 		vm.Push(field)
 		return nil
-	default:
-		return runtimeError("property access not supported on %s", runtime.KindName(obj))
 	}
+	return runtimeError("property access not supported on %s", runtime.KindName(obj))
 }
 
 func (vm *VM) execSetProperty(name string) error {

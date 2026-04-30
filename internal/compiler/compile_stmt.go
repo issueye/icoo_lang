@@ -32,6 +32,8 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 		c.compileForStmt(s)
 	case *ast.ForInStmt:
 		c.compileForInStmt(s)
+	case *ast.MatchStmt:
+		c.compileMatchStmt(s)
 	case *ast.BreakStmt:
 		c.compileBreakStmt(s)
 	case *ast.ContinueStmt:
@@ -78,54 +80,91 @@ func (c *Compiler) compileForInStmt(stmt *ast.ForInStmt) {
 	defer c.endScope()
 
 	iterName := c.syntheticName("iter")
-	indexName := c.syntheticName("idx")
+	stepName := c.syntheticName("step")
 
 	c.compileExpr(stmt.Iterable)
+	iterMethodIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "iter"})
+	c.emit(bytecode.OpGetProperty)
+	c.emitShort(iterMethodIdx)
+	c.emit(bytecode.OpCall)
+	c.emitByte(0)
 	c.addLocal(iterName, true)
-	c.emitConstant(runtime.IntValue{Value: -1})
-	c.addLocal(indexName, false)
 
 	loopStart := len(c.current.chunk.Code)
-
-	c.emit(bytecode.OpGetLocal)
-	c.emitShort(uint16(c.mustResolveLocal(indexName)))
-	c.emitConstant(runtime.IntValue{Value: 1})
-	c.emit(bytecode.OpAdd)
-	c.emit(bytecode.OpSetLocal)
-	c.emitShort(uint16(c.mustResolveLocal(indexName)))
-	c.emit(bytecode.OpPop)
-
-	c.emit(bytecode.OpGetLocal)
-	c.emitShort(uint16(c.mustResolveLocal(indexName)))
-	lenNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "len"})
-	c.emit(bytecode.OpGetGlobal)
-	c.emitShort(lenNameIdx)
-	c.emit(bytecode.OpGetLocal)
-	c.emitShort(uint16(c.mustResolveLocal(iterName)))
-	c.emit(bytecode.OpCall)
-	c.emitByte(1)
-	c.emit(bytecode.OpLess)
-	exitJump := c.emitJump(bytecode.OpJumpIfFalse)
-	c.emit(bytecode.OpPop)
-
 	c.beginLoop(loopStart)
 	c.beginScope()
+
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(iterName)))
+	nextMethodIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "next"})
+	c.emit(bytecode.OpGetProperty)
+	c.emitShort(nextMethodIdx)
+	c.emit(bytecode.OpCall)
+	c.emitByte(0)
+	c.addLocal(stepName, true)
+
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(c.mustResolveLocal(stepName)))
+	doneNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "done"})
+	c.emit(bytecode.OpGetProperty)
+	c.emitShort(doneNameIdx)
+	exitJump := c.emitJump(bytecode.OpJumpIfTrue)
+	c.emit(bytecode.OpPop)
+
 	if stmt.Name != "_" {
 		c.emit(bytecode.OpGetLocal)
-		c.emitShort(uint16(c.mustResolveLocal(iterName)))
-		c.emit(bytecode.OpGetLocal)
-		c.emitShort(uint16(c.mustResolveLocal(indexName)))
-		c.emit(bytecode.OpGetIndex)
+		c.emitShort(uint16(c.mustResolveLocal(stepName)))
+		valueNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "value"})
+		c.emit(bytecode.OpGetProperty)
+		c.emitShort(valueNameIdx)
 		c.addLocal(stmt.Name, false)
 	}
+
+	exitCleanupCount := c.localsAboveDepth(c.current.loopStack[len(c.current.loopStack)-1].ScopeDepth)
 	c.compileBlockStmt(stmt.Body, false)
 	c.endScope()
 
 	loop := c.endLoop()
 	c.emitLoop(loop.ContinueTarget)
 	c.patchJump(exitJump)
+	for i := 0; i < exitCleanupCount; i++ {
+		c.emit(bytecode.OpPop)
+	}
 	c.emit(bytecode.OpPop)
 	c.patchBreakJumps(loop)
+}
+
+func (c *Compiler) compileMatchStmt(stmt *ast.MatchStmt) {
+	matchName := c.syntheticName("match")
+	c.beginScope()
+	defer c.endScope()
+	c.compileExpr(stmt.Value)
+	c.addLocal(matchName, true)
+
+	endJumps := make([]int, 0, len(stmt.Arms))
+	for _, arm := range stmt.Arms {
+		var nextArmJump int
+		if !arm.IsWildcard {
+			c.emit(bytecode.OpGetLocal)
+			c.emitShort(uint16(c.mustResolveLocal(matchName)))
+			c.compileExpr(arm.Pattern)
+			c.emit(bytecode.OpEqual)
+			nextArmJump = c.emitJump(bytecode.OpJumpIfFalse)
+			c.emit(bytecode.OpPop)
+		}
+
+		c.compileBlockStmt(arm.Body, true)
+		endJumps = append(endJumps, c.emitJump(bytecode.OpJump))
+
+		if !arm.IsWildcard {
+			c.patchJump(nextArmJump)
+			c.emit(bytecode.OpPop)
+		}
+	}
+
+	for _, jump := range endJumps {
+		c.patchJump(jump)
+	}
 }
 
 func (c *Compiler) compileLoop(cond ast.Expr, body *ast.BlockStmt) {
@@ -168,6 +207,18 @@ func (c *Compiler) compileContinueStmt(_ *ast.ContinueStmt) {
 	loop := c.current.loopStack[len(c.current.loopStack)-1]
 	c.emitLoopScopeCleanup(loop.ScopeDepth)
 	c.emitLoop(loop.ContinueTarget)
+}
+
+func (c *Compiler) localsAboveDepth(depth int) int {
+	count := 0
+	for i := len(c.current.locals) - 1; i >= 0; i-- {
+		local := c.current.locals[i]
+		if local.Depth <= depth {
+			break
+		}
+		count++
+	}
+	return count
 }
 
 func (c *Compiler) syntheticName(prefix string) string {

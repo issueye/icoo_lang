@@ -128,6 +128,8 @@ func (a *Analyzer) visitStmt(stmt ast.Stmt) {
 		a.visitLoopStmt(s.Cond, s.Body)
 	case *ast.ForInStmt:
 		a.visitForInStmt(s)
+	case *ast.MatchStmt:
+		a.visitMatchStmt(s)
 	case *ast.BreakStmt:
 		if a.loopDepth == 0 {
 			a.report(s.Span(), "break used outside loop")
@@ -164,6 +166,29 @@ func (a *Analyzer) visitForInStmt(stmt *ast.ForInStmt) {
 	defer func() { a.loopDepth-- }()
 	if stmt.Body != nil {
 		a.visitBlockStmt(stmt.Body)
+	}
+}
+
+func (a *Analyzer) visitMatchStmt(stmt *ast.MatchStmt) {
+	if stmt.Value != nil {
+		a.visitExpr(stmt.Value)
+	}
+	seenWildcard := false
+	for i, arm := range stmt.Arms {
+		if arm.IsWildcard {
+			if seenWildcard {
+				a.report(arm.Span_, "duplicate wildcard match arm")
+			}
+			if i != len(stmt.Arms)-1 {
+				a.report(arm.Span_, "wildcard match arm must be last")
+			}
+			seenWildcard = true
+		} else if arm.Pattern != nil {
+			a.visitExpr(arm.Pattern)
+		}
+		if arm.Body != nil {
+			a.visitNestedBlockStmt(arm.Body)
+		}
 	}
 }
 

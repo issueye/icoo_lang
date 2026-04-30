@@ -96,6 +96,25 @@ func (s *ForInStmt) Span() token.Span {
 	return s.Span_
 }
 
+type MatchArm struct {
+	Pattern Expr
+	IsWildcard bool
+	Body *BlockStmt
+	Span_ token.Span
+}
+
+type MatchStmt struct {
+	Value Expr
+	Arms  []MatchArm
+	Span_ token.Span
+}
+
+func (*MatchStmt) node() {}
+func (*MatchStmt) stmt() {}
+func (s *MatchStmt) Span() token.Span {
+	return s.Span_
+}
+
 type BreakStmt struct {
 	Span_ token.Span
 }
