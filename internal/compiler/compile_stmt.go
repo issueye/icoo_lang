@@ -25,6 +25,12 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 		c.compileIfStmt(s)
 	case *ast.WhileStmt:
 		c.compileWhileStmt(s)
+	case *ast.ForStmt:
+		c.compileForStmt(s)
+	case *ast.BreakStmt:
+		c.compileBreakStmt(s)
+	case *ast.ContinueStmt:
+		c.compileContinueStmt(s)
 	default:
 		c.errorf("unsupported statement")
 	}
@@ -55,12 +61,49 @@ func (c *Compiler) compileIfStmt(stmt *ast.IfStmt) {
 }
 
 func (c *Compiler) compileWhileStmt(stmt *ast.WhileStmt) {
+	c.compileLoop(stmt.Cond, stmt.Body)
+}
+
+func (c *Compiler) compileForStmt(stmt *ast.ForStmt) {
+	c.compileLoop(stmt.Cond, stmt.Body)
+}
+
+func (c *Compiler) compileLoop(cond ast.Expr, body *ast.BlockStmt) {
 	loopStart := len(c.current.chunk.Code)
-	c.compileExpr(stmt.Cond)
-	exitJump := c.emitJump(bytecode.OpJumpIfFalse)
-	c.emit(bytecode.OpPop)
-	c.compileBlockStmt(stmt.Body, true)
-	c.emitLoop(loopStart)
-	c.patchJump(exitJump)
-	c.emit(bytecode.OpPop)
+	exitJump := -1
+	if cond != nil {
+		c.compileExpr(cond)
+		exitJump = c.emitJump(bytecode.OpJumpIfFalse)
+		c.emit(bytecode.OpPop)
+	}
+
+	c.beginLoop(loopStart)
+	c.compileBlockStmt(body, true)
+	loop := c.endLoop()
+	c.emitLoop(loop.ContinueTarget)
+
+	if exitJump >= 0 {
+		c.patchJump(exitJump)
+		c.emit(bytecode.OpPop)
+	}
+	c.patchBreakJumps(loop)
+}
+
+func (c *Compiler) compileBreakStmt(_ *ast.BreakStmt) {
+	if len(c.current.loopStack) == 0 {
+		c.errorf("break used outside loop")
+		return
+	}
+	loop := &c.current.loopStack[len(c.current.loopStack)-1]
+	jump := c.emitJump(bytecode.OpJump)
+	loop.BreakJumps = append(loop.BreakJumps, jump)
+}
+
+func (c *Compiler) compileContinueStmt(_ *ast.ContinueStmt) {
+	if len(c.current.loopStack) == 0 {
+		c.errorf("continue used outside loop")
+		return
+	}
+	loop := c.current.loopStack[len(c.current.loopStack)-1]
+	c.emitLoop(loop.ContinueTarget)
 }

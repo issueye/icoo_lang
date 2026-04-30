@@ -10,6 +10,7 @@ type Analyzer struct {
 	diagnostics []diag.Diagnostic
 	scope       *Scope
 	inFunction  int
+	loopDepth   int
 }
 
 func Analyze(program *ast.Program) []diag.Diagnostic {
@@ -122,10 +123,32 @@ func (a *Analyzer) visitStmt(stmt ast.Stmt) {
 			a.visitStmt(s.Else)
 		}
 	case *ast.WhileStmt:
-		a.visitExpr(s.Cond)
-		if s.Body != nil {
-			a.visitNestedBlockStmt(s.Body)
+		a.visitLoopStmt(s.Cond, s.Body)
+	case *ast.ForStmt:
+		if s.Cond != nil {
+			a.visitLoopStmt(s.Cond, s.Body)
+		} else {
+			a.visitLoopStmt(nil, s.Body)
 		}
+	case *ast.BreakStmt:
+		if a.loopDepth == 0 {
+			a.report(s.Span(), "break used outside loop")
+		}
+	case *ast.ContinueStmt:
+		if a.loopDepth == 0 {
+			a.report(s.Span(), "continue used outside loop")
+		}
+	}
+}
+
+func (a *Analyzer) visitLoopStmt(cond ast.Expr, body *ast.BlockStmt) {
+	if cond != nil {
+		a.visitExpr(cond)
+	}
+	if body != nil {
+		a.loopDepth++
+		defer func() { a.loopDepth-- }()
+		a.visitNestedBlockStmt(body)
 	}
 }
 

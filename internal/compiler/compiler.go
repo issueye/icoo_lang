@@ -136,3 +136,24 @@ func (c *Compiler) emitLoop(loopStart int) {
 	offset := len(c.current.chunk.Code) - loopStart + 2
 	c.emitShort(uint16(offset))
 }
+
+func (c *Compiler) beginLoop(continueTarget int) {
+	c.current.loopStack = append(c.current.loopStack, LoopContext{
+		BreakJumps:     make([]int, 0, 4),
+		ContinueTarget: continueTarget,
+		ScopeDepth:     c.current.scopeDepth,
+	})
+}
+
+func (c *Compiler) endLoop() LoopContext {
+	idx := len(c.current.loopStack) - 1
+	loop := c.current.loopStack[idx]
+	c.current.loopStack = c.current.loopStack[:idx]
+	return loop
+}
+
+func (c *Compiler) patchBreakJumps(loop LoopContext) {
+	for _, jump := range loop.BreakJumps {
+		c.patchJump(jump)
+	}
+}

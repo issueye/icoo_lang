@@ -70,3 +70,35 @@ func (*WhileStmt) stmt() {}
 func (s *WhileStmt) Span() token.Span {
 	return s.Span_
 }
+
+type ForStmt struct {
+	Cond Expr
+	Body *BlockStmt
+	Span_ token.Span
+}
+
+func (*ForStmt) node() {}
+func (*ForStmt) stmt() {}
+func (s *ForStmt) Span() token.Span {
+	return s.Span_
+}
+
+type BreakStmt struct {
+	Span_ token.Span
+}
+
+func (*BreakStmt) node() {}
+func (*BreakStmt) stmt() {}
+func (s *BreakStmt) Span() token.Span {
+	return s.Span_
+}
+
+type ContinueStmt struct {
+	Span_ token.Span
+}
+
+func (*ContinueStmt) node() {}
+func (*ContinueStmt) stmt() {}
+func (s *ContinueStmt) Span() token.Span {
+	return s.Span_
+}

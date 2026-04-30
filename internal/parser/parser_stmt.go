@@ -19,6 +19,12 @@ func (p *Parser) parseStatement() ast.Stmt {
 		return p.parseIfStmt()
 	case token.While:
 		return p.parseWhileStmt()
+	case token.For:
+		return p.parseForStmt()
+	case token.Break:
+		return p.parseBreakStmt()
+	case token.Continue:
+		return p.parseContinueStmt()
 	case token.Return:
 		return p.parseReturnStmt()
 	default:
@@ -83,6 +89,33 @@ func (p *Parser) parseWhileStmt() ast.Stmt {
 		Body:  body,
 		Span_: token.Span{Start: startTok.Span.Start, End: body.Span().End},
 	}
+}
+
+func (p *Parser) parseForStmt() ast.Stmt {
+	startTok := p.expect(token.For, "expected 'for'")
+	var cond ast.Expr
+	if !p.check(token.LBrace) {
+		cond = p.parseExpression(PrecLowest)
+	}
+	body := p.parseBlockStmt()
+	if body == nil {
+		return nil
+	}
+	return &ast.ForStmt{
+		Cond:  cond,
+		Body:  body,
+		Span_: token.Span{Start: startTok.Span.Start, End: body.Span().End},
+	}
+}
+
+func (p *Parser) parseBreakStmt() ast.Stmt {
+	tok := p.expect(token.Break, "expected 'break'")
+	return &ast.BreakStmt{Span_: tok.Span}
+}
+
+func (p *Parser) parseContinueStmt() ast.Stmt {
+	tok := p.expect(token.Continue, "expected 'continue'")
+	return &ast.ContinueStmt{Span_: tok.Span}
 }
 
 func (p *Parser) parseReturnStmt() ast.Stmt {
