@@ -146,6 +146,16 @@ func (vm *VM) LastModule() *runtime.Module {
 	return vm.lastModule
 }
 
+func (vm *VM) GlobalNames() []string {
+	vm.mu.RLock()
+	defer vm.mu.RUnlock()
+	names := make([]string, 0, len(vm.globals))
+	for k := range vm.globals {
+		names = append(names, k)
+	}
+	return names
+}
+
 func runtimeError(format string, args ...any) error {
 	return fmt.Errorf(format, args...)
 }

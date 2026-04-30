@@ -53,6 +53,10 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 				c.errorf("unsupported unary operator")
 			}
 		case *ast.BinaryExpr:
+			if e.Op == token.AndAnd || e.Op == token.OrOr {
+				c.compileLogicalExpr(e)
+				return
+			}
 			c.compileExpr(e.Left)
 			c.compileExpr(e.Right)
 			c.compileBinaryOp(e.Op)
@@ -183,6 +187,26 @@ func (c *Compiler) compileBinaryOp(op token.Type) {
 		c.emit(bytecode.OpLessEqual)
 	default:
 		c.errorf("unsupported binary operator")
+	}
+}
+
+func (c *Compiler) compileLogicalExpr(e *ast.BinaryExpr) {
+	c.compileExpr(e.Left)
+
+	if e.Op == token.AndAnd {
+		// Short-circuit AND: push left, if falsy keep it, else push right
+		c.emit(bytecode.OpDup)
+		endJump := c.emitJump(bytecode.OpJumpIfFalse)
+		c.emit(bytecode.OpPop)
+		c.compileExpr(e.Right)
+		c.patchJump(endJump)
+	} else {
+		// Short-circuit OR: push left, if truthy keep it, else push right
+		c.emit(bytecode.OpDup)
+		endJump := c.emitJump(bytecode.OpJumpIfTrue)
+		c.emit(bytecode.OpPop)
+		c.compileExpr(e.Right)
+		c.patchJump(endJump)
 	}
 }
 

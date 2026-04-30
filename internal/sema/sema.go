@@ -22,6 +22,18 @@ func Analyze(program *ast.Program) []diag.Diagnostic {
 	return a.diagnostics
 }
 
+func AnalyzeWithGlobals(program *ast.Program, globalNames []string) []diag.Diagnostic {
+	a := &Analyzer{
+		scope: NewScope(nil),
+	}
+	a.defineBuiltins()
+	for _, name := range globalNames {
+		a.scope.Define(Symbol{Name: name})
+	}
+	a.visitProgram(program)
+	return a.diagnostics
+}
+
 func (a *Analyzer) defineBuiltins() {
 	builtins := []string{"print", "println", "len", "typeOf", "chan", "panic", "error"}
 	for _, name := range builtins {

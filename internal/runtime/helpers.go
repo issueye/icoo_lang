@@ -8,6 +8,12 @@ func IsTruthy(v Value) bool {
 		return false
 	case BoolValue:
 		return value.Value
+	case IntValue:
+		return value.Value != 0
+	case FloatValue:
+		return value.Value != 0
+	case StringValue:
+		return value.Value != ""
 	default:
 		return true
 	}

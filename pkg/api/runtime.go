@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"icoo_lang/internal/compiler"
 	"icoo_lang/internal/lexer"
@@ -65,6 +66,51 @@ func (r *Runtime) RunFile(path string) (runtime.Value, error) {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 	return r.runModuleSource(absPath, string(src))
+}
+
+func (r *Runtime) VM() *vm.VM {
+	return r.vm
+}
+
+func (r *Runtime) RunReplLine(line string) (runtime.Value, error) {
+	// If the line is a pure expression, wrap as return to capture value
+	wrapped := line
+	if isExpression(line) {
+		wrapped = "return " + line
+	}
+
+	tokens := lexer.LexAll(wrapped)
+	p := parser.New(tokens)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		return nil, p.Errors()[0]
+	}
+	if len(program.Nodes) == 0 {
+		return nil, nil
+	}
+
+	// Skip sema for REPL; compiler resolves unknowns as globals
+	compiled, compileErrs := compiler.Compile(program)
+	if len(compileErrs) > 0 {
+		return nil, compileErrs[0]
+	}
+
+	result, err := r.vm.RunModule("", &runtime.Closure{Proto: compiled.Proto})
+	return result, err
+}
+
+func isExpression(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	keywords := []string{"let ", "const ", "fn ", "class ", "import ", "export ", "if ", "while ", "for ", "match ", "try ", "throw ", "break ", "continue ", "go ", "select ", "return "}
+	for _, kw := range keywords {
+		if strings.HasPrefix(trimmed, kw) {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *Runtime) runModuleSource(path, src string) (runtime.Value, error) {
