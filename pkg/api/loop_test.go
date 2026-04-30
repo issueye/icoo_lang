@@ -97,6 +97,90 @@ if sum != 8 {
 	}
 }
 
+func TestRuntimeRunSource_BreakRunsFinally(t *testing.T) {
+	src := `
+let i = 0
+let out = ""
+
+for i < 4 {
+  i = i + 1
+  try {
+    out = out + "t"
+    if i == 2 {
+      break
+    }
+  } finally {
+    out = out + "f"
+  }
+}
+
+if out != "tftf" {
+  panic("unexpected break/finally trace")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected break through finally run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ContinueRunsFinally(t *testing.T) {
+	src := `
+let i = 0
+let out = ""
+
+for i < 3 {
+  i = i + 1
+  try {
+    out = out + "t"
+    if i < 3 {
+      continue
+    }
+    out = out + "x"
+  } finally {
+    out = out + "f"
+  }
+}
+
+if out != "tftftxf" {
+  panic("unexpected continue/finally trace")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected continue through finally run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_FinallyLoopCleanupDoesNotLeakHandlers(t *testing.T) {
+	src := `
+let i = 0
+
+for i < 2 {
+  i = i + 1
+  try {
+    if i == 1 {
+      continue
+    }
+  } finally {
+    let marker = i
+    if marker < 0 {
+      panic("unreachable")
+    }
+  }
+}
+
+len(1)
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatalf("expected final uncaught runtime error after finally loop")
+	}
+}
+
 func TestRuntimeRunSource_InfiniteForWithBreak(t *testing.T) {
 	src := `
 let i = 0

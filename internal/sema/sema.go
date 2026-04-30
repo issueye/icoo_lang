@@ -184,14 +184,17 @@ func (a *Analyzer) visitTryCatchStmt(stmt *ast.TryCatchStmt) {
 	if stmt.Try != nil {
 		a.visitNestedBlockStmt(stmt.Try)
 	}
-	prevScope := a.scope
-	a.scope = NewScope(prevScope)
-	defer func() { a.scope = prevScope }()
-	if stmt.CatchName != "" {
-		a.scope.Define(Symbol{Name: stmt.CatchName, IsConst: true})
-	}
 	if stmt.Catch != nil {
+		prevScope := a.scope
+		a.scope = NewScope(prevScope)
+		defer func() { a.scope = prevScope }()
+		if stmt.CatchName != "" {
+			a.scope.Define(Symbol{Name: stmt.CatchName, IsConst: true})
+		}
 		a.visitBlockStmt(stmt.Catch)
+	}
+	if stmt.Finally != nil {
+		a.visitNestedBlockStmt(stmt.Finally)
 	}
 }
 

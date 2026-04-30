@@ -112,6 +112,7 @@ type TryCatchStmt struct {
 	Try       *BlockStmt
 	CatchName string
 	Catch     *BlockStmt
+	Finally   *BlockStmt
 	Span_     token.Span
 }
 

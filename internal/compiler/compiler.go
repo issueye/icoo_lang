@@ -21,8 +21,38 @@ type LoopContext struct {
 	ScopeDepth     int
 }
 
+type ExitActionKind int
+
+const (
+	CompletionKindNormal = 0
+	CompletionKindException = 1
+)
+
+const (
+	ExitActionReturn ExitActionKind = iota
+	ExitActionBreak
+	ExitActionContinue
+	ExitActionException
+)
+
+type FinallyAction struct {
+	Code           int
+	Kind           ExitActionKind
+	LoopIndex      int
+	ContinueTarget int
+	LoopScopeDepth int
+}
+
 type TryContext struct {
-	ScopeDepth int
+	ScopeDepth          int
+	HandlerActive       bool
+	FinallyBlock        bool
+	InFinally           bool
+	CompletionKindSlot  int
+	CompletionValueSlot int
+	FinallyJumpPatches  []int
+	Actions             []FinallyAction
+	NextActionCode      int
 }
 
 type CompiledModule struct {
@@ -42,7 +72,7 @@ type FuncCompiler struct {
 	locals     []Local
 	scopeDepth int
 	loopStack  []LoopContext
-	tryStack   []TryContext
+	tryStack   []*TryContext
 }
 
 func Compile(program *ast.Program) (*CompiledModule, []error) {
@@ -168,17 +198,100 @@ func (c *Compiler) patchBreakJumps(loop LoopContext) {
 	}
 }
 
+func (c *Compiler) emitGetLocal(slot int) {
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(slot))
+}
+
+func (c *Compiler) emitSetLocal(slot int) {
+	c.emit(bytecode.OpSetLocal)
+	c.emitShort(uint16(slot))
+}
+
+func (c *Compiler) emitInt(value int64) {
+	c.emitConstant(runtime.IntValue{Value: value})
+}
+
+func (c *Compiler) emitStoreTopToLocal(slot int) {
+	c.emitSetLocal(slot)
+	c.emit(bytecode.OpPop)
+}
+
+func (c *Compiler) emitStoreIntToLocal(slot int, value int) {
+	c.emitInt(int64(value))
+	c.emitStoreTopToLocal(slot)
+}
+
+func (c *Compiler) patchAddressList(positions []int, value int) {
+	for _, pos := range positions {
+		c.patchAddress(pos, value)
+	}
+}
+
+func (c *Compiler) patchJumpList(positions []int) {
+	for _, pos := range positions {
+		c.patchJump(pos)
+	}
+}
+
+func (c *Compiler) currentFinallyContext(boundaryScopeDepth int) *TryContext {
+	for i := len(c.current.tryStack) - 1; i >= 0; i-- {
+		ctx := c.current.tryStack[i]
+		if ctx.FinallyBlock && !ctx.InFinally && ctx.ScopeDepth > boundaryScopeDepth {
+			return ctx
+		}
+	}
+	return nil
+}
+
+func (c *Compiler) outerFinallyContext(current *TryContext, boundaryScopeDepth int) *TryContext {
+	seenCurrent := false
+	for i := len(c.current.tryStack) - 1; i >= 0; i-- {
+		ctx := c.current.tryStack[i]
+		if ctx == current {
+			seenCurrent = true
+			continue
+		}
+		if !seenCurrent {
+			continue
+		}
+		if ctx.FinallyBlock && ctx.ScopeDepth > boundaryScopeDepth {
+			return ctx
+		}
+	}
+	return nil
+}
+
+func (c *Compiler) getOrAddFinallyAction(ctx *TryContext, kind ExitActionKind, loopIndex, continueTarget, loopScopeDepth int) int {
+	for _, action := range ctx.Actions {
+		if action.Kind == kind && action.LoopIndex == loopIndex && action.ContinueTarget == continueTarget && action.LoopScopeDepth == loopScopeDepth {
+			return action.Code
+		}
+	}
+	code := ctx.NextActionCode
+	ctx.NextActionCode++
+	ctx.Actions = append(ctx.Actions, FinallyAction{Code: code, Kind: kind, LoopIndex: loopIndex, ContinueTarget: continueTarget, LoopScopeDepth: loopScopeDepth})
+	return code
+}
+
+func (c *Compiler) emitJumpToFinally(ctx *TryContext) {
+	jump := c.emitJump(bytecode.OpJump)
+	ctx.FinallyJumpPatches = append(ctx.FinallyJumpPatches, jump)
+}
+
 func (c *Compiler) emitExceptionScopeCleanup(scopeDepth int) {
 	for i := len(c.current.tryStack) - 1; i >= 0; i-- {
 		ctx := c.current.tryStack[i]
 		if ctx.ScopeDepth <= scopeDepth {
 			break
 		}
-		c.emit(bytecode.OpPopExceptionHandler)
+		if ctx.HandlerActive {
+			c.emit(bytecode.OpPopExceptionHandler)
+		}
 	}
 }
 
-func (c *Compiler) emitLoopScopeCleanup(scopeDepth int) {
+func (c *Compiler) emitScopeCleanup(scopeDepth int) {
 	for i := len(c.current.locals) - 1; i >= 0; i-- {
 		local := c.current.locals[i]
 		if local.Depth <= scopeDepth {
@@ -186,4 +299,8 @@ func (c *Compiler) emitLoopScopeCleanup(scopeDepth int) {
 		}
 		c.emitPopLocal()
 	}
+}
+
+func (c *Compiler) emitLoopScopeCleanup(scopeDepth int) {
+	c.emitScopeCleanup(scopeDepth)
 }

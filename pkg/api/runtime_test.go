@@ -181,6 +181,127 @@ func TestRuntimeRunSource_UncaughtThrowStillReturnsHostError(t *testing.T) {
 	}
 }
 
+func TestRuntimeRunSource_TryFinallyRunsOnNormalPath(t *testing.T) {
+	src := `
+let out = ""
+
+try {
+  out = out + "try"
+} finally {
+  out = out + "/finally"
+}
+
+if out != "try/finally" {
+  panic("unexpected try/finally normal result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected try/finally normal run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_TryCatchFinallyRunsCatchThenFinally(t *testing.T) {
+	src := `
+let out = ""
+
+try {
+  throw "boom"
+} catch err {
+  out = out + err.message
+} finally {
+  out = out + "/finally"
+}
+
+if out != "boom/finally" {
+  panic("unexpected try/catch/finally result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected try/catch/finally run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_TryFinallyRethrowsAfterFinally(t *testing.T) {
+	src := `
+let out = ""
+
+try {
+  try {
+    throw "boom"
+  } finally {
+    out = "finally"
+  }
+} catch err {
+  out = out + "/" + err.message
+}
+
+if out != "finally/boom" {
+  panic("unexpected try/finally rethrow result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected try/finally rethrow run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ReturnRunsFinally(t *testing.T) {
+	src := `
+fn demo() {
+  let out = ""
+  try {
+    out = "try"
+    return out
+  } finally {
+    out = out + "/finally"
+    if out != "try/finally" {
+      panic("finally should observe pre-return state")
+    }
+  }
+}
+
+if demo() != "try" {
+  panic("unexpected return result after finally")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected return through finally run to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_FinallyThrowOverridesReturn(t *testing.T) {
+	src := `
+fn demo() {
+  try {
+    return "ok"
+  } finally {
+    throw "finally boom"
+  }
+}
+
+try {
+  demo()
+  panic("expected finally throw to override return")
+} catch err {
+  if err.message != "finally boom" {
+    panic("unexpected finally override message")
+  }
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected finally override run to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_StdlibIntegrationScript(t *testing.T) {
 	rt := NewRuntime()
 	path := filepath.Join("..", "..", "testdata", "integration", "stdlib.ic")

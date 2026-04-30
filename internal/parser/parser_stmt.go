@@ -187,17 +187,40 @@ func (p *Parser) parseTryCatchStmt() ast.Stmt {
 	if tryBlock == nil {
 		return nil
 	}
-	p.expect(token.Catch, "expected 'catch' after try block")
-	catchName := p.expect(token.Ident, "expected catch binding name").Lexeme
-	catchBlock := p.parseBlockStmt()
-	if catchBlock == nil {
+
+	var catchName string
+	var catchBlock *ast.BlockStmt
+	var finallyBlock *ast.BlockStmt
+	end := tryBlock.Span().End
+
+	if p.match(token.Catch) {
+		catchName = p.expect(token.Ident, "expected catch binding name").Lexeme
+		catchBlock = p.parseBlockStmt()
+		if catchBlock == nil {
+			return nil
+		}
+		end = catchBlock.Span().End
+	}
+
+	if p.match(token.Finally) {
+		finallyBlock = p.parseBlockStmt()
+		if finallyBlock == nil {
+			return nil
+		}
+		end = finallyBlock.Span().End
+	}
+
+	if catchBlock == nil && finallyBlock == nil {
+		p.errorAtCurrent("expected 'catch' or 'finally' after try block")
 		return nil
 	}
+
 	return &ast.TryCatchStmt{
 		Try:       tryBlock,
 		CatchName: catchName,
 		Catch:     catchBlock,
-		Span_:     token.Span{Start: startTok.Span.Start, End: catchBlock.Span().End},
+		Finally:   finallyBlock,
+		Span_:     token.Span{Start: startTok.Span.Start, End: end},
 	}
 }
 

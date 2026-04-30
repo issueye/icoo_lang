@@ -18,13 +18,7 @@ func (c *Compiler) compileStmt(stmt ast.Stmt) {
 		c.compileExpr(s.Expr)
 		c.emit(bytecode.OpPop)
 	case *ast.ReturnStmt:
-		if s.Value != nil {
-			c.compileExpr(s.Value)
-		} else {
-			c.emitNull()
-		}
-		c.emitExceptionScopeCleanup(-1)
-		c.emit(bytecode.OpReturn)
+		c.compileReturnStmt(s)
 	case *ast.ThrowStmt:
 		c.compileThrowStmt(s)
 	case *ast.IfStmt:
@@ -190,28 +184,104 @@ func (c *Compiler) compileMatchStmt(stmt *ast.MatchStmt) {
 }
 
 func (c *Compiler) compileTryCatchStmt(stmt *ast.TryCatchStmt) {
+	if stmt.Finally == nil {
+		c.compileTryCatchWithoutFinally(stmt)
+		return
+	}
+	c.compileTryCatchWithFinally(stmt)
+}
+
+func (c *Compiler) compileTryCatchWithoutFinally(stmt *ast.TryCatchStmt) {
 	c.emit(bytecode.OpPushExceptionHandler)
 	catchAddrPos := len(c.current.chunk.Code)
 	c.emitByte(0xff)
 	c.emitByte(0xff)
-	c.current.tryStack = append(c.current.tryStack, TryContext{ScopeDepth: c.current.scopeDepth})
+	ctx := &TryContext{ScopeDepth: c.current.scopeDepth, HandlerActive: true}
+	c.current.tryStack = append(c.current.tryStack, ctx)
 
 	c.compileBlockStmt(stmt.Try, true)
 	c.current.tryStack = c.current.tryStack[:len(c.current.tryStack)-1]
-	c.emit(bytecode.OpPopExceptionHandler)
+	if ctx.HandlerActive {
+		c.emit(bytecode.OpPopExceptionHandler)
+		ctx.HandlerActive = false
+	}
 	endJump := c.emitJump(bytecode.OpJump)
 
 	catchTarget := len(c.current.chunk.Code)
 	c.patchAddress(catchAddrPos, catchTarget)
+	ctx.HandlerActive = false
 
-	c.beginScope()
-	if stmt.CatchName != "" {
-		c.addLocal(stmt.CatchName, true)
+	if stmt.Catch != nil {
+		c.beginScope()
+		if stmt.CatchName != "" {
+			c.addLocal(stmt.CatchName, true)
+		}
+		c.compileBlockStmt(stmt.Catch, false)
+		c.endScope()
 	}
-	c.compileBlockStmt(stmt.Catch, false)
-	c.endScope()
 
 	c.patchJump(endJump)
+}
+
+func (c *Compiler) compileTryCatchWithFinally(stmt *ast.TryCatchStmt) {
+	c.beginScope()
+	c.emitInt(CompletionKindNormal)
+	completionKindSlot := c.addLocal(c.syntheticName("finally_kind"), true)
+	c.emitNull()
+	completionValueSlot := c.addLocal(c.syntheticName("finally_value"), false)
+
+	ctx := &TryContext{
+		ScopeDepth:          c.current.scopeDepth,
+		HandlerActive:       true,
+		FinallyBlock:        true,
+		CompletionKindSlot:  completionKindSlot,
+		CompletionValueSlot: completionValueSlot,
+		NextActionCode:      2,
+	}
+
+	c.emit(bytecode.OpPushExceptionHandler)
+	handlerAddrPos := len(c.current.chunk.Code)
+	c.emitByte(0xff)
+	c.emitByte(0xff)
+	c.current.tryStack = append(c.current.tryStack, ctx)
+
+	c.compileBlockStmt(stmt.Try, true)
+	if ctx.HandlerActive {
+		c.emit(bytecode.OpPopExceptionHandler)
+		ctx.HandlerActive = false
+	}
+	c.emitStoreIntToLocal(completionKindSlot, CompletionKindNormal)
+	c.emitJumpToFinally(ctx)
+
+	catchTarget := len(c.current.chunk.Code)
+	c.patchAddress(handlerAddrPos, catchTarget)
+	ctx.HandlerActive = false
+
+	if stmt.Catch != nil {
+		c.beginScope()
+		if stmt.CatchName != "" {
+			c.addLocal(stmt.CatchName, true)
+		} else {
+			c.emit(bytecode.OpPop)
+		}
+		c.compileBlockStmt(stmt.Catch, false)
+		c.endScope()
+		c.emitStoreIntToLocal(completionKindSlot, CompletionKindNormal)
+		c.emitJumpToFinally(ctx)
+	} else {
+		c.emitStoreTopToLocal(completionValueSlot)
+		c.emitStoreIntToLocal(completionKindSlot, CompletionKindException)
+		c.emitJumpToFinally(ctx)
+	}
+
+	c.patchJumpList(ctx.FinallyJumpPatches)
+	ctx.InFinally = true
+	c.compileBlockStmt(stmt.Finally, true)
+	ctx.InFinally = false
+
+	c.current.tryStack = c.current.tryStack[:len(c.current.tryStack)-1]
+	c.emitFinallyDispatch(ctx)
+	c.endScope()
 }
 
 func (c *Compiler) compileThrowStmt(stmt *ast.ThrowStmt) {
@@ -220,7 +290,151 @@ func (c *Compiler) compileThrowStmt(stmt *ast.ThrowStmt) {
 	} else {
 		c.emitNull()
 	}
+	if ctx := c.currentFinallyContext(-1); ctx != nil && !ctx.HandlerActive {
+		c.emitExitThroughFinally(ctx, ExitActionException, -1, 0, -1, true)
+		return
+	}
 	c.emit(bytecode.OpThrow)
+}
+
+func (c *Compiler) compileReturnStmt(stmt *ast.ReturnStmt) {
+	ctx := c.currentFinallyContext(-1)
+	if ctx == nil {
+		if stmt.Value != nil {
+			c.compileExpr(stmt.Value)
+		} else {
+			c.emitNull()
+		}
+		c.emitExceptionScopeCleanup(-1)
+		c.emit(bytecode.OpReturn)
+		return
+	}
+
+	if stmt.Value != nil {
+		c.compileExpr(stmt.Value)
+	} else {
+		c.emitNull()
+	}
+	c.emitExitThroughFinally(ctx, ExitActionReturn, -1, 0, -1, true)
+}
+
+func (c *Compiler) compileBreakStmt(_ *ast.BreakStmt) {
+	if len(c.current.loopStack) == 0 {
+		c.errorf("break used outside loop")
+		return
+	}
+	loopIndex := len(c.current.loopStack) - 1
+	loop := c.current.loopStack[loopIndex]
+	if ctx := c.currentFinallyContext(loop.ScopeDepth); ctx != nil {
+		c.emitExitThroughFinally(ctx, ExitActionBreak, loopIndex, 0, loop.ScopeDepth, false)
+		return
+	}
+	c.emitExceptionScopeCleanup(loop.ScopeDepth)
+	c.emitLoopScopeCleanup(loop.ScopeDepth)
+	jump := c.emitJump(bytecode.OpJump)
+	c.current.loopStack[loopIndex].BreakJumps = append(c.current.loopStack[loopIndex].BreakJumps, jump)
+}
+
+func (c *Compiler) compileContinueStmt(_ *ast.ContinueStmt) {
+	if len(c.current.loopStack) == 0 {
+		c.errorf("continue used outside loop")
+		return
+	}
+	loopIndex := len(c.current.loopStack) - 1
+	loop := c.current.loopStack[loopIndex]
+	if ctx := c.currentFinallyContext(loop.ScopeDepth); ctx != nil {
+		c.emitExitThroughFinally(ctx, ExitActionContinue, loopIndex, loop.ContinueTarget, loop.ScopeDepth, false)
+		return
+	}
+	c.emitExceptionScopeCleanup(loop.ScopeDepth)
+	c.emitLoopScopeCleanup(loop.ScopeDepth)
+	c.emitLoop(loop.ContinueTarget)
+}
+
+func (c *Compiler) emitExitThroughFinally(ctx *TryContext, kind ExitActionKind, loopIndex, continueTarget, loopScopeDepth int, valueOnStack bool) {
+	if valueOnStack {
+		c.emitStoreTopToLocal(ctx.CompletionValueSlot)
+	}
+	actionCode := c.getOrAddFinallyAction(ctx, kind, loopIndex, continueTarget, loopScopeDepth)
+	c.emitStoreIntToLocal(ctx.CompletionKindSlot, actionCode)
+	c.emitExceptionScopeCleanup(ctx.ScopeDepth)
+	c.emitScopeCleanup(ctx.ScopeDepth)
+	if ctx.HandlerActive {
+		c.emit(bytecode.OpPopExceptionHandler)
+	}
+	c.emitJumpToFinally(ctx)
+}
+
+func (c *Compiler) emitFinallyDispatch(ctx *TryContext) {
+	exceptionDone := c.emitJumpIfCompletionKindMismatch(ctx.CompletionKindSlot, CompletionKindException)
+	c.emit(bytecode.OpPop)
+	c.emitGetLocal(ctx.CompletionValueSlot)
+	c.emit(bytecode.OpThrow)
+	c.patchJump(exceptionDone)
+	c.emit(bytecode.OpPop)
+
+	for _, action := range ctx.Actions {
+		next := c.emitJumpIfCompletionKindMismatch(ctx.CompletionKindSlot, action.Code)
+		c.emit(bytecode.OpPop)
+		c.emitDispatchFinallyAction(ctx, action)
+		c.patchJump(next)
+		c.emit(bytecode.OpPop)
+	}
+}
+
+func (c *Compiler) emitDispatchFinallyAction(ctx *TryContext, action FinallyAction) {
+	switch action.Kind {
+	case ExitActionReturn:
+		c.emitGetLocal(ctx.CompletionValueSlot)
+		outer := c.outerFinallyContext(ctx, -1)
+		if outer != nil {
+			c.emitExitThroughFinally(outer, ExitActionReturn, -1, 0, -1, true)
+			return
+		}
+		c.emitExceptionScopeCleanup(-1)
+		c.emit(bytecode.OpReturn)
+	case ExitActionException:
+		c.emitGetLocal(ctx.CompletionValueSlot)
+		outer := c.outerFinallyContext(ctx, -1)
+		if outer != nil {
+			c.emitExitThroughFinally(outer, ExitActionException, -1, 0, -1, true)
+			return
+		}
+		c.emit(bytecode.OpThrow)
+	case ExitActionBreak:
+		if action.LoopIndex < 0 || action.LoopIndex >= len(c.current.loopStack) {
+			c.errorf("internal compiler error: invalid break loop index")
+			return
+		}
+		loop := &c.current.loopStack[action.LoopIndex]
+		outer := c.outerFinallyContext(ctx, action.LoopScopeDepth)
+		if outer != nil {
+			c.emitExitThroughFinally(outer, ExitActionBreak, action.LoopIndex, 0, action.LoopScopeDepth, false)
+			return
+		}
+		c.emitExceptionScopeCleanup(action.LoopScopeDepth)
+		c.emitLoopScopeCleanup(action.LoopScopeDepth)
+		jump := c.emitJump(bytecode.OpJump)
+		loop.BreakJumps = append(loop.BreakJumps, jump)
+	case ExitActionContinue:
+		outer := c.outerFinallyContext(ctx, action.LoopScopeDepth)
+		if outer != nil {
+			c.emitExitThroughFinally(outer, ExitActionContinue, action.LoopIndex, action.ContinueTarget, action.LoopScopeDepth, false)
+			return
+		}
+		c.emitExceptionScopeCleanup(action.LoopScopeDepth)
+		c.emitLoopScopeCleanup(action.LoopScopeDepth)
+		c.emitLoop(action.ContinueTarget)
+	default:
+		c.errorf("internal compiler error: unsupported finally action")
+	}
+}
+
+func (c *Compiler) emitJumpIfCompletionKindMismatch(slot int, expected int) int {
+	c.emitGetLocal(slot)
+	c.emitInt(int64(expected))
+	c.emit(bytecode.OpEqual)
+	return c.emitJump(bytecode.OpJumpIfFalse)
 }
 
 func (c *Compiler) compileLoop(cond ast.Expr, body *ast.BlockStmt) {
@@ -242,29 +456,6 @@ func (c *Compiler) compileLoop(cond ast.Expr, body *ast.BlockStmt) {
 		c.emit(bytecode.OpPop)
 	}
 	c.patchBreakJumps(loop)
-}
-
-func (c *Compiler) compileBreakStmt(_ *ast.BreakStmt) {
-	if len(c.current.loopStack) == 0 {
-		c.errorf("break used outside loop")
-		return
-	}
-	loop := &c.current.loopStack[len(c.current.loopStack)-1]
-	c.emitExceptionScopeCleanup(loop.ScopeDepth)
-	c.emitLoopScopeCleanup(loop.ScopeDepth)
-	jump := c.emitJump(bytecode.OpJump)
-	loop.BreakJumps = append(loop.BreakJumps, jump)
-}
-
-func (c *Compiler) compileContinueStmt(_ *ast.ContinueStmt) {
-	if len(c.current.loopStack) == 0 {
-		c.errorf("continue used outside loop")
-		return
-	}
-	loop := c.current.loopStack[len(c.current.loopStack)-1]
-	c.emitExceptionScopeCleanup(loop.ScopeDepth)
-	c.emitLoopScopeCleanup(loop.ScopeDepth)
-	c.emitLoop(loop.ContinueTarget)
 }
 
 func (c *Compiler) localsAboveDepth(depth int) int {

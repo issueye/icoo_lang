@@ -78,3 +78,95 @@ try {
 if fromCall != "fn boom" {
   panic("expected cross-function throw to be caught")
 }
+
+let finallyNormal = ""
+try {
+  finallyNormal = finallyNormal + "try"
+} finally {
+  finallyNormal = finallyNormal + "/finally"
+}
+
+if finallyNormal != "try/finally" {
+  panic("expected finally on normal path")
+}
+
+let finallyCatch = ""
+try {
+  throw "boom"
+} catch err {
+  finallyCatch = err.message
+} finally {
+  finallyCatch = finallyCatch + "/finally"
+}
+
+if finallyCatch != "boom/finally" {
+  panic("expected catch then finally")
+}
+
+let finallyRethrow = ""
+try {
+  try {
+    throw "rethrow"
+  } finally {
+    finallyRethrow = "finally"
+  }
+} catch err {
+  finallyRethrow = finallyRethrow + "/" + err.message
+}
+
+if finallyRethrow != "finally/rethrow" {
+  panic("expected finally before rethrow")
+}
+
+fn finallyReturn() {
+  let out = ""
+  try {
+    out = "try"
+    return out
+  } finally {
+    out = out + "/finally"
+    if out != "try/finally" {
+      panic("expected finally before return")
+    }
+  }
+}
+
+if finallyReturn() != "try" {
+  panic("expected original return after finally")
+}
+
+let continueTrace = ""
+let j = 0
+for j < 3 {
+  j = j + 1
+  try {
+    continueTrace = continueTrace + "t"
+    if j < 3 {
+      continue
+    }
+    continueTrace = continueTrace + "x"
+  } finally {
+    continueTrace = continueTrace + "f"
+  }
+}
+
+if continueTrace != "tftftxf" {
+  panic("expected continue through finally")
+}
+
+fn topFinallyOverride() {
+  try {
+    return
+  } finally {
+    throw "top finally override"
+  }
+}
+
+try {
+  topFinallyOverride()
+  panic("expected finally override throw")
+} catch err {
+  if err.message != "top finally override" {
+    panic("expected finally override throw")
+  }
+}
