@@ -1,5 +1,7 @@
 # Icoo MVP 实施路线
 
+当前 MVP 收口状态见：`docs/mvp-status.md`。
+
 ## 目标
 
 本文档定义 Icoo 从空仓库启动到首个可运行 MVP 的实施路线。MVP 的目标不是一次性实现完整语言，而是尽快形成一个可验证的最小闭环：
@@ -38,6 +40,8 @@
 - `std.io` 标准库模块导入
 - `std.time` 标准库模块导入
 - `std.math` 标准库模块导入
+- `std.json` 标准库模块导入
+- `std.fs` 标准库模块导入
 
 ### 暂不纳入 MVP
 
@@ -63,7 +67,9 @@
 8. 支持 `import std.io as io`
 9. 支持 `import std.time as time`
 10. 支持 `import std.math as math`
-11. `go test ./...` 能通过核心包测试
+11. 支持 `import std.json as json`
+12. 支持 `import std.fs as fs`
+13. `go test ./...` 能通过核心包测试
 
 ---
 
@@ -551,6 +557,15 @@ OpSetIndex
 - 对象
 - 成员访问
 - 下标访问
+
+#### `testdata/integration/stdlib.ic`
+验证：
+- `std.io`
+- `std.time`
+- `std.math`
+- `std.json`
+- `std.fs`
+- CLI `icoo run` 端到端链路
 
 ### 完成标准
 

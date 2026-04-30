@@ -1,0 +1,47 @@
+import std.io as io
+import std.time as time
+import std.math as math
+import std.json as json
+import std.fs as fs
+
+let now1 = time.now()
+time.sleep(0)
+let now2 = time.now()
+if now2 < now1 {
+  panic("time should not go backwards")
+}
+
+println(math.abs(-3))
+println(math.max(4, 7))
+println(math.min(4, 7))
+println(math.floor(1.8))
+println(math.ceil(1.2))
+
+let encoded = json.encode({name: "icoo", nums: [1, 2], ok: true, miss: null})
+let decoded = json.decode(encoded)
+println(decoded.name)
+println(decoded.nums[1])
+println(decoded.ok)
+println(decoded.miss)
+
+let path = "../../testdata/integration/tmp_stdlib.txt"
+if fs.exists(path) {
+  println("present")
+} else {
+  println("missing")
+}
+fs.writeFile(path, "hello")
+println(fs.exists(path))
+println(fs.readFile(path))
+
+let ioKeys = ""
+for key, value in io {
+  ioKeys = ioKeys + key
+}
+println(ioKeys)
+
+let fsKeys = ""
+for key, value in fs {
+  fsKeys = fsKeys + key
+}
+println(fsKeys)

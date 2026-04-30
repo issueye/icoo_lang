@@ -240,6 +240,155 @@ math.abs("x")
 	}
 }
 
+func TestRuntimeRunSource_ImportsStdJSONModule(t *testing.T) {
+	src := `
+import std.json as json
+
+let text = json.encode({name: "icoo", nums: [1, 2], ok: true, miss: null})
+let value = json.decode(text)
+
+if typeOf(text) != "string" {
+  panic("json.encode should return string")
+}
+if value.name != "icoo" {
+  panic("unexpected decoded object field")
+}
+if value.nums[0] != 1 {
+  panic("unexpected decoded array item")
+}
+if value.ok != true {
+  panic("unexpected decoded bool field")
+}
+if value.miss != null {
+  panic("unexpected decoded null field")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.json import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdJSONModule(t *testing.T) {
+	src := `
+import std.json as json
+
+let keys = ""
+let count = 0
+for key, value in json {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.json export kind")
+  }
+}
+
+if keys != "decodeencode" {
+  panic("unexpected std.json iteration order")
+}
+if count != 2 {
+  panic("unexpected std.json export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.json iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdJSONRejectsUnsupportedEncodeValue(t *testing.T) {
+	src := `
+import std.json as json
+
+json.encode(fn() {})
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.json.encode to reject unsupported value")
+	}
+}
+
+func TestRuntimeRunSource_StdJSONRejectsNonStringDecodeArg(t *testing.T) {
+	src := `
+import std.json as json
+
+json.decode(1)
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.json.decode to reject non-string argument")
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdFSModule(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "note.txt")
+	src := `
+import std.fs as fs
+
+if fs.exists("` + filePath + `") {
+  panic("file should not exist before write")
+}
+fs.writeFile("` + filePath + `", "hello")
+if !fs.exists("` + filePath + `") {
+  panic("file should exist after write")
+}
+if fs.readFile("` + filePath + `") != "hello" {
+  panic("unexpected file contents")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.fs import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdFSModule(t *testing.T) {
+	src := `
+import std.fs as fs
+
+let keys = ""
+let count = 0
+for key, value in fs {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.fs export kind")
+  }
+}
+
+if keys != "existsreadFilewriteFile" {
+  panic("unexpected std.fs iteration order")
+}
+if count != 3 {
+  panic("unexpected std.fs export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.fs iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdFSRejectsNonStringArgs(t *testing.T) {
+	src := `
+import std.fs as fs
+
+fs.exists(1)
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.fs.exists to reject non-string argument")
+	}
+}
+
 func TestRuntimeCheckSource_ParsesImportExport(t *testing.T) {
 	src := `
 import "./math.ic" as math
