@@ -11,6 +11,7 @@
 
 - 架构分析：`docs/architecture-analysis-report.md`
 - 语言说明：`docs/language-design.md`
+- AI 代码生成参考：`docs/ai-language-api.md`
 - Runtime API：`docs/api.md`
 - 迭代器协议：`docs/iterators.md`
 - MVP 路线（历史规划）：`docs/mvp-roadmap.md`

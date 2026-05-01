@@ -96,10 +96,20 @@ if ready.json.ok != true {
 if len(routes.json.routes.defaults) != 2 {
   panic("expected default routes in admin response")
 }
-if requests.json.total < 2 {
+if requests.json.total != 2 {
   panic("expected recorded requests")
 }
-if requests.json.requests[0].resolved_model != "gpt-4o-mini" {
+
+let firstRequest = requests.json.requests[0]
+let secondRequest = requests.json.requests[1]
+let foundResolved = false
+if firstRequest.route_name == "chat-gpt-4o" && firstRequest.resolved_model == "gpt-4o-mini" {
+  foundResolved = true
+}
+if secondRequest.route_name == "chat-gpt-4o" && secondRequest.resolved_model == "gpt-4o-mini" {
+  foundResolved = true
+}
+if foundResolved != true {
   panic("expected recent request resolved model")
 }
 

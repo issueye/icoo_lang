@@ -6,6 +6,12 @@
 - 测试编写者
 - 需要从 Go 宿主程序调用 Icoo 的开发者
 
+相关文档：
+
+- AI 代码生成参考：`docs/ai-language-api.md`
+- 语言说明：`docs/language-design.md`
+- 当前状态：`docs/mvp-status.md`
+
 相关实现：
 
 - `pkg/api/runtime.go`

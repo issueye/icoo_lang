@@ -1999,6 +1999,7 @@ if postResp.json.count != 2 {
 	}
 }
 
+
 func TestRuntimeRunSource_StdExpressMiddleware(t *testing.T) {
 	src := `
 import std.express as express
@@ -2047,6 +2048,39 @@ if stopResp.body != "stopped" {
 		t.Fatalf("expected std.express middleware to succeed, got: %v", err)
 	}
 }
+
+func TestRuntimeRunSource_StdExpressRootRouteMatchesExactly(t *testing.T) {
+	src := `
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+app.get("/", fn(req) {
+  return express.text("root")
+})
+app.get("/admin/routes", fn(req) {
+  return express.json({ok: true, route: req.path})
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let rootResp = client.get(server.url + "/")
+let adminResp = client.getJSON(server.url + "/admin/routes")
+server.close()
+
+if rootResp.body != "root" {
+  panic("unexpected express root body")
+}
+if adminResp.json.route != "/admin/routes" {
+  panic("root route should not shadow specific routes")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected express root route match to succeed, got: %v", err)
+	}
+}
+
 
 func TestRuntimeRunSource_ImportsStdCryptoModule(t *testing.T) {
 	src := `

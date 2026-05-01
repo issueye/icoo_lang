@@ -479,6 +479,28 @@ if out != "ab" {
 	}
 }
 
+func TestRuntimeRunSource_ArrayIndexWithLoopVariable(t *testing.T) {
+	src := `
+let arr = [10, 20]
+let i = 0
+let sum = 0
+
+for i < len(arr) {
+  sum = sum * 10 + arr[i]
+  i = i + 1
+}
+
+if sum != 120 {
+  panic("unexpected array index with loop variable")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected array index with loop variable to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_DirectIteratorForIn(t *testing.T) {
 	src := `
 let iter = [1, 2, 3].iter()

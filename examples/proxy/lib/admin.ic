@@ -2,43 +2,55 @@ import std.express as express
 import "./catalog.ic" as catalog
 import "./store.ic" as store
 
-export fn registerRoutes(app, state) {
-  app.get("/healthz", fn(req) {
-    return express.json({
-      ok: true,
-      service: "icoo-proxy"
-    })
-  })
+const adminApi = fn() {
+  let expressModule = express
+  let catalogModule = catalog
+  let storeModule = store
 
-  app.get("/readyz", fn(req) {
-    return express.json({
-      ok: true,
-      upstreamBaseUrl: state.config.upstreamBaseUrl,
-      requestCount: store.count(state.store)
+  fn registerRoutesImpl(app, state) {
+    app.get("/healthz", fn(req) {
+      return expressModule.json({
+        ok: true,
+        service: "icoo-proxy"
+      })
     })
-  })
 
-  app.get("/admin/routes", fn(req) {
-    return express.json({
-      ok: true,
-      routes: catalog.snapshot(state.catalog)
+    app.get("/readyz", fn(req) {
+      return expressModule.json({
+        ok: true,
+        upstreamBaseUrl: state.config.upstreamBaseUrl,
+        requestCount: storeModule.count(state.store)
+      })
     })
-  })
 
-  app.get("/admin/models", fn(req) {
-    return express.json({
-      ok: true,
-      models: catalog.modelsSnapshot(state.catalog)
+    app.get("/admin/routes", fn(req) {
+      return expressModule.json({
+        ok: true,
+        routes: catalogModule.snapshot(state.catalog)
+      })
     })
-  })
 
-  app.get("/admin/requests", fn(req) {
-    return express.json({
-      ok: true,
-      total: store.count(state.store),
-      requests: store.listRecent(state.store)
+    app.get("/admin/models", fn(req) {
+      return expressModule.json({
+        ok: true,
+        models: catalogModule.modelsSnapshot(state.catalog)
+      })
     })
-  })
 
-  return app
-}
+    app.get("/admin/requests", fn(req) {
+      return expressModule.json({
+        ok: true,
+        total: storeModule.count(state.store),
+        requests: storeModule.listRecent(state.store)
+      })
+    })
+
+    return app
+  }
+
+  return {
+    registerRoutes: registerRoutesImpl
+  }
+}()
+
+export const registerRoutes = adminApi.registerRoutes

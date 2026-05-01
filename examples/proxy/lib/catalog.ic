@@ -1,51 +1,77 @@
-export fn buildCatalog(config) {
-  return {
-    defaultRoutes: config.defaultRoutes,
-    aliases: config.aliases
-  }
-}
-
-fn cloneRoute(route, selection, requestedModel) {
-  return {
-    name: route.name,
-    alias: route.alias,
-    endpoint: route.endpoint,
-    upstreamPath: route.upstreamPath,
-    upstreamModel: route.upstreamModel,
-    protocol: route.protocol,
-    selection: selection,
-    requestedModel: requestedModel
-  }
-}
-
-export fn resolveRoute(catalog, endpoint, requestedModel) {
-  if requestedModel != null {
-    for i, route in catalog.aliases {
-      if route.alias == requestedModel && route.endpoint == endpoint {
-        return cloneRoute(route, "alias", requestedModel)
+const catalogApi = fn() {
+  fn lookup(obj, name) {
+    if obj == null {
+      return null
+    }
+    for key, value in obj {
+      if key == name {
+        return value
       }
     }
+    return null
   }
 
-  for i, route in catalog.defaultRoutes {
-    if route.endpoint == endpoint {
-      return cloneRoute(route, "default", requestedModel)
+  fn buildCatalogImpl(config) {
+    return {
+      defaultRoutes: config.defaultRoutes,
+      aliases: config.aliases
     }
   }
 
-  return null
-}
-
-export fn snapshot(catalog) {
-  return {
-    defaults: catalog.defaultRoutes,
-    aliases: catalog.aliases
+  fn cloneRoute(route, selection, requestedModel) {
+    return {
+      name: route.name,
+      alias: lookup(route, "alias"),
+      endpoint: route.endpoint,
+      upstreamPath: route.upstreamPath,
+      upstreamModel: route.upstreamModel,
+      protocol: route.protocol,
+      selection: selection,
+      requestedModel: requestedModel
+    }
   }
-}
 
-export fn modelsSnapshot(catalog) {
-  return {
-    defaults: catalog.defaultRoutes,
-    aliases: catalog.aliases
+  fn resolveRouteImpl(catalog, endpoint, requestedModel) {
+    if requestedModel != null {
+      for i, route in catalog.aliases {
+        if route.alias == requestedModel && route.endpoint == endpoint {
+          return cloneRoute(route, "alias", requestedModel)
+        }
+      }
+    }
+
+    for i, route in catalog.defaultRoutes {
+      if route.endpoint == endpoint {
+        return cloneRoute(route, "default", requestedModel)
+      }
+    }
+
+    return null
   }
-}
+
+  fn snapshotImpl(catalog) {
+    return {
+      defaults: catalog.defaultRoutes,
+      aliases: catalog.aliases
+    }
+  }
+
+  fn modelsSnapshotImpl(catalog) {
+    return {
+      defaults: catalog.defaultRoutes,
+      aliases: catalog.aliases
+    }
+  }
+
+  return {
+    buildCatalog: buildCatalogImpl,
+    resolveRoute: resolveRouteImpl,
+    snapshot: snapshotImpl,
+    modelsSnapshot: modelsSnapshotImpl
+  }
+}()
+
+export const buildCatalog = catalogApi.buildCatalog
+export const resolveRoute = catalogApi.resolveRoute
+export const snapshot = catalogApi.snapshot
+export const modelsSnapshot = catalogApi.modelsSnapshot

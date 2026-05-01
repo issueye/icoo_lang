@@ -317,6 +317,7 @@ func (c *Compiler) compileFnExprExpr(e *ast.FnExpr) {
 	child.proto.Arity = len(e.Params)
 	prev := c.current
 	c.current = child
+	c.beginScope()
 
 	for _, param := range e.Params {
 		c.addLocal(param.Name, false)

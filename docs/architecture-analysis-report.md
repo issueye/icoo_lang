@@ -1,5 +1,14 @@
 # Icoo 架构分析报告（面向开发者）
 
+## 相关文档
+
+- 语言说明：`docs/language-design.md`
+- AI 代码生成参考：`docs/ai-language-api.md`
+- Runtime API：`docs/api.md`
+- 当前状态：`docs/mvp-status.md`
+
+---
+
 ## 1. 项目概述
 
 Icoo 是一个使用 Go 实现的脚本语言运行时与工具链项目。  

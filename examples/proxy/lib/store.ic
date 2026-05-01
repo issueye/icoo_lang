@@ -1,55 +1,74 @@
 import std.db as db
 import std.time as time
 
-export fn createStore(limit) {
-  let conn = db.sqlite(":memory:")
-  conn.exec("create table requests (id integer primary key, ts integer, method text, path text, route_name text, requested_model text, resolved_model text, auth_via text, status integer, upstream_url text, note text)")
+const storeApi = fn() {
+  let dbModule = db
+  let timeModule = time
+
+  fn trimToLimitImpl(store) {
+    let rows = store.conn.query("select id from requests order by id desc")
+    let i = store.limit
+    for i < len(rows) {
+      store.conn.exec("delete from requests where id = ?", [rows[i].id])
+      i = i + 1
+    }
+    return null
+  }
+
+  fn createStoreImpl(limit) {
+    let conn = dbModule.sqlite(":memory:")
+    conn.exec("create table requests (id integer primary key, ts integer, method text, path text, route_name text, requested_model text, resolved_model text, auth_via text, status integer, upstream_url text, note text)")
+    return {
+      conn: conn,
+      limit: limit
+    }
+  }
+
+  fn recordRequestImpl(store, item) {
+    store.conn.exec(
+      "insert into requests (ts, method, path, route_name, requested_model, resolved_model, auth_via, status, upstream_url, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        timeModule.now(),
+        item.method,
+        item.path,
+        item.route_name,
+        item.requested_model,
+        item.resolved_model,
+        item.auth_via,
+        item.status,
+        item.upstream_url,
+        item.note
+      ]
+    )
+    trimToLimitImpl(store)
+    return null
+  }
+
+  fn listRecentImpl(store) {
+    return store.conn.query("select id, ts, method, path, route_name, requested_model, resolved_model, auth_via, status, upstream_url, note from requests order by id desc")
+  }
+
+  fn countImpl(store) {
+    let row = store.conn.queryOne("select count(*) as total from requests")
+    return row.total
+  }
+
+  fn closeImpl(store) {
+    store.conn.close()
+    return null
+  }
+
   return {
-    conn: conn,
-    limit: limit
+    createStore: createStoreImpl,
+    recordRequest: recordRequestImpl,
+    listRecent: listRecentImpl,
+    count: countImpl,
+    close: closeImpl
   }
-}
+}()
 
-fn trimToLimit(store) {
-  let rows = store.conn.query("select id from requests order by id desc")
-  let i = store.limit
-  for i < len(rows) {
-    store.conn.exec("delete from requests where id = ?", [rows[i].id])
-    i = i + 1
-  }
-  return null
-}
-
-export fn recordRequest(store, item) {
-  store.conn.exec(
-    "insert into requests (ts, method, path, route_name, requested_model, resolved_model, auth_via, status, upstream_url, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [
-      time.now(),
-      item.method,
-      item.path,
-      item.route_name,
-      item.requested_model,
-      item.resolved_model,
-      item.auth_via,
-      item.status,
-      item.upstream_url,
-      item.note
-    ]
-  )
-  trimToLimit(store)
-  return null
-}
-
-export fn listRecent(store) {
-  return store.conn.query("select id, ts, method, path, route_name, requested_model, resolved_model, auth_via, status, upstream_url, note from requests order by id desc")
-}
-
-export fn count(store) {
-  let row = store.conn.queryOne("select count(*) as total from requests")
-  return row.total
-}
-
-export fn close(store) {
-  store.conn.close()
-  return null
-}
+export const createStore = storeApi.createStore
+export const recordRequest = storeApi.recordRequest
+export const listRecent = storeApi.listRecent
+export const count = storeApi.count
+export const close = storeApi.close

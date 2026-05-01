@@ -1,124 +1,166 @@
 import std.json as json
 import std.os as os
 
-fn defaultConfig() {
-  return {
-    listenAddr: "127.0.0.1:8086",
-    upstreamBaseUrl: "http://127.0.0.1:8096",
-    apiKeys: ["demo-key"],
-    allowUnauthenticatedLocal: false,
-    timeoutMs: 5000,
-    recentLimit: 20,
-    defaultRoutes: [
-      {
-        name: "chat-default",
-        endpoint: "/v1/chat/completions",
-        upstreamPath: "/openai/chat/completions",
-        upstreamModel: "gpt-4o-mini",
-        protocol: "openai"
-      },
-      {
-        name: "messages-default",
-        endpoint: "/v1/messages",
-        upstreamPath: "/anthropic/messages",
-        upstreamModel: "claude-3-5-sonnet",
-        protocol: "anthropic"
-      }
-    ],
-    aliases: [
-      {
-        alias: "gpt-4o",
-        endpoint: "/v1/chat/completions",
-        name: "chat-gpt-4o",
-        upstreamPath: "/openai/chat/completions",
-        upstreamModel: "gpt-4o-mini",
-        protocol: "openai"
-      },
-      {
-        alias: "demo-openai",
-        endpoint: "/v1/chat/completions",
-        name: "chat-demo-openai",
-        upstreamPath: "/openai/chat/completions",
-        upstreamModel: "gpt-4o-mini",
-        protocol: "openai"
-      },
-      {
-        alias: "claude-sonnet",
-        endpoint: "/v1/messages",
-        name: "messages-claude-sonnet",
-        upstreamPath: "/anthropic/messages",
-        upstreamModel: "claude-3-5-sonnet",
-        protocol: "anthropic"
-      },
-      {
-        alias: "sonnet",
-        endpoint: "/v1/messages",
-        name: "messages-sonnet",
-        upstreamPath: "/anthropic/messages",
-        upstreamModel: "claude-3-5-sonnet",
-        protocol: "anthropic"
-      }
-    ]
-  }
-}
+const configApi = fn() {
+  let jsonModule = json
+  let osModule = os
 
-fn applyOverride(config, override) {
-  if override == null {
+  fn defaultConfig() {
+    return {
+      listenAddr: "127.0.0.1:8086",
+      upstreamBaseUrl: "http://127.0.0.1:8096",
+      apiKeys: ["demo-key"],
+      allowUnauthenticatedLocal: false,
+      timeoutMs: 5000,
+      recentLimit: 20,
+      defaultRoutes: [
+        {
+          name: "chat-default",
+          endpoint: "/v1/chat/completions",
+          upstreamPath: "/openai/chat/completions",
+          upstreamModel: "gpt-4o-mini",
+          protocol: "openai"
+        },
+        {
+          name: "messages-default",
+          endpoint: "/v1/messages",
+          upstreamPath: "/anthropic/messages",
+          upstreamModel: "claude-3-5-sonnet",
+          protocol: "anthropic"
+        }
+      ],
+      aliases: [
+        {
+          alias: "gpt-4o",
+          endpoint: "/v1/chat/completions",
+          name: "chat-gpt-4o",
+          upstreamPath: "/openai/chat/completions",
+          upstreamModel: "gpt-4o-mini",
+          protocol: "openai"
+        },
+        {
+          alias: "demo-openai",
+          endpoint: "/v1/chat/completions",
+          name: "chat-demo-openai",
+          upstreamPath: "/openai/chat/completions",
+          upstreamModel: "gpt-4o-mini",
+          protocol: "openai"
+        },
+        {
+          alias: "claude-sonnet",
+          endpoint: "/v1/messages",
+          name: "messages-claude-sonnet",
+          upstreamPath: "/anthropic/messages",
+          upstreamModel: "claude-3-5-sonnet",
+          protocol: "anthropic"
+        },
+        {
+          alias: "sonnet",
+          endpoint: "/v1/messages",
+          name: "messages-sonnet",
+          upstreamPath: "/anthropic/messages",
+          upstreamModel: "claude-3-5-sonnet",
+          protocol: "anthropic"
+        }
+      ]
+    }
+  }
+
+  fn lookup(obj, name) {
+    if obj == null {
+      return null
+    }
+    for key, value in obj {
+      if key == name {
+        return value
+      }
+    }
+    return null
+  }
+
+  fn applyOverride(config, override) {
+    if override == null {
+      return config
+    }
+
+    let listenAddr = lookup(override, "listenAddr")
+    if listenAddr != null {
+      config.listenAddr = listenAddr
+    }
+
+    let upstreamBaseUrl = lookup(override, "upstreamBaseUrl")
+    if upstreamBaseUrl != null {
+      config.upstreamBaseUrl = upstreamBaseUrl
+    }
+
+    let apiKeys = lookup(override, "apiKeys")
+    if apiKeys != null {
+      config.apiKeys = apiKeys
+    }
+
+    let allowUnauthenticatedLocal = lookup(override, "allowUnauthenticatedLocal")
+    if allowUnauthenticatedLocal != null {
+      config.allowUnauthenticatedLocal = allowUnauthenticatedLocal
+    }
+
+    let timeoutMs = lookup(override, "timeoutMs")
+    if timeoutMs != null {
+      config.timeoutMs = timeoutMs
+    }
+
+    let recentLimit = lookup(override, "recentLimit")
+    if recentLimit != null {
+      config.recentLimit = recentLimit
+    }
+
+    let defaultRoutes = lookup(override, "defaultRoutes")
+    if defaultRoutes != null {
+      config.defaultRoutes = defaultRoutes
+    }
+
+    let aliases = lookup(override, "aliases")
+    if aliases != null {
+      config.aliases = aliases
+    }
+
     return config
   }
-  if override.listenAddr != null {
-    config.listenAddr = override.listenAddr
-  }
-  if override.upstreamBaseUrl != null {
-    config.upstreamBaseUrl = override.upstreamBaseUrl
-  }
-  if override.apiKeys != null {
-    config.apiKeys = override.apiKeys
-  }
-  if override.allowUnauthenticatedLocal != null {
-    config.allowUnauthenticatedLocal = override.allowUnauthenticatedLocal
-  }
-  if override.timeoutMs != null {
-    config.timeoutMs = override.timeoutMs
-  }
-  if override.recentLimit != null {
-    config.recentLimit = override.recentLimit
-  }
-  if override.defaultRoutes != null {
-    config.defaultRoutes = override.defaultRoutes
-  }
-  if override.aliases != null {
-    config.aliases = override.aliases
-  }
-  return config
-}
 
-export fn loadConfig(overrides) {
-  let config = defaultConfig()
+  fn loadConfigImpl(overrides) {
+    let config = defaultConfig()
 
-  let configPath = os.getEnv("ICOO_PROXY_CONFIG")
-  if configPath != null {
-    config = applyOverride(config, json.fromFile(configPath))
+    let configPath = osModule.getEnv("ICOO_PROXY_CONFIG")
+    if configPath != null {
+      config = applyOverride(config, jsonModule.fromFile(configPath))
+    }
+
+    let listenAddr = osModule.getEnv("ICOO_PROXY_LISTEN")
+    if listenAddr != null {
+      config.listenAddr = listenAddr
+    }
+
+    let upstreamBaseUrl = osModule.getEnv("ICOO_PROXY_UPSTREAM")
+    if upstreamBaseUrl != null {
+      config.upstreamBaseUrl = upstreamBaseUrl
+    }
+
+    let allowLocal = osModule.getEnv("ICOO_PROXY_ALLOW_LOCAL")
+    if allowLocal == "1" || allowLocal == "true" {
+      config.allowUnauthenticatedLocal = true
+    }
+
+    return applyOverride(config, overrides)
   }
 
-  let listenAddr = os.getEnv("ICOO_PROXY_LISTEN")
-  if listenAddr != null {
-    config.listenAddr = listenAddr
+  fn sampleConfigImpl() {
+    return defaultConfig()
   }
 
-  let upstreamBaseUrl = os.getEnv("ICOO_PROXY_UPSTREAM")
-  if upstreamBaseUrl != null {
-    config.upstreamBaseUrl = upstreamBaseUrl
+  return {
+    loadConfig: loadConfigImpl,
+    sampleConfig: sampleConfigImpl
   }
+}()
 
-  let allowLocal = os.getEnv("ICOO_PROXY_ALLOW_LOCAL")
-  if allowLocal == "1" || allowLocal == "true" {
-    config.allowUnauthenticatedLocal = true
-  }
-
-  return applyOverride(config, overrides)
-}
-
-export fn sampleConfig() {
-  return defaultConfig()
-}
+export const loadConfig = configApi.loadConfig
+export const sampleConfig = configApi.sampleConfig

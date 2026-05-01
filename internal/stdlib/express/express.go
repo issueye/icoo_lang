@@ -168,11 +168,11 @@ func (route routeBinding) matches(method, path string) bool {
 	if route.path == "*" {
 		return true
 	}
-	if route.path == "/" {
-		return true
-	}
 	if path == route.path {
 		return true
+	}
+	if route.path == "/" {
+		return route.method == "ALL"
 	}
 	return strings.HasPrefix(path, strings.TrimRight(route.path, "/")+"/")
 }

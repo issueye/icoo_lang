@@ -1,4 +1,13 @@
-# Icoo 语言设计草案
+# Icoo 语言说明
+
+相关文档：
+
+- AI 代码生成参考：`docs/ai-language-api.md`
+- Runtime API：`docs/api.md`
+- 当前状态：`docs/mvp-status.md`
+- 架构分析：`docs/architecture-analysis-report.md`
+
+---
 
 ## 目标
 

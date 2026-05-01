@@ -51,6 +51,7 @@ func (c *Compiler) compileFnDecl(d *ast.FnDecl) {
 	child.proto.Arity = len(d.Params)
 	prev := c.current
 	c.current = child
+	c.beginScope()
 
 	for _, param := range d.Params {
 		c.addLocal(param.Name, false)
@@ -289,6 +290,7 @@ func (c *Compiler) compileClassMethod(method *ast.ClassMethod, hasSuper bool) {
 
 	prev := c.current
 	c.current = methodChild
+	c.beginScope()
 
 	c.addLocal("this", false)
 	if hasSuper {

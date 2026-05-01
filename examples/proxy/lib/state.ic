@@ -2,16 +2,30 @@ import std.time as time
 import "./catalog.ic" as catalog
 import "./store.ic" as store
 
-export fn newState(config) {
-  return {
-    config: config,
-    catalog: catalog.buildCatalog(config),
-    store: store.createStore(config.recentLimit),
-    startedAt: time.now()
-  }
-}
+const stateApi = fn() {
+  let timeModule = time
+  let catalogModule = catalog
+  let storeModule = store
 
-export fn close(state) {
-  store.close(state.store)
-  return null
-}
+  fn newStateImpl(config) {
+    return {
+      config: config,
+      catalog: catalogModule.buildCatalog(config),
+      store: storeModule.createStore(config.recentLimit),
+      startedAt: timeModule.now()
+    }
+  }
+
+  fn closeImpl(state) {
+    storeModule.close(state.store)
+    return null
+  }
+
+  return {
+    newState: newStateImpl,
+    close: closeImpl
+  }
+}()
+
+export const newState = stateApi.newState
+export const close = stateApi.close

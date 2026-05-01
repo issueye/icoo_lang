@@ -234,6 +234,28 @@ if add10(5) != 15 {
 
 // ---- Error cases ----
 
+func TestClosureCaptureFunctionBodyTopLevelLocal(t *testing.T) {
+	src := `
+fn factory() {
+  let prefix = "hi"
+  fn inner(name) {
+    return prefix + ", " + name
+  }
+  return inner
+}
+
+let greet = factory()
+let result = greet("icoo")
+if result != "hi, icoo" {
+  panic("expected function body top-level local capture")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("function body top-level local capture failed: %v", err)
+	}
+}
+
 func TestClosureCaptureNonExistent(t *testing.T) {
 	src := `
 fn outer() {
