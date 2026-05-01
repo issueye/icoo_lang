@@ -13,10 +13,12 @@ import (
 type ModuleLoader func(importerPath, spec string) (*runtime.Module, error)
 
 type CallFrame struct {
-	Closure *runtime.Closure
-	Module  *runtime.Module
-	IP      int
-	Base    int
+	Closure  *runtime.Closure
+	Module   *runtime.Module
+	Receiver *runtime.ObjectValue
+	Super    *runtime.ClassValue
+	IP       int
+	Base     int
 }
 
 type ExceptionHandler struct {
@@ -109,6 +111,8 @@ func (vm *VM) goExecutor(task *concurrency.GoTask) {
 		if _, err := sub.runLoop(); err != nil {
 			fmt.Fprintf(os.Stderr, "goroutine: %v\n", err)
 		}
+	case *runtime.MethodProxy:
+		fmt.Fprintf(os.Stderr, "goroutine: method proxy requires active method receiver\n")
 	}
 }
 

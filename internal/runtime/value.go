@@ -25,6 +25,8 @@ const (
 	InterfaceKind
 	ClassKind
 	BoundMethodKind
+	MethodProxyKind
+	MethodDefKind
 )
 
 type Value interface {
@@ -137,8 +139,8 @@ func (v *ObjectValue) String() string {
 type ClassValue struct {
 	Name    string
 	Super   *ClassValue
-	Init    *Closure
-	Methods map[string]*Closure
+	Init    *MethodDef
+	Methods map[string]*MethodDef
 }
 
 func (v *ClassValue) Kind() ValueKind { return ClassKind }
@@ -150,7 +152,7 @@ func (v *ClassValue) String() string {
 	return "<class " + name + ">"
 }
 
-func (v *ClassValue) FindMethod(name string) (*Closure, *ClassValue, bool) {
+func (v *ClassValue) FindMethod(name string) (*MethodDef, *ClassValue, bool) {
 	for cls := v; cls != nil; cls = cls.Super {
 		if cls.Methods != nil {
 			if method, ok := cls.Methods[name]; ok {
@@ -161,7 +163,7 @@ func (v *ClassValue) FindMethod(name string) (*Closure, *ClassValue, bool) {
 	return nil, nil, false
 }
 
-func (v *ClassValue) FindInitializer() (*Closure, *ClassValue, bool) {
+func (v *ClassValue) FindInitializer() (*MethodDef, *ClassValue, bool) {
 	for cls := v; cls != nil; cls = cls.Super {
 		if cls.Init != nil {
 			return cls.Init, cls, true
@@ -173,7 +175,7 @@ func (v *ClassValue) FindInitializer() (*Closure, *ClassValue, bool) {
 type BoundMethod struct {
 	Name     string
 	Receiver *ObjectValue
-	Method   *Closure
+	Method   *MethodDef
 	Super    *ClassValue
 	Init     bool
 }
@@ -185,6 +187,37 @@ func (v *BoundMethod) String() string {
 		name = v.Name
 	}
 	return "<bound fn " + name + ">"
+}
+
+type MethodProxy struct {
+	Name   string
+	Method *Closure
+	Init   bool
+}
+
+func (v *MethodProxy) Kind() ValueKind { return MethodProxyKind }
+func (v *MethodProxy) String() string {
+	name := "anonymous"
+	if v != nil && v.Name != "" {
+		name = v.Name
+	}
+	return "<method proxy " + name + ">"
+}
+
+type MethodDef struct {
+	Name         string
+	Callable     Value
+	ImplicitThis bool
+	Init         bool
+}
+
+func (v *MethodDef) Kind() ValueKind { return MethodDefKind }
+func (v *MethodDef) String() string {
+	name := "anonymous"
+	if v != nil && v.Name != "" {
+		name = v.Name
+	}
+	return "<method def " + name + ">"
 }
 
 type NativeFunc func(args []Value) (Value, error)

@@ -346,3 +346,87 @@ class Person {
 		t.Fatal("expected super usage error")
 	}
 }
+
+func TestClassMethodDecorator(t *testing.T) {
+	src := `
+fn excited(target) {
+  return fn() {
+    return target() + "!"
+  }
+}
+
+class Greeter {
+  @excited
+  greet() {
+    return "hi"
+  }
+}
+
+if Greeter().greet() != "hi!" {
+  panic("expected decorated method")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class method decorator failed: %v", err)
+	}
+}
+
+func TestClassMethodDecoratorOrder(t *testing.T) {
+	src := `
+fn prefix(text) {
+  return fn(target) {
+    return fn() {
+      return text + target()
+    }
+  }
+}
+
+class Greeter {
+  @prefix("A")
+  @prefix("B")
+  greet() {
+    return "C"
+  }
+}
+
+if Greeter().greet() != "ABC" {
+  panic("expected method decorator order")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class method decorator order failed: %v", err)
+	}
+}
+
+func TestClassInitDecorator(t *testing.T) {
+	src := `
+fn withFlag(target) {
+  return fn(name) {
+    let obj = target(name)
+    obj.decorated = true
+    return obj
+  }
+}
+
+class Person {
+  @withFlag
+  init(name) {
+    this.name = name
+  }
+}
+
+let p = Person("Ada")
+if p.name != "Ada" {
+  panic("expected init to run")
+}
+if !p.decorated {
+  panic("expected init decorator to run")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class init decorator failed: %v", err)
+	}
+}

@@ -35,7 +35,7 @@ func AnalyzeWithGlobals(program *ast.Program, globalNames []string) []diag.Diagn
 }
 
 func (a *Analyzer) defineBuiltins() {
-	builtins := []string{"print", "println", "len", "typeOf", "chan", "satisfies", "panic", "error", "_tryCheck", "__buildClass", "__superGet"}
+	builtins := []string{"print", "println", "len", "typeOf", "chan", "satisfies", "panic", "error", "_tryCheck", "__buildClass", "__methodDef", "__methodProxy", "__superGet"}
 	for _, name := range builtins {
 		a.scope.Define(Symbol{Name: name})
 	}
@@ -138,6 +138,9 @@ func (a *Analyzer) visitClassDecl(d *ast.ClassDecl) {
 	}
 	hasInit := false
 	for _, method := range d.Methods {
+		for _, decorator := range method.Decorators {
+			a.visitExpr(decorator)
+		}
 		if method.Name == "init" {
 			if hasInit {
 				a.report(method.Span_, "duplicate init method")

@@ -92,6 +92,10 @@ func KindName(v Value) string {
 		return "class"
 	case BoundMethodKind:
 		return "function"
+	case MethodProxyKind:
+		return "function"
+	case MethodDefKind:
+		return "function"
 	default:
 		return "unknown"
 	}

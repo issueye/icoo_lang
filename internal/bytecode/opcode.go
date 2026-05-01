@@ -11,6 +11,7 @@ const (
 	OpFalse
 	OpPop
 	OpDup
+	OpSwap
 
 	OpGetLocal
 	OpSetLocal
@@ -81,6 +82,8 @@ func (op Opcode) String() string {
 		return "OpPop"
 	case OpDup:
 		return "OpDup"
+	case OpSwap:
+		return "OpSwap"
 	case OpGetLocal:
 		return "OpGetLocal"
 	case OpSetLocal:

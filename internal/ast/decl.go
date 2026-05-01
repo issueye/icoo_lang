@@ -80,10 +80,11 @@ func (d *DecoratedDecl) Span() token.Span {
 }
 
 type ClassMethod struct {
-	Name   string
-	Params []Param
-	Body   *BlockStmt
-	Span_  token.Span
+	Name       string
+	Params     []Param
+	Body       *BlockStmt
+	Decorators []Expr
+	Span_      token.Span
 }
 
 func (m ClassMethod) Span() token.Span {

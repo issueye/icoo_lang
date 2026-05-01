@@ -21,6 +21,12 @@ fn mark(target) {
   }
 }
 
+fn excited(target) {
+  return fn() {
+    return target() + "!"
+  }
+}
+
 @mark
 class Box {
   init(value) {
@@ -28,9 +34,18 @@ class Box {
   }
 }
 
+class Greeter {
+  @excited
+  hello() {
+    return "welcome"
+  }
+}
+
 let box = Box(7)
+let greeter = Greeter()
 
 io.println("== decorators ==")
 io.println("greet:", greet("icoo"))
 io.println("box value:", box.value)
 io.println("box decorated:", box.decorated)
+io.println("method decorator:", greeter.hello())

@@ -388,7 +388,7 @@ func (vm *VM) execGetProperty(name string) error {
 					Receiver: value,
 					Method:   method,
 					Super:    owner.Super,
-					Init:     name == "init",
+					Init:     method.Init,
 				})
 				return nil
 			}

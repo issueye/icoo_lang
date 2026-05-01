@@ -305,15 +305,58 @@ func (c *Compiler) compileClassMethod(method *ast.ClassMethod, hasSuper bool) {
 	methodChild.proto.LocalCount = len(methodChild.locals)
 	c.current = prev
 
-	if len(methodChild.upvalues) > 0 {
-		c.compileClosureWiring(methodChild)
-		return
+	if len(method.Decorators) > 0 {
+		for _, decorator := range method.Decorators {
+			c.compileExpr(decorator)
+		}
+
+		proxyIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "__methodProxy"})
+		c.emit(bytecode.OpGetGlobal)
+		c.emitShort(proxyIdx)
 	}
 
-	protoValue := &runtime.Closure{Proto: methodChild.proto}
-	constIdx := c.current.chunk.AddConstant(protoValue)
-	c.emit(bytecode.OpClosure)
-	c.emitShort(constIdx)
+	if len(methodChild.upvalues) > 0 {
+		c.compileClosureWiring(methodChild)
+	} else {
+		protoValue := &runtime.Closure{Proto: methodChild.proto}
+		constIdx := c.current.chunk.AddConstant(protoValue)
+		c.emit(bytecode.OpClosure)
+		c.emitShort(constIdx)
+	}
+
+	if len(method.Decorators) > 0 {
+		c.emitConstant(runtime.StringValue{Value: method.Name})
+		if method.Name == "init" {
+			c.emit(bytecode.OpTrue)
+		} else {
+			c.emit(bytecode.OpFalse)
+		}
+		c.emit(bytecode.OpCall)
+		c.emitByte(3)
+		for range method.Decorators {
+			c.emit(bytecode.OpCall)
+			c.emitByte(1)
+		}
+	}
+
+	methodDefIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "__methodDef"})
+	c.emit(bytecode.OpGetGlobal)
+	c.emitShort(methodDefIdx)
+	c.emit(bytecode.OpSwap)
+	if len(method.Decorators) > 0 {
+		c.emit(bytecode.OpFalse)
+	} else {
+		c.emit(bytecode.OpTrue)
+	}
+	if method.Name == "init" {
+		c.emit(bytecode.OpTrue)
+	} else {
+		c.emit(bytecode.OpFalse)
+	}
+	c.emitConstant(runtime.StringValue{Value: method.Name})
+	c.emit(bytecode.OpCall)
+	c.emitByte(4)
+
 }
 
 func boolToInt(v bool) int {

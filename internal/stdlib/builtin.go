@@ -21,6 +21,8 @@ func RegisterBuiltins(machine *vm.VM) {
 	machine.DefineBuiltin("satisfies", &runtime.NativeFunction{Name: "satisfies", Arity: 2, Fn: builtinSatisfies})
 	machine.DefineBuiltin("_tryCheck", &runtime.NativeFunction{Name: "_tryCheck", Arity: 1, Fn: builtinTryCheck})
 	machine.DefineBuiltin("__buildClass", &runtime.NativeFunction{Name: "__buildClass", Arity: 4, Fn: builtinBuildClass})
+	machine.DefineBuiltin("__methodDef", &runtime.NativeFunction{Name: "__methodDef", Arity: 4, Fn: builtinMethodDef})
+	machine.DefineBuiltin("__methodProxy", &runtime.NativeFunction{Name: "__methodProxy", Arity: 3, Fn: builtinMethodProxy})
 	machine.DefineBuiltin("__superGet", &runtime.NativeFunction{Name: "__superGet", Arity: 3, Fn: builtinSuperGet})
 }
 
@@ -255,24 +257,24 @@ func builtinBuildClass(args []runtime.Value) (runtime.Value, error) {
 		return nil, fmt.Errorf("__buildClass: super must be class or null")
 	}
 
-	var init *runtime.Closure
+	var init *runtime.MethodDef
 	switch value := args[2].(type) {
 	case runtime.NullValue:
-	case *runtime.Closure:
+	case *runtime.MethodDef:
 		init = value
 	default:
-		return nil, fmt.Errorf("__buildClass: init must be function or null")
+		return nil, fmt.Errorf("__buildClass: init must be method or null")
 	}
 
 	methodObj, ok := args[3].(*runtime.ObjectValue)
 	if !ok {
 		return nil, fmt.Errorf("__buildClass: methods must be object")
 	}
-	methods := make(map[string]*runtime.Closure, len(methodObj.Fields))
+	methods := make(map[string]*runtime.MethodDef, len(methodObj.Fields))
 	for name, value := range methodObj.Fields {
-		method, ok := value.(*runtime.Closure)
+		method, ok := value.(*runtime.MethodDef)
 		if !ok {
-			return nil, fmt.Errorf("__buildClass: method %s must be function", name)
+			return nil, fmt.Errorf("__buildClass: method %s must be method", name)
 		}
 		methods[name] = method
 	}
@@ -282,6 +284,53 @@ func builtinBuildClass(args []runtime.Value) (runtime.Value, error) {
 		Super:   super,
 		Init:    init,
 		Methods: methods,
+	}, nil
+}
+
+func builtinMethodDef(args []runtime.Value) (runtime.Value, error) {
+	callable := args[0]
+	switch callable.(type) {
+	case *runtime.Closure, *runtime.NativeFunction, *runtime.MethodProxy:
+	default:
+		return nil, fmt.Errorf("__methodDef: first argument must be callable")
+	}
+	implicitValue, ok := args[1].(runtime.BoolValue)
+	if !ok {
+		return nil, fmt.Errorf("__methodDef: second argument must be bool")
+	}
+	initValue, ok := args[2].(runtime.BoolValue)
+	if !ok {
+		return nil, fmt.Errorf("__methodDef: third argument must be bool")
+	}
+	nameValue, ok := args[3].(runtime.StringValue)
+	if !ok {
+		return nil, fmt.Errorf("__methodDef: fourth argument must be string")
+	}
+	return &runtime.MethodDef{
+		Name:         nameValue.Value,
+		Callable:     callable,
+		ImplicitThis: implicitValue.Value,
+		Init:         initValue.Value,
+	}, nil
+}
+
+func builtinMethodProxy(args []runtime.Value) (runtime.Value, error) {
+	method, ok := args[0].(*runtime.Closure)
+	if !ok || method == nil {
+		return nil, fmt.Errorf("__methodProxy: first argument must be function")
+	}
+	nameValue, ok := args[1].(runtime.StringValue)
+	if !ok {
+		return nil, fmt.Errorf("__methodProxy: second argument must be string")
+	}
+	initValue, ok := args[2].(runtime.BoolValue)
+	if !ok {
+		return nil, fmt.Errorf("__methodProxy: third argument must be bool")
+	}
+	return &runtime.MethodProxy{
+		Name:   nameValue.Value,
+		Method: method,
+		Init:   initValue.Value,
 	}, nil
 }
 
@@ -300,7 +349,7 @@ func builtinSuperGet(args []runtime.Value) (runtime.Value, error) {
 	}
 
 	var (
-		method *runtime.Closure
+		method *runtime.MethodDef
 		owner  *runtime.ClassValue
 		found  bool
 	)
@@ -318,6 +367,6 @@ func builtinSuperGet(args []runtime.Value) (runtime.Value, error) {
 		Receiver: receiver,
 		Method:   method,
 		Super:    owner.Super,
-		Init:     nameValue.Value == "init",
+		Init:     method.Init,
 	}, nil
 }

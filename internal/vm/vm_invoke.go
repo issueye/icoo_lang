@@ -80,20 +80,20 @@ func cloneDetachedValue(value runtime.Value) runtime.Value {
 		}
 		return &runtime.ObjectValue{Fields: fields, Class: class}
 	case *runtime.ClassValue:
-		methods := make(map[string]*runtime.Closure, len(v.Methods))
+		methods := make(map[string]*runtime.MethodDef, len(v.Methods))
 		for key, method := range v.Methods {
 			if method == nil {
 				continue
 			}
-			methods[key] = cloneDetachedValue(method).(*runtime.Closure)
+			methods[key] = cloneDetachedValue(method).(*runtime.MethodDef)
 		}
 		var super *runtime.ClassValue
 		if v.Super != nil {
 			super = cloneDetachedValue(v.Super).(*runtime.ClassValue)
 		}
-		var init *runtime.Closure
+		var init *runtime.MethodDef
 		if v.Init != nil {
-			init = cloneDetachedValue(v.Init).(*runtime.Closure)
+			init = cloneDetachedValue(v.Init).(*runtime.MethodDef)
 		}
 		return &runtime.ClassValue{Name: v.Name, Super: super, Init: init, Methods: methods}
 	case *runtime.BoundMethod:
@@ -101,9 +101,9 @@ func cloneDetachedValue(value runtime.Value) runtime.Value {
 		if v.Receiver != nil {
 			receiver = cloneDetachedValue(v.Receiver).(*runtime.ObjectValue)
 		}
-		var method *runtime.Closure
+		var method *runtime.MethodDef
 		if v.Method != nil {
-			method = cloneDetachedValue(v.Method).(*runtime.Closure)
+			method = cloneDetachedValue(v.Method).(*runtime.MethodDef)
 		}
 		var super *runtime.ClassValue
 		if v.Super != nil {
@@ -115,6 +115,27 @@ func cloneDetachedValue(value runtime.Value) runtime.Value {
 			Method:   method,
 			Super:    super,
 			Init:     v.Init,
+		}
+	case *runtime.MethodProxy:
+		var method *runtime.Closure
+		if v.Method != nil {
+			method = cloneDetachedValue(v.Method).(*runtime.Closure)
+		}
+		return &runtime.MethodProxy{
+			Name:   v.Name,
+			Method: method,
+			Init:   v.Init,
+		}
+	case *runtime.MethodDef:
+		var callable runtime.Value
+		if v.Callable != nil {
+			callable = cloneDetachedValue(v.Callable)
+		}
+		return &runtime.MethodDef{
+			Name:         v.Name,
+			Callable:     callable,
+			ImplicitThis: v.ImplicitThis,
+			Init:         v.Init,
 		}
 	case *runtime.ErrorValue:
 		cloned := &runtime.ErrorValue{

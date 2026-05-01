@@ -56,6 +56,11 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 			vm.Pop()
 		case bytecode.OpDup:
 			vm.Push(vm.Peek(0))
+		case bytecode.OpSwap:
+			top := vm.Pop()
+			next := vm.Pop()
+			vm.Push(top)
+			vm.Push(next)
 		case bytecode.OpGetLocal:
 			slot := int(vm.readShort(frame, chunk))
 			vm.Push(vm.stack[frame.Base+slot])

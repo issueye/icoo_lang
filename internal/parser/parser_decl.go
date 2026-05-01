@@ -160,17 +160,28 @@ func (p *Parser) parseClassDecl() ast.Decl {
 	p.expect(token.LBrace, "expected '{' after class name")
 	methods := make([]ast.ClassMethod, 0, 4)
 	for !p.check(token.RBrace) && !p.atEnd() {
+		var decorators []ast.Expr
+		var methodStart token.Position
+		if p.check(token.At) {
+			startTok, parsed := p.parseDecoratorList()
+			decorators = parsed
+			methodStart = startTok.Span.Start
+		}
 		methodNameTok := p.expectIdentOrKeyword("method name")
 		methodParams := p.parseParamList()
 		methodBody := p.parseBlockStmt()
 		if methodBody == nil {
 			return nil
 		}
+		if methodStart.Line == 0 {
+			methodStart = methodNameTok.Span.Start
+		}
 		methods = append(methods, ast.ClassMethod{
-			Name:   methodNameTok.Lexeme,
-			Params: methodParams,
-			Body:   methodBody,
-			Span_:  token.Span{Start: methodNameTok.Span.Start, End: methodBody.Span().End},
+			Name:       methodNameTok.Lexeme,
+			Params:     methodParams,
+			Body:       methodBody,
+			Decorators: decorators,
+			Span_:      token.Span{Start: methodStart, End: methodBody.Span().End},
 		})
 	}
 	endTok := p.expect(token.RBrace, "expected '}' after class body")
@@ -183,12 +194,7 @@ func (p *Parser) parseClassDecl() ast.Decl {
 }
 
 func (p *Parser) parseDecoratedDecl() ast.Decl {
-	startTok := p.expect(token.At, "expected '@'")
-	decorators := make([]ast.Expr, 0, 2)
-	decorators = append(decorators, p.parseExpression(PrecLowest))
-	for p.match(token.At) {
-		decorators = append(decorators, p.parseExpression(PrecLowest))
-	}
+	startTok, decorators := p.parseDecoratorList()
 
 	var decl ast.Decl
 	switch p.current().Type {
@@ -209,6 +215,16 @@ func (p *Parser) parseDecoratedDecl() ast.Decl {
 		Decorators: decorators,
 		Span_:      token.Span{Start: startTok.Span.Start, End: decl.Span().End},
 	}
+}
+
+func (p *Parser) parseDecoratorList() (token.Token, []ast.Expr) {
+	startTok := p.expect(token.At, "expected '@'")
+	decorators := make([]ast.Expr, 0, 2)
+	decorators = append(decorators, p.parseExpression(PrecLowest))
+	for p.match(token.At) {
+		decorators = append(decorators, p.parseExpression(PrecLowest))
+	}
+	return startTok, decorators
 }
 
 func (p *Parser) parseTypeDecl() ast.Decl {
