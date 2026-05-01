@@ -1105,7 +1105,7 @@ func TestRuntimeRunSource_ImportsStdHTTPModule(t *testing.T) {
 	defer server.Close()
 
 	src := `
-import std.net.http.client as http
+import std.http.client as http
 
 let resp = http.get("` + server.URL + `")
 if !resp.ok {
@@ -1121,7 +1121,7 @@ if resp.body != "hello" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http import to succeed, got: %v", err)
+		t.Fatalf("expected std.http.client import to succeed, got: %v", err)
 	}
 }
 
@@ -1141,7 +1141,7 @@ func TestRuntimeRunSource_StdHTTPRequestSupportsMethodHeadersAndBody(t *testing.
 	defer server.Close()
 
 	src := `
-import std.net.http.client as http
+import std.http.client as http
 
 let resp = http.request({
   url: "` + server.URL + `",
@@ -1160,7 +1160,7 @@ if resp.body != "payload" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http request to succeed, got: %v", err)
+		t.Fatalf("expected std.http.client request to succeed, got: %v", err)
 	}
 }
 
@@ -1174,7 +1174,7 @@ func TestRuntimeRunSource_StdHTTPDownload(t *testing.T) {
 
 	src := `
 import std.fs as fs
-import std.net.http.client as http
+import std.http.client as http
 
 let resp = http.download("` + server.URL + `", "` + path + `")
 if !resp.ok {
@@ -1190,13 +1190,13 @@ if fs.readFile("` + path + `") != "download-body" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http download to succeed, got: %v", err)
+		t.Fatalf("expected std.http.client download to succeed, got: %v", err)
 	}
 }
 
 func TestRuntimeRunSource_IteratesStdHTTPClientModule(t *testing.T) {
 	src := `
-import std.net.http.client as http
+import std.http.client as http
 
 let keys = ""
 let count = 0
@@ -1204,27 +1204,27 @@ for key, value in http {
   keys = keys + key
   count = count + 1
   if typeOf(value) != "native_function" {
-    panic("unexpected std.net.http.client export kind")
+    panic("unexpected std.http.client export kind")
   }
 }
 
 if keys != "deletedownloadgetgetJSONpostputrequestrequestJSON" {
-  panic("unexpected std.net.http.client iteration order")
+  panic("unexpected std.http.client iteration order")
 }
 if count != 8 {
-  panic("unexpected std.net.http.client export count")
+  panic("unexpected std.http.client export count")
 }
 `
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http.client iteration to succeed, got: %v", err)
+		t.Fatalf("expected std.http.client iteration to succeed, got: %v", err)
 	}
 }
 
 func TestRuntimeRunSource_IteratesStdHTTPServerModule(t *testing.T) {
 	src := `
-import std.net.http.server as http
+import std.http.server as http
 
 let keys = ""
 let count = 0
@@ -1232,21 +1232,21 @@ for key, value in http {
   keys = keys + key
   count = count + 1
   if typeOf(value) != "native_function" {
-    panic("unexpected std.net.http.server export kind")
+    panic("unexpected std.http.server export kind")
   }
 }
 
 if keys != "forwardlisten" {
-  panic("unexpected std.net.http.server iteration order")
+  panic("unexpected std.http.server iteration order")
 }
 if count != 2 {
-  panic("unexpected std.net.http.server export count")
+  panic("unexpected std.http.server export count")
 }
 `
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http.server iteration to succeed, got: %v", err)
+		t.Fatalf("expected std.http.server iteration to succeed, got: %v", err)
 	}
 }
 
@@ -1268,7 +1268,7 @@ func TestRuntimeRunSource_StdHTTPShortcutMethods(t *testing.T) {
 	defer server.Close()
 
 	src := `
-import std.net.http.client as http
+import std.http.client as http
 
 let postResp = http.post("` + server.URL + `", "A")
 let putResp = http.put("` + server.URL + `", "B")
@@ -1287,7 +1287,7 @@ if deleteResp.body != "delete" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http shortcut methods to succeed, got: %v", err)
+		t.Fatalf("expected std.http.client shortcut methods to succeed, got: %v", err)
 	}
 }
 
@@ -1309,7 +1309,7 @@ func TestRuntimeRunSource_StdHTTPJSONHelpers(t *testing.T) {
 	defer server.Close()
 
 	src := `
-import std.net.http.client as http
+import std.http.client as http
 
 let getResp = http.getJSON("` + server.URL + `")
 if getResp.json.ok != true {
@@ -1340,14 +1340,14 @@ if postResp.headers["X-Seen-Content-Type"] != "application/json" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http JSON helpers to succeed, got: %v", err)
+		t.Fatalf("expected std.http.client JSON helpers to succeed, got: %v", err)
 	}
 }
 
 func TestRuntimeRunSource_StdHTTPListen(t *testing.T) {
 	src := `
-import std.net.http.client as client
-import std.net.http.server as server
+import std.http.client as client
+import std.http.server as server
 
 let serverHandle = server.listen({
   addr: "127.0.0.1:0",
@@ -1372,14 +1372,14 @@ if resp.body != "GET:/hello:icoo" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http listen to succeed, got: %v", err)
+		t.Fatalf("expected std.http.server listen to succeed, got: %v", err)
 	}
 }
 
 func TestRuntimeRunSource_StdHTTPListenJSONResponse(t *testing.T) {
 	src := `
-import std.net.http.client as client
-import std.net.http.server as server
+import std.http.client as client
+import std.http.server as server
 
 let serverHandle = server.listen({
   addr: "127.0.0.1:0",
@@ -1404,7 +1404,7 @@ if resp.json.ok != true {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http listen JSON response to succeed, got: %v", err)
+		t.Fatalf("expected std.http.server listen JSON response to succeed, got: %v", err)
 	}
 }
 
@@ -1434,8 +1434,8 @@ func TestRuntimeRunSource_StdHTTPForwardPassThrough(t *testing.T) {
 	defer upstream.Close()
 
 	src := `
-import std.net.http.client as client
-import std.net.http.server as server
+import std.http.client as client
+import std.http.server as server
 
 let serverHandle = server.listen({
   addr: "127.0.0.1:0",
@@ -1468,7 +1468,7 @@ if resp.headers["X-Upstream"] != "seen" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http forward pass-through to succeed, got: %v", err)
+		t.Fatalf("expected std.http.server forward pass-through to succeed, got: %v", err)
 	}
 }
 
@@ -1496,8 +1496,8 @@ func TestRuntimeRunSource_StdHTTPForwardOverridesRequest(t *testing.T) {
 	defer upstream.Close()
 
 	src := `
-import std.net.http.client as client
-import std.net.http.server as server
+import std.http.client as client
+import std.http.server as server
 
 let serverHandle = server.listen({
   addr: "127.0.0.1:0",
@@ -1530,7 +1530,7 @@ if resp.body != "overridden" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http forward overrides to succeed, got: %v", err)
+		t.Fatalf("expected std.http.server forward overrides to succeed, got: %v", err)
 	}
 }
 
@@ -1553,8 +1553,8 @@ func TestRuntimeRunSource_StdHTTPForwardFiltersHopByHopHeaders(t *testing.T) {
 	defer upstream.Close()
 
 	src := `
-import std.net.http.client as client
-import std.net.http.server as server
+import std.http.client as client
+import std.http.server as server
 
 let serverHandle = server.listen({
   addr: "127.0.0.1:0",
@@ -1582,20 +1582,20 @@ if resp.body != "filtered" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.net.http forward header filtering to succeed, got: %v", err)
+		t.Fatalf("expected std.http.server forward header filtering to succeed, got: %v", err)
 	}
 }
 
-func TestRuntimeRunSource_RejectsOldStdHTTPPaths(t *testing.T) {
+func TestRuntimeRunSource_RejectsOldStdNetHTTPPaths(t *testing.T) {
 	src := `
-import std.http.client as http
+import std.net.http.client as http
 
 http.get("http://127.0.0.1")
 `
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err == nil {
-		t.Fatal("expected old std.http.client import to fail")
+		t.Fatal("expected old std.net.http.client import to fail")
 	}
 }
 
@@ -1861,7 +1861,7 @@ if count != 6 {
 func TestRuntimeRunSource_StdExpressRoutes(t *testing.T) {
 	src := `
 import std.express as express
-import std.net.http.client as client
+import std.http.client as client
 
 let app = express.create()
 app.get("/hello", fn(req) {
@@ -1903,7 +1903,7 @@ if postResp.json.count != 2 {
 func TestRuntimeRunSource_StdExpressMiddleware(t *testing.T) {
 	src := `
 import std.express as express
-import std.net.http.client as client
+import std.http.client as client
 
 let app = express.new()
 app.use(fn(req, next) {
