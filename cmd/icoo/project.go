@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -26,12 +27,14 @@ type projectConfig struct {
 	Name          string `toml:"name"`
 	Entry         string `toml:"entry"`
 	EntryFunction string `toml:"entry_function"`
+	RootAlias     string `toml:"root_alias"`
 }
 
 type initOptions struct {
 	Target        string
 	Entry         string
 	EntryFunction string
+	RootAlias     string
 }
 
 type resolvedProject struct {
@@ -40,6 +43,7 @@ type resolvedProject struct {
 	EntryPath     string
 	EntryDisplay  string
 	EntryFunction string
+	RootAlias     string
 }
 
 func runInit(args []string) error {
@@ -84,6 +88,7 @@ func runInit(args []string) error {
 		Name:          name,
 		Entry:         opts.Entry,
 		EntryFunction: opts.EntryFunction,
+		RootAlias:     opts.RootAlias,
 	}}
 	encoded, err := toml.Marshal(cfg)
 	if err != nil {
@@ -123,7 +128,7 @@ func parseInitArgs(args []string) (initOptions, error) {
 		case arg == "--entry":
 			i++
 			if i >= len(args) {
-				return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name]")
+				return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]")
 			}
 			opts.Entry = args[i]
 		case strings.HasPrefix(arg, "--entry="):
@@ -131,11 +136,19 @@ func parseInitArgs(args []string) (initOptions, error) {
 		case arg == "--entry-fn":
 			i++
 			if i >= len(args) {
-				return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name]")
+				return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]")
 			}
 			opts.EntryFunction = args[i]
 		case strings.HasPrefix(arg, "--entry-fn="):
 			opts.EntryFunction = strings.TrimPrefix(arg, "--entry-fn=")
+		case arg == "--root-alias":
+			i++
+			if i >= len(args) {
+				return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]")
+			}
+			opts.RootAlias = args[i]
+		case strings.HasPrefix(arg, "--root-alias="):
+			opts.RootAlias = strings.TrimPrefix(arg, "--root-alias=")
 		case strings.HasPrefix(arg, "--"):
 			return initOptions{}, fmt.Errorf("unknown option: %s", arg)
 		default:
@@ -144,7 +157,7 @@ func parseInitArgs(args []string) (initOptions, error) {
 	}
 
 	if len(positionals) > 1 {
-		return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name]")
+		return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]")
 	}
 	if len(positionals) == 1 {
 		opts.Target = positionals[0]
@@ -161,9 +174,14 @@ func parseInitArgs(args []string) (initOptions, error) {
 	if strings.ContainsAny(entryFn, " \t\r\n") {
 		return initOptions{}, fmt.Errorf("project entry function must not contain whitespace: %s", entryFn)
 	}
+	rootAlias, err := normalizeProjectRootAlias(opts.RootAlias)
+	if err != nil {
+		return initOptions{}, err
+	}
 
 	opts.Entry = entry
 	opts.EntryFunction = entryFn
+	opts.RootAlias = rootAlias
 	return opts, nil
 }
 
@@ -174,6 +192,7 @@ func runCheckPath(path string) error {
 	}
 
 	rt := api.NewRuntime()
+	rt.SetProjectRoot(resolved.Root, resolved.RootAlias)
 	errs := rt.CheckFile(resolved.EntryPath)
 	if len(errs) > 0 {
 		for _, checkErr := range errs {
@@ -193,6 +212,7 @@ func runProjectPath(path string) error {
 	}
 
 	rt := api.NewRuntime()
+	rt.SetProjectRoot(resolved.Root, resolved.RootAlias)
 	if _, err := rt.RunFile(resolved.EntryPath); err != nil {
 		return err
 	}
@@ -250,6 +270,10 @@ func loadProject(root string) (resolvedProject, error) {
 	if entryFn == "" {
 		entryFn = defaultProjectEntryFunction
 	}
+	rootAlias, err := normalizeProjectRootAlias(file.Project.RootAlias)
+	if err != nil {
+		return resolvedProject{}, err
+	}
 
 	return resolvedProject{
 		Root:          absRoot,
@@ -257,6 +281,7 @@ func loadProject(root string) (resolvedProject, error) {
 		EntryPath:     entryPath,
 		EntryDisplay:  entryPath,
 		EntryFunction: entryFn,
+		RootAlias:     rootAlias,
 	}, nil
 }
 
@@ -277,6 +302,31 @@ func normalizeProjectEntry(entry string) (string, error) {
 		return "", fmt.Errorf("project entry must stay within project root: %s", entry)
 	}
 	return cleaned, nil
+}
+
+func normalizeProjectRootAlias(alias string) (string, error) {
+	alias = strings.TrimSpace(alias)
+	if alias == "" {
+		return "", nil
+	}
+	if alias == "std" {
+		return "", errors.New("project root alias cannot be std")
+	}
+	if strings.ContainsAny(alias, "/\\. \t\r\n") {
+		return "", fmt.Errorf("project root alias must be a single identifier: %s", alias)
+	}
+	for i, r := range alias {
+		if i == 0 {
+			if !unicode.IsLetter(r) && r != '_' {
+				return "", fmt.Errorf("project root alias must start with a letter or underscore: %s", alias)
+			}
+			continue
+		}
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' {
+			return "", fmt.Errorf("project root alias must be a single identifier: %s", alias)
+		}
+	}
+	return alias, nil
 }
 
 func resolveProjectEntryPath(root, entry string) (string, error) {

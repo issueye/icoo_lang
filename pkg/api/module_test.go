@@ -37,6 +37,105 @@ let name = math.version
 	}
 }
 
+func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "src", "main.ic")
+	modPath := filepath.Join(dir, "utils", "math.ic")
+
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+		t.Fatalf("mkdir main dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(modPath), 0o755); err != nil {
+		t.Fatalf("mkdir module dir: %v", err)
+	}
+	if err := os.WriteFile(modPath, []byte(`export fn add(a, b) {
+  return a + b
+}
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+	if err := os.WriteFile(mainPath, []byte(`import "app/utils/math.ic" as math
+
+let total = math.add(1, 2)
+if total != 3 {
+  panic("unexpected alias import result")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	rt.SetProjectRoot(dir, "app")
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected root alias import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunFile_ProjectRootAliasRejectsTraversal(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "src", "main.ic")
+
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+		t.Fatalf("mkdir main dir: %v", err)
+	}
+	if err := os.WriteFile(mainPath, []byte(`import "app/../outside.ic" as outside
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	rt.SetProjectRoot(dir, "app")
+	if _, err := rt.RunFile(mainPath); err == nil {
+		t.Fatal("expected root alias traversal import to fail")
+	}
+}
+
+func TestRuntimeRunFile_RelativeImportStillWorksWithProjectRootAlias(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "src", "main.ic")
+	modPath := filepath.Join(dir, "src", "math.ic")
+
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+		t.Fatalf("mkdir main dir: %v", err)
+	}
+	if err := os.WriteFile(modPath, []byte(`export const answer = 42
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+	if err := os.WriteFile(mainPath, []byte(`import "./math.ic" as math
+
+if math.answer != 42 {
+  panic("unexpected relative import result")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	rt.SetProjectRoot(dir, "app")
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected relative import to keep working, got: %v", err)
+	}
+}
+
+func TestRuntimeRunFile_RootAliasRequiresConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "src", "main.ic")
+
+	if err := os.MkdirAll(filepath.Dir(mainPath), 0o755); err != nil {
+		t.Fatalf("mkdir main dir: %v", err)
+	}
+	if err := os.WriteFile(mainPath, []byte(`import "app/utils/math.ic" as math
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err == nil {
+		t.Fatal("expected alias-like import without configuration to fail")
+	}
+}
+
 func TestRuntimeRunFile_IteratesModuleExports(t *testing.T) {
 	dir := t.TempDir()
 	modPath := filepath.Join(dir, "math.ic")

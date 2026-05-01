@@ -16,8 +16,10 @@ import (
 )
 
 type Runtime struct {
-	vm      *vm.VM
-	modules map[string]*runtime.Module
+	vm               *vm.VM
+	modules          map[string]*runtime.Module
+	projectRoot      string
+	projectRootAlias string
 }
 
 func NewRuntime() *Runtime {
@@ -29,6 +31,11 @@ func NewRuntime() *Runtime {
 	machine.SetModuleLoader(rt.loadModule)
 	stdlib.RegisterBuiltins(machine)
 	return rt
+}
+
+func (r *Runtime) SetProjectRoot(root string, alias string) {
+	r.projectRoot = filepath.Clean(root)
+	r.projectRootAlias = strings.TrimSpace(alias)
 }
 
 func (r *Runtime) CheckSource(src string) []error {
@@ -165,7 +172,7 @@ func (r *Runtime) loadModule(importerPath, spec string) (*runtime.Module, error)
 		return mod, nil
 	}
 
-	resolved, err := resolveModulePath(importerPath, spec)
+	resolved, err := r.resolveModulePath(importerPath, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -220,16 +227,48 @@ func (r *Runtime) loadModule(importerPath, spec string) (*runtime.Module, error)
 	return module, nil
 }
 
-func resolveModulePath(importerPath, spec string) (string, error) {
+func (r *Runtime) resolveModulePath(importerPath, spec string) (string, error) {
 	if spec == "" {
 		return "", fmt.Errorf("empty module path")
 	}
 	if filepath.IsAbs(spec) {
 		return filepath.Clean(spec), nil
 	}
+	if r.projectRootAlias != "" && (spec == r.projectRootAlias || strings.HasPrefix(spec, r.projectRootAlias+"/")) {
+		if r.projectRoot == "" {
+			return "", fmt.Errorf("project root is not configured for import: %s", spec)
+		}
+		rel := strings.TrimPrefix(spec, r.projectRootAlias)
+		rel = strings.TrimPrefix(rel, "/")
+		if rel == "" {
+			return "", fmt.Errorf("project root import must include a file path: %s", spec)
+		}
+		return resolvePathWithinRoot(r.projectRoot, rel, spec)
+	}
 	baseDir := "."
 	if importerPath != "" {
 		baseDir = filepath.Dir(importerPath)
 	}
 	return filepath.Abs(filepath.Join(baseDir, spec))
+}
+
+func resolvePathWithinRoot(root, rel, original string) (string, error) {
+	joined := filepath.Join(root, filepath.FromSlash(rel))
+	absPath, err := filepath.Abs(joined)
+	if err != nil {
+		return "", fmt.Errorf("resolve module path: %w", err)
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve project root: %w", err)
+	}
+	relToRoot, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve project root relation: %w", err)
+	}
+	relToRoot = filepath.ToSlash(relToRoot)
+	if relToRoot == ".." || strings.HasPrefix(relToRoot, "../") {
+		return "", fmt.Errorf("project root import must stay within project root: %s", original)
+	}
+	return absPath, nil
 }
