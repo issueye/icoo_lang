@@ -1,16 +1,16 @@
-package stdlib
+package system
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdFSModule() *runtime.Module {
+func LoadStdFSModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.fs",
 		Path: "std.fs",
@@ -33,7 +33,7 @@ func loadStdFSModule() *runtime.Module {
 }
 
 func fsReadFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("readFile", args[0])
+	path, err := utils.RequireStringArg("readFile", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -45,11 +45,11 @@ func fsReadFile(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsWriteFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("writeFile", args[0])
+	path, err := utils.RequireStringArg("writeFile", args[0])
 	if err != nil {
 		return nil, err
 	}
-	content, err := requireStringArg("writeFile", args[1])
+	content, err := utils.RequireStringArg("writeFile", args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,7 @@ func fsWriteFile(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsExists(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("exists", args[0])
+	path, err := utils.RequireStringArg("exists", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func fsExists(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsMkdir(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("mkdir", args[0])
+	path, err := utils.RequireStringArg("mkdir", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func fsMkdir(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsRemove(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("remove", args[0])
+	path, err := utils.RequireStringArg("remove", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func fsRemove(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsReadDir(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("readDir", args[0])
+	path, err := utils.RequireStringArg("readDir", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func fsReadDir(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsStat(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("stat", args[0])
+	path, err := utils.RequireStringArg("stat", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +140,11 @@ func fsStat(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsRename(args []runtime.Value) (runtime.Value, error) {
-	oldPath, err := requireStringArg("rename", args[0])
+	oldPath, err := utils.RequireStringArg("rename", args[0])
 	if err != nil {
 		return nil, err
 	}
-	newPath, err := requireStringArg("rename", args[1])
+	newPath, err := utils.RequireStringArg("rename", args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +155,11 @@ func fsRename(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsCopyFile(args []runtime.Value) (runtime.Value, error) {
-	srcPath, err := requireStringArg("copyFile", args[0])
+	srcPath, err := utils.RequireStringArg("copyFile", args[0])
 	if err != nil {
 		return nil, err
 	}
-	dstPath, err := requireStringArg("copyFile", args[1])
+	dstPath, err := utils.RequireStringArg("copyFile", args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -180,11 +180,11 @@ func fsCopyFile(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsJoin(args []runtime.Value) (runtime.Value, error) {
-	left, err := requireStringArg("join", args[0])
+	left, err := utils.RequireStringArg("join", args[0])
 	if err != nil {
 		return nil, err
 	}
-	right, err := requireStringArg("join", args[1])
+	right, err := utils.RequireStringArg("join", args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func fsJoin(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsBase(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("base", args[0])
+	path, err := utils.RequireStringArg("base", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -200,17 +200,9 @@ func fsBase(args []runtime.Value) (runtime.Value, error) {
 }
 
 func fsDir(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("dir", args[0])
+	path, err := utils.RequireStringArg("dir", args[0])
 	if err != nil {
 		return nil, err
 	}
 	return runtime.StringValue{Value: filepath.Dir(path)}, nil
-}
-
-func requireStringArg(name string, v runtime.Value) (string, error) {
-	text, ok := v.(runtime.StringValue)
-	if !ok {
-		return "", fmt.Errorf("%s expects string argument", name)
-	}
-	return text.Value, nil
 }

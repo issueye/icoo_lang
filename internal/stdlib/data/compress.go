@@ -1,4 +1,4 @@
-package stdlib
+package data
 
 import (
 	"bytes"
@@ -8,9 +8,10 @@ import (
 	"io"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdCompressModule() *runtime.Module {
+func LoadStdCompressModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.compress",
 		Path: "std.compress",
@@ -25,7 +26,7 @@ func loadStdCompressModule() *runtime.Module {
 }
 
 func compressGzipCompress(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("gzipCompress", args[0])
+	text, err := utils.RequireStringArg("gzipCompress", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +42,7 @@ func compressGzipCompress(args []runtime.Value) (runtime.Value, error) {
 }
 
 func compressGzipDecompress(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("gzipDecompress", args[0])
+	text, err := utils.RequireStringArg("gzipDecompress", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +63,7 @@ func compressGzipDecompress(args []runtime.Value) (runtime.Value, error) {
 }
 
 func compressZlibCompress(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("zlibCompress", args[0])
+	text, err := utils.RequireStringArg("zlibCompress", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +79,7 @@ func compressZlibCompress(args []runtime.Value) (runtime.Value, error) {
 }
 
 func compressZlibDecompress(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("zlibDecompress", args[0])
+	text, err := utils.RequireStringArg("zlibDecompress", args[0])
 	if err != nil {
 		return nil, err
 	}

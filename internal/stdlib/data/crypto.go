@@ -1,4 +1,4 @@
-package stdlib
+package data
 
 import (
 	"crypto/aes"
@@ -13,9 +13,10 @@ import (
 	"io"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdCryptoModule() *runtime.Module {
+func LoadStdCryptoModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.crypto",
 		Path: "std.crypto",
@@ -37,7 +38,7 @@ func loadStdCryptoModule() *runtime.Module {
 }
 
 func cryptoSHA256(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("sha256", args[0])
+	text, err := utils.RequireStringArg("sha256", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +47,7 @@ func cryptoSHA256(args []runtime.Value) (runtime.Value, error) {
 }
 
 func cryptoSHA512(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("sha512", args[0])
+	text, err := utils.RequireStringArg("sha512", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func cryptoHMACSHA512(args []runtime.Value) (runtime.Value, error) {
 }
 
 func cryptoBase64Encode(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("base64Encode", args[0])
+	text, err := utils.RequireStringArg("base64Encode", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +84,7 @@ func cryptoBase64Encode(args []runtime.Value) (runtime.Value, error) {
 }
 
 func cryptoBase64Decode(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("base64Decode", args[0])
+	text, err := utils.RequireStringArg("base64Decode", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +96,7 @@ func cryptoBase64Decode(args []runtime.Value) (runtime.Value, error) {
 }
 
 func cryptoHexEncode(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("hexEncode", args[0])
+	text, err := utils.RequireStringArg("hexEncode", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +104,7 @@ func cryptoHexEncode(args []runtime.Value) (runtime.Value, error) {
 }
 
 func cryptoHexDecode(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("hexDecode", args[0])
+	text, err := utils.RequireStringArg("hexDecode", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -147,15 +148,15 @@ func cryptoAESGCMEncrypt(args []runtime.Value) (runtime.Value, error) {
 }
 
 func cryptoAESGCMDecrypt(args []runtime.Value) (runtime.Value, error) {
-	key, err := requireStringArg("aesGCMDecrypt", args[0])
+	key, err := utils.RequireStringArg("aesGCMDecrypt", args[0])
 	if err != nil {
 		return nil, err
 	}
-	nonceText, err := requireStringArg("aesGCMDecrypt", args[1])
+	nonceText, err := utils.RequireStringArg("aesGCMDecrypt", args[1])
 	if err != nil {
 		return nil, err
 	}
-	ciphertextText, err := requireStringArg("aesGCMDecrypt", args[2])
+	ciphertextText, err := utils.RequireStringArg("aesGCMDecrypt", args[2])
 	if err != nil {
 		return nil, err
 	}
@@ -187,11 +188,11 @@ func newAESGCM(name, key string) (cipher.AEAD, error) {
 }
 
 func requireStringPair(name string, first runtime.Value, second runtime.Value) (string, string, error) {
-	left, err := requireStringArg(name, first)
+	left, err := utils.RequireStringArg(name, first)
 	if err != nil {
 		return "", "", err
 	}
-	right, err := requireStringArg(name, second)
+	right, err := utils.RequireStringArg(name, second)
 	if err != nil {
 		return "", "", err
 	}

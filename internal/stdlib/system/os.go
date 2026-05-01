@@ -1,4 +1,4 @@
-package stdlib
+package system
 
 import (
 	"fmt"
@@ -7,9 +7,10 @@ import (
 	"strings"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdOSModule() *runtime.Module {
+func LoadStdOSModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.os",
 		Path: "std.os",
@@ -48,7 +49,7 @@ func osTempDir(args []runtime.Value) (runtime.Value, error) {
 }
 
 func osGetEnv(args []runtime.Value) (runtime.Value, error) {
-	key, err := requireStringArg("getEnv", args[0])
+	key, err := utils.RequireStringArg("getEnv", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -60,11 +61,11 @@ func osGetEnv(args []runtime.Value) (runtime.Value, error) {
 }
 
 func osSetEnv(args []runtime.Value) (runtime.Value, error) {
-	key, err := requireStringArg("setEnv", args[0])
+	key, err := utils.RequireStringArg("setEnv", args[0])
 	if err != nil {
 		return nil, err
 	}
-	value, err := requireStringArg("setEnv", args[1])
+	value, err := utils.RequireStringArg("setEnv", args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func osSetEnv(args []runtime.Value) (runtime.Value, error) {
 }
 
 func osMkdirAll(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("mkdirAll", args[0])
+	path, err := utils.RequireStringArg("mkdirAll", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +90,7 @@ func osMkdirAll(args []runtime.Value) (runtime.Value, error) {
 }
 
 func osRemove(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("remove", args[0])
+	path, err := utils.RequireStringArg("remove", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +101,7 @@ func osRemove(args []runtime.Value) (runtime.Value, error) {
 }
 
 func osRemoveAll(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("removeAll", args[0])
+	path, err := utils.RequireStringArg("removeAll", args[0])
 	if err != nil {
 		return nil, err
 	}

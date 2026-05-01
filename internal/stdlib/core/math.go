@@ -1,4 +1,4 @@
-package stdlib
+package core
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"icoo_lang/internal/runtime"
 )
 
-func loadStdMathModule() *runtime.Module {
+func LoadStdMathModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.math",
 		Path: "std.math",

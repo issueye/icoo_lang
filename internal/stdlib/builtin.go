@@ -2,11 +2,10 @@ package stdlib
 
 import (
 	"fmt"
-	"os"
 	"reflect"
-	"strings"
 
 	"icoo_lang/internal/runtime"
+	stdcore "icoo_lang/internal/stdlib/core"
 	"icoo_lang/internal/vm"
 )
 
@@ -24,21 +23,11 @@ func RegisterBuiltins(machine *vm.VM) {
 }
 
 func builtinPrint(args []runtime.Value) (runtime.Value, error) {
-	parts := make([]string, 0, len(args))
-	for _, arg := range args {
-		parts = append(parts, stringify(arg))
-	}
-	_, err := fmt.Fprint(os.Stdout, strings.Join(parts, ""))
-	return runtime.NullValue{}, err
+	return stdcore.Print(args)
 }
 
 func builtinPrintln(args []runtime.Value) (runtime.Value, error) {
-	parts := make([]string, 0, len(args))
-	for _, arg := range args {
-		parts = append(parts, stringify(arg))
-	}
-	_, err := fmt.Fprintln(os.Stdout, strings.Join(parts, " "))
-	return runtime.NullValue{}, err
+	return stdcore.Println(args)
 }
 
 func builtinLen(args []runtime.Value) (runtime.Value, error) {

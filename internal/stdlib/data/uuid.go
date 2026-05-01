@@ -1,4 +1,4 @@
-package stdlib
+package data
 
 import (
 	"crypto/rand"
@@ -6,9 +6,10 @@ import (
 	"strings"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdUUIDModule() *runtime.Module {
+func LoadStdUUIDModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.uuid",
 		Path: "std.uuid",
@@ -31,7 +32,7 @@ func uuidV4(args []runtime.Value) (runtime.Value, error) {
 }
 
 func uuidIsValid(args []runtime.Value) (runtime.Value, error) {
-	text, err := requireStringArg("isValid", args[0])
+	text, err := utils.RequireStringArg("isValid", args[0])
 	if err != nil {
 		return nil, err
 	}

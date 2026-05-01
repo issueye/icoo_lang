@@ -1,4 +1,4 @@
-package stdlib
+package system
 
 import (
 	"os"
@@ -7,7 +7,7 @@ import (
 	langruntime "icoo_lang/internal/runtime"
 )
 
-func loadStdHostModule() *langruntime.Module {
+func LoadStdHostModule() *langruntime.Module {
 	return &langruntime.Module{
 		Name: "std.host",
 		Path: "std.host",

@@ -1,4 +1,4 @@
-package stdlib
+package system
 
 import (
 	"bytes"
@@ -6,9 +6,10 @@ import (
 	"os/exec"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdExecModule() *runtime.Module {
+func LoadStdExecModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.exec",
 		Path: "std.exec",
@@ -23,7 +24,7 @@ func execRun(args []runtime.Value) (runtime.Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return nil, fmt.Errorf("run expects command and optional args array")
 	}
-	command, err := requireStringArg("run", args[0])
+	command, err := utils.RequireStringArg("run", args[0])
 	if err != nil {
 		return nil, err
 	}

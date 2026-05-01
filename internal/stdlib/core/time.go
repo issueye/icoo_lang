@@ -1,4 +1,4 @@
-package stdlib
+package core
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"icoo_lang/internal/runtime"
 )
 
-func loadStdTimeModule() *runtime.Module {
+func LoadStdTimeModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.time",
 		Path: "std.time",
