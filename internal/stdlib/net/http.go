@@ -1,4 +1,4 @@
-package stdlib
+package stdnet
 
 import (
 	"encoding/json"
@@ -12,18 +12,18 @@ import (
 	"time"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdHTTPModule() *runtime.Module {
+func LoadStdNetHTTPClientModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.http",
-		Path: "std.http",
+		Name: "std.net.http.client",
+		Path: "std.net.http.client",
 		Exports: map[string]runtime.Value{
 			"delete":      &runtime.NativeFunction{Name: "delete", Arity: 1, Fn: httpDelete},
 			"download":    &runtime.NativeFunction{Name: "download", Arity: 2, Fn: httpDownload},
 			"get":         &runtime.NativeFunction{Name: "get", Arity: 1, Fn: httpGet},
 			"getJSON":     &runtime.NativeFunction{Name: "getJSON", Arity: 1, Fn: httpGetJSON},
-			"listen":      &runtime.NativeFunction{Name: "listen", Arity: 1, CtxFn: httpListen},
 			"post":        &runtime.NativeFunction{Name: "post", Arity: 2, Fn: httpPost},
 			"put":         &runtime.NativeFunction{Name: "put", Arity: 2, Fn: httpPut},
 			"request":     &runtime.NativeFunction{Name: "request", Arity: 1, Fn: httpRequest},
@@ -33,8 +33,19 @@ func loadStdHTTPModule() *runtime.Module {
 	}
 }
 
+func LoadStdNetHTTPServerModule() *runtime.Module {
+	return &runtime.Module{
+		Name: "std.net.http.server",
+		Path: "std.net.http.server",
+		Exports: map[string]runtime.Value{
+			"listen": &runtime.NativeFunction{Name: "listen", Arity: 1, CtxFn: httpListen},
+		},
+		Done: true,
+	}
+}
+
 func httpGet(args []runtime.Value) (runtime.Value, error) {
-	url, err := requireStringArg("get", args[0])
+	url, err := utils.RequireStringArg("get", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +56,7 @@ func httpGet(args []runtime.Value) (runtime.Value, error) {
 }
 
 func httpGetJSON(args []runtime.Value) (runtime.Value, error) {
-	url, err := requireStringArg("getJSON", args[0])
+	url, err := utils.RequireStringArg("getJSON", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +76,7 @@ func httpPut(args []runtime.Value) (runtime.Value, error) {
 }
 
 func httpDelete(args []runtime.Value) (runtime.Value, error) {
-	url, err := requireStringArg("delete", args[0])
+	url, err := utils.RequireStringArg("delete", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +101,7 @@ func httpRequestJSON(args []runtime.Value) (runtime.Value, error) {
 	}
 	obj := args[0].(*runtime.ObjectValue)
 	if jsonBodyValue, ok := obj.Fields["json"]; ok {
-		plain, err := runtimeToPlainValue(jsonBodyValue)
+		plain, err := utils.RuntimeToPlainValue(jsonBodyValue)
 		if err != nil {
 			return nil, err
 		}
@@ -111,11 +122,11 @@ func httpRequestJSON(args []runtime.Value) (runtime.Value, error) {
 }
 
 func httpDownload(args []runtime.Value) (runtime.Value, error) {
-	url, err := requireStringArg("download", args[0])
+	url, err := utils.RequireStringArg("download", args[0])
 	if err != nil {
 		return nil, err
 	}
-	path, err := requireStringArg("download", args[1])
+	path, err := utils.RequireStringArg("download", args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +248,7 @@ func doHTTPRequest(opts *httpRequestOptions) (runtime.Value, error) {
 		if err := json.Unmarshal(body, &decoded); err != nil {
 			return nil, err
 		}
-		result.Fields["json"] = plainToRuntimeValue(decoded)
+		result.Fields["json"] = utils.PlainToRuntimeValue(decoded)
 	}
 	return result, nil
 }
@@ -374,7 +385,7 @@ func writeHTTPServerResponse(w http.ResponseWriter, value runtime.Value) error {
 		}
 
 		if jsonValue, ok := resp.Fields["json"]; ok {
-			plain, err := runtimeToPlainValue(jsonValue)
+			plain, err := utils.RuntimeToPlainValue(jsonValue)
 			if err != nil {
 				return err
 			}
@@ -430,11 +441,11 @@ func httpHeadersToRuntime(headers http.Header) runtime.Value {
 }
 
 func httpSimpleBodyRequest(name string, method string, args []runtime.Value) (runtime.Value, error) {
-	url, err := requireStringArg(name, args[0])
+	url, err := utils.RequireStringArg(name, args[0])
 	if err != nil {
 		return nil, err
 	}
-	body, err := requireStringArg(name, args[1])
+	body, err := utils.RequireStringArg(name, args[1])
 	if err != nil {
 		return nil, err
 	}

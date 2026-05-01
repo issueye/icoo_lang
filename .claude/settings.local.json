@@ -4,8 +4,11 @@
       "Bash(gofmt -w \"internal/stdlib/crypto.go\" \"internal/stdlib/uuid.go\" \"internal/stdlib/compress.go\" \"internal/stdlib/modules.go\" \"pkg/api/module_test.go\")",
       "Bash(go test *)",
       "Bash(python -)",
-      "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(go get *)",
+      "Bash(gofmt -w \"internal/stdlib/http.go\" \"internal/stdlib/modules.go\" \"internal/stdlib/websocket.go\" \"internal/stdlib/sse.go\" \"internal/stdlib/socket.go\" \"pkg/api/module_test.go\")",
+      "Bash(go mod *)"
     ]
   }
 }

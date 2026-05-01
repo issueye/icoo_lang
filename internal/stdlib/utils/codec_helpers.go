@@ -1,4 +1,4 @@
-package stdlib
+package utils
 
 import (
 	"fmt"
@@ -7,7 +7,15 @@ import (
 	"icoo_lang/internal/runtime"
 )
 
-func runtimeToPlainValue(v runtime.Value) (any, error) {
+func RequireStringArg(name string, v runtime.Value) (string, error) {
+	text, ok := v.(runtime.StringValue)
+	if !ok {
+		return "", fmt.Errorf("%s expects string argument", name)
+	}
+	return text.Value, nil
+}
+
+func RuntimeToPlainValue(v runtime.Value) (any, error) {
 	switch value := v.(type) {
 	case nil:
 		return nil, nil
@@ -24,7 +32,7 @@ func runtimeToPlainValue(v runtime.Value) (any, error) {
 	case *runtime.ArrayValue:
 		items := make([]any, 0, len(value.Elements))
 		for _, elem := range value.Elements {
-			plain, err := runtimeToPlainValue(elem)
+			plain, err := RuntimeToPlainValue(elem)
 			if err != nil {
 				return nil, err
 			}
@@ -34,7 +42,7 @@ func runtimeToPlainValue(v runtime.Value) (any, error) {
 	case *runtime.ObjectValue:
 		obj := make(map[string]any, len(value.Fields))
 		for key, field := range value.Fields {
-			plain, err := runtimeToPlainValue(field)
+			plain, err := RuntimeToPlainValue(field)
 			if err != nil {
 				return nil, err
 			}
@@ -46,7 +54,7 @@ func runtimeToPlainValue(v runtime.Value) (any, error) {
 	}
 }
 
-func plainToRuntimeValue(v any) runtime.Value {
+func PlainToRuntimeValue(v any) runtime.Value {
 	switch value := v.(type) {
 	case nil:
 		return runtime.NullValue{}
@@ -87,19 +95,19 @@ func plainToRuntimeValue(v any) runtime.Value {
 	case []any:
 		elems := make([]runtime.Value, 0, len(value))
 		for _, item := range value {
-			elems = append(elems, plainToRuntimeValue(item))
+			elems = append(elems, PlainToRuntimeValue(item))
 		}
 		return &runtime.ArrayValue{Elements: elems}
 	case map[string]any:
 		fields := make(map[string]runtime.Value, len(value))
 		for key, item := range value {
-			fields[key] = plainToRuntimeValue(item)
+			fields[key] = PlainToRuntimeValue(item)
 		}
 		return &runtime.ObjectValue{Fields: fields}
 	case map[any]any:
 		fields := make(map[string]runtime.Value, len(value))
 		for key, item := range value {
-			fields[fmt.Sprint(key)] = plainToRuntimeValue(item)
+			fields[fmt.Sprint(key)] = PlainToRuntimeValue(item)
 		}
 		return &runtime.ObjectValue{Fields: fields}
 	default:

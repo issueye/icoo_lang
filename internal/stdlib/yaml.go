@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 
 	"gopkg.in/yaml.v3"
 )
@@ -24,7 +25,7 @@ func loadStdYAMLModule() *runtime.Module {
 }
 
 func yamlEncode(args []runtime.Value) (runtime.Value, error) {
-	plain, err := runtimeToPlainValue(args[0])
+	plain, err := utils.RuntimeToPlainValue(args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func yamlDecode(args []runtime.Value) (runtime.Value, error) {
 	if err := yaml.Unmarshal([]byte(text.Value), &decoded); err != nil {
 		return nil, err
 	}
-	return plainToRuntimeValue(decoded), nil
+	return utils.PlainToRuntimeValue(decoded), nil
 }
 
 func yamlFromFile(args []runtime.Value) (runtime.Value, error) {

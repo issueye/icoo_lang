@@ -6,11 +6,17 @@ import (
 
 func (vm *VM) nativeContext() *runtime.NativeContext {
 	return &runtime.NativeContext{
-		CallDetached: vm.CallDetached,
+		CallDetached:         vm.CallDetached,
+		CallDetachedWithArgs: vm.CallDetachedWithArgs,
 	}
 }
 
 func (vm *VM) CallDetached(callee runtime.Value, args []runtime.Value) (runtime.Value, error) {
+	result, _, err := vm.CallDetachedWithArgs(callee, args)
+	return result, err
+}
+
+func (vm *VM) CallDetachedWithArgs(callee runtime.Value, args []runtime.Value) (runtime.Value, []runtime.Value, error) {
 	sub := vm.cloneForInvocation()
 	clonedCallee := cloneDetachedValue(callee)
 	clonedArgs := make([]runtime.Value, len(args))
@@ -21,9 +27,10 @@ func (vm *VM) CallDetached(callee runtime.Value, args []runtime.Value) (runtime.
 	sub.stack = append(sub.stack, clonedCallee)
 	sub.stack = append(sub.stack, clonedArgs...)
 	if err := sub.CallValue(clonedCallee, len(clonedArgs)); err != nil {
-		return nil, err
+		return nil, clonedArgs, err
 	}
-	return sub.runLoop()
+	result, err := sub.runLoop()
+	return result, clonedArgs, err
 }
 
 func (vm *VM) cloneForInvocation() *VM {

@@ -330,19 +330,87 @@ json.decode(1)
 
 func TestRuntimeRunSource_ImportsStdFSModule(t *testing.T) {
 	dir := t.TempDir()
-	filePath := filepath.Join(dir, "note.txt")
 	src := `
 import std.fs as fs
 
-if fs.exists("` + filePath + `") {
+let root = "` + dir + `"
+let nested = fs.join(root, "nested")
+let filePath = fs.join(nested, "note.txt")
+let copyPath = fs.join(root, "copy.txt")
+let renamedPath = fs.join(root, "renamed.txt")
+let emptyDir = fs.join(root, "empty")
+
+if fs.exists(filePath) {
   panic("file should not exist before write")
 }
-fs.writeFile("` + filePath + `", "hello")
-if !fs.exists("` + filePath + `") {
+fs.mkdir(nested)
+fs.mkdir(emptyDir)
+fs.writeFile(filePath, "hello")
+if !fs.exists(filePath) {
   panic("file should exist after write")
 }
-if fs.readFile("` + filePath + `") != "hello" {
+if fs.readFile(filePath) != "hello" {
   panic("unexpected file contents")
+}
+if fs.base(filePath) != "note.txt" {
+  panic("unexpected base")
+}
+if fs.base(fs.dir(filePath)) != "nested" {
+  panic("unexpected dir")
+}
+
+let entries = fs.readDir(root)
+if typeOf(entries) != "array" {
+  panic("readDir should return array")
+}
+if entries[0].name != "empty" {
+  panic("unexpected first readDir entry")
+}
+if !entries[0].isDir {
+  panic("expected empty entry to be directory")
+}
+if entries[1].name != "nested" {
+  panic("unexpected second readDir entry")
+}
+
+let info = fs.stat(filePath)
+if info.name != "note.txt" {
+  panic("unexpected stat name")
+}
+if info.size != 5 {
+  panic("unexpected stat size")
+}
+if !info.isFile {
+  panic("expected file stat")
+}
+if info.isDir {
+  panic("file should not be dir")
+}
+if typeOf(info.mode) != "string" {
+  panic("stat mode should be string")
+}
+if typeOf(info.modTime) != "int" {
+  panic("stat modTime should be int")
+}
+
+fs.copyFile(filePath, copyPath)
+if fs.readFile(copyPath) != "hello" {
+  panic("unexpected copied file contents")
+}
+fs.rename(copyPath, renamedPath)
+if fs.exists(copyPath) {
+  panic("copy path should not exist after rename")
+}
+if fs.readFile(renamedPath) != "hello" {
+  panic("unexpected renamed file contents")
+}
+fs.remove(renamedPath)
+if fs.exists(renamedPath) {
+  panic("renamed file should be removed")
+}
+fs.remove(emptyDir)
+if fs.exists(emptyDir) {
+  panic("empty dir should be removed")
 }
 `
 
@@ -366,10 +434,10 @@ for key, value in fs {
   }
 }
 
-if keys != "existsreadFilewriteFile" {
+if keys != "basecopyFiledirexistsjoinmkdirreadDirreadFileremoverenamestatwriteFile" {
   panic("unexpected std.fs iteration order")
 }
-if count != 3 {
+if count != 12 {
   panic("unexpected std.fs export count")
 }
 `
@@ -381,15 +449,39 @@ if count != 3 {
 }
 
 func TestRuntimeRunSource_StdFSRejectsNonStringArgs(t *testing.T) {
-	src := `
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{name: "exists", src: `
 import std.fs as fs
-
 fs.exists(1)
-`
+`},
+		{name: "mkdir", src: `
+import std.fs as fs
+fs.mkdir(1)
+`},
+		{name: "rename", src: `
+import std.fs as fs
+fs.rename("a", 1)
+`},
+		{name: "copyFile", src: `
+import std.fs as fs
+fs.copyFile(1, "b")
+`},
+		{name: "stat", src: `
+import std.fs as fs
+fs.stat(1)
+`},
+	}
 
-	rt := NewRuntime()
-	if _, err := rt.RunSource(src); err == nil {
-		t.Fatal("expected std.fs.exists to reject non-string argument")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := NewRuntime()
+			if _, err := rt.RunSource(tc.src); err == nil {
+				t.Fatalf("expected std.fs.%s to reject non-string argument", tc.name)
+			}
+		})
 	}
 }
 
@@ -881,7 +973,7 @@ func TestRuntimeRunSource_ImportsStdHTTPModule(t *testing.T) {
 	defer server.Close()
 
 	src := `
-import std.http as http
+import std.net.http.client as http
 
 let resp = http.get("` + server.URL + `")
 if !resp.ok {
@@ -897,7 +989,7 @@ if resp.body != "hello" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http import to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http import to succeed, got: %v", err)
 	}
 }
 
@@ -917,7 +1009,7 @@ func TestRuntimeRunSource_StdHTTPRequestSupportsMethodHeadersAndBody(t *testing.
 	defer server.Close()
 
 	src := `
-import std.http as http
+import std.net.http.client as http
 
 let resp = http.request({
   url: "` + server.URL + `",
@@ -936,7 +1028,7 @@ if resp.body != "payload" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http request to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http request to succeed, got: %v", err)
 	}
 }
 
@@ -950,7 +1042,7 @@ func TestRuntimeRunSource_StdHTTPDownload(t *testing.T) {
 
 	src := `
 import std.fs as fs
-import std.http as http
+import std.net.http.client as http
 
 let resp = http.download("` + server.URL + `", "` + path + `")
 if !resp.ok {
@@ -966,13 +1058,13 @@ if fs.readFile("` + path + `") != "download-body" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http download to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http download to succeed, got: %v", err)
 	}
 }
 
-func TestRuntimeRunSource_IteratesStdHTTPModule(t *testing.T) {
+func TestRuntimeRunSource_IteratesStdHTTPClientModule(t *testing.T) {
 	src := `
-import std.http as http
+import std.net.http.client as http
 
 let keys = ""
 let count = 0
@@ -980,21 +1072,49 @@ for key, value in http {
   keys = keys + key
   count = count + 1
   if typeOf(value) != "native_function" {
-    panic("unexpected std.http export kind")
+    panic("unexpected std.net.http.client export kind")
   }
 }
 
-if keys != "deletedownloadgetgetJSONlistenpostputrequestrequestJSON" {
-  panic("unexpected std.http iteration order")
+if keys != "deletedownloadgetgetJSONpostputrequestrequestJSON" {
+  panic("unexpected std.net.http.client iteration order")
 }
-if count != 9 {
-  panic("unexpected std.http export count")
+if count != 8 {
+  panic("unexpected std.net.http.client export count")
 }
 `
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http iteration to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http.client iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdHTTPServerModule(t *testing.T) {
+	src := `
+import std.net.http.server as http
+
+let keys = ""
+let count = 0
+for key, value in http {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.net.http.server export kind")
+  }
+}
+
+if keys != "listen" {
+  panic("unexpected std.net.http.server iteration order")
+}
+if count != 1 {
+  panic("unexpected std.net.http.server export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.net.http.server iteration to succeed, got: %v", err)
 	}
 }
 
@@ -1016,7 +1136,7 @@ func TestRuntimeRunSource_StdHTTPShortcutMethods(t *testing.T) {
 	defer server.Close()
 
 	src := `
-import std.http as http
+import std.net.http.client as http
 
 let postResp = http.post("` + server.URL + `", "A")
 let putResp = http.put("` + server.URL + `", "B")
@@ -1035,7 +1155,7 @@ if deleteResp.body != "delete" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http shortcut methods to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http shortcut methods to succeed, got: %v", err)
 	}
 }
 
@@ -1057,7 +1177,7 @@ func TestRuntimeRunSource_StdHTTPJSONHelpers(t *testing.T) {
 	defer server.Close()
 
 	src := `
-import std.http as http
+import std.net.http.client as http
 
 let getResp = http.getJSON("` + server.URL + `")
 if getResp.json.ok != true {
@@ -1088,15 +1208,16 @@ if postResp.headers["X-Seen-Content-Type"] != "application/json" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http JSON helpers to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http JSON helpers to succeed, got: %v", err)
 	}
 }
 
 func TestRuntimeRunSource_StdHTTPListen(t *testing.T) {
 	src := `
-import std.http as http
+import std.net.http.client as client
+import std.net.http.server as server
 
-let server = http.listen({
+let serverHandle = server.listen({
   addr: "127.0.0.1:0",
   handler: fn(req) {
     return {
@@ -1106,8 +1227,8 @@ let server = http.listen({
   }
 })
 
-let resp = http.get(server.url + "/hello?name=icoo")
-server.close()
+let resp = client.get(serverHandle.url + "/hello?name=icoo")
+serverHandle.close()
 
 if resp.status != 201 {
   panic("unexpected http.listen status")
@@ -1119,15 +1240,16 @@ if resp.body != "GET:/hello:icoo" {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http listen to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http listen to succeed, got: %v", err)
 	}
 }
 
 func TestRuntimeRunSource_StdHTTPListenJSONResponse(t *testing.T) {
 	src := `
-import std.http as http
+import std.net.http.client as client
+import std.net.http.server as server
 
-let server = http.listen({
+let serverHandle = server.listen({
   addr: "127.0.0.1:0",
   handler: fn(req) {
     return {
@@ -1137,8 +1259,8 @@ let server = http.listen({
   }
 })
 
-let resp = http.getJSON(server.url + "/json")
-server.close()
+let resp = client.getJSON(serverHandle.url + "/json")
+serverHandle.close()
 
 if resp.json.path != "/json" {
   panic("unexpected http.listen json path")
@@ -1150,7 +1272,370 @@ if resp.json.ok != true {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.http listen JSON response to succeed, got: %v", err)
+		t.Fatalf("expected std.net.http listen JSON response to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_RejectsOldStdHTTPPaths(t *testing.T) {
+	src := `
+import std.http.client as http
+
+http.get("http://127.0.0.1")
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected old std.http.client import to fail")
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdNetWebSocketModules(t *testing.T) {
+	src := `
+import std.net.websocket.client as client
+import std.net.websocket.server as server
+
+let clientKeys = ""
+let clientCount = 0
+for key, value in client {
+  clientKeys = clientKeys + key
+  clientCount = clientCount + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected websocket client export kind")
+  }
+}
+let serverKeys = ""
+let serverCount = 0
+for key, value in server {
+  serverKeys = serverKeys + key
+  serverCount = serverCount + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected websocket server export kind")
+  }
+}
+if clientKeys != "connect" || clientCount != 1 {
+  panic("unexpected websocket client exports")
+}
+if serverKeys != "listen" || serverCount != 1 {
+  panic("unexpected websocket server exports")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected websocket module iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdNetWebSocketEcho(t *testing.T) {
+	src := `
+import std.net.websocket.client as client
+import std.net.websocket.server as server
+
+let srv = server.listen({
+  addr: "127.0.0.1:0",
+  path: "/ws",
+  handler: fn(conn, req) {
+    let msg = conn.read()
+    conn.write("echo:" + msg)
+    conn.close()
+  }
+})
+let conn = client.connect({url: srv.url, timeoutMs: 5000})
+conn.write("hello")
+let reply = conn.read()
+conn.close()
+srv.close()
+if reply != "echo:hello" {
+  panic("unexpected websocket echo")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected websocket echo to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdNetSSEModules(t *testing.T) {
+	src := `
+import std.net.sse.client as client
+import std.net.sse.server as server
+
+let clientKeys = ""
+let clientCount = 0
+for key, value in client {
+  clientKeys = clientKeys + key
+  clientCount = clientCount + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected sse client export kind")
+  }
+}
+let serverKeys = ""
+let serverCount = 0
+for key, value in server {
+  serverKeys = serverKeys + key
+  serverCount = serverCount + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected sse server export kind")
+  }
+}
+if clientKeys != "connect" || clientCount != 1 {
+  panic("unexpected sse client exports")
+}
+if serverKeys != "listen" || serverCount != 1 {
+  panic("unexpected sse server exports")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected sse module iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdNetSSEEvent(t *testing.T) {
+	src := `
+import std.net.sse.client as client
+import std.net.sse.server as server
+
+let srv = server.listen({
+  addr: "127.0.0.1:0",
+  path: "/events",
+  handler: fn(stream, req) {
+    stream.send({event: "message", data: "hello", id: "1"})
+    stream.close()
+  }
+})
+let stream = client.connect({url: srv.url, timeoutMs: 5000})
+let event = stream.read()
+stream.close()
+srv.close()
+if event.event != "message" {
+  panic("unexpected sse event name")
+}
+if event.data != "hello" {
+  panic("unexpected sse data")
+}
+if event.id != "1" {
+  panic("unexpected sse id")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected sse event to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdNetSocketModules(t *testing.T) {
+	src := `
+import std.net.socket.client as client
+import std.net.socket.server as server
+
+let clientKeys = ""
+let clientCount = 0
+for key, value in client {
+  clientKeys = clientKeys + key
+  clientCount = clientCount + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected socket client export kind")
+  }
+}
+let serverKeys = ""
+let serverCount = 0
+for key, value in server {
+  serverKeys = serverKeys + key
+  serverCount = serverCount + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected socket server export kind")
+  }
+}
+if clientKeys != "connectTCPdialUDP" || clientCount != 2 {
+  panic("unexpected socket client exports")
+}
+if serverKeys != "listenTCPlistenUDP" || serverCount != 2 {
+  panic("unexpected socket server exports")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected socket module iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdNetSocketTCPEcho(t *testing.T) {
+	src := `
+import std.net.socket.client as client
+import std.net.socket.server as server
+
+let srv = server.listenTCP({
+  addr: "127.0.0.1:0",
+  handler: fn(conn) {
+    let msg = conn.read(1024)
+    conn.write("echo:" + msg)
+    conn.close()
+  }
+})
+let conn = client.connectTCP({addr: srv.addr, timeoutMs: 5000})
+conn.write("hello")
+let reply = conn.read(1024)
+conn.close()
+srv.close()
+if reply != "echo:hello" {
+  panic("unexpected tcp echo")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected tcp echo to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdNetSocketUDPEcho(t *testing.T) {
+	src := `
+import std.net.socket.client as client
+import std.net.socket.server as server
+
+let srv = server.listenUDP({
+  addr: "127.0.0.1:0",
+  handler: fn(packet) {
+    packet.reply("echo:" + packet.data)
+  }
+})
+let conn = client.dialUDP({addr: srv.addr})
+conn.write("hello")
+let reply = conn.read(1024)
+conn.close()
+srv.close()
+if reply != "echo:hello" {
+  panic("unexpected udp echo")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected udp echo to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdExpressModule(t *testing.T) {
+	src := `
+import std.express as express
+
+let keys = ""
+let count = 0
+for key, value in express {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.express export kind")
+  }
+}
+
+if keys != "createjsonnewnextredirecttext" {
+  panic("unexpected std.express iteration order")
+}
+if count != 6 {
+  panic("unexpected std.express export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.express iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExpressRoutes(t *testing.T) {
+	src := `
+import std.express as express
+import std.net.http.client as client
+
+let app = express.create()
+app.get("/hello", fn(req) {
+  return express.text(201, req.method + ":" + req.path + ":" + req.query.name)
+})
+app.post("/json", fn(req) {
+  return express.json({name: req.json.name, count: req.json.count})
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let getResp = client.get(server.url + "/hello?name=icoo")
+let postResp = client.requestJSON({
+  url: server.url + "/json",
+  method: "POST",
+  json: {name: "icoo", count: 2}
+})
+server.close()
+
+if getResp.status != 201 {
+  panic("unexpected express get status")
+}
+if getResp.body != "GET:/hello:icoo" {
+  panic("unexpected express get body")
+}
+if postResp.json.name != "icoo" {
+  panic("unexpected express json name")
+}
+if postResp.json.count != 2 {
+  panic("unexpected express json count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.express routes to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExpressMiddleware(t *testing.T) {
+	src := `
+import std.express as express
+import std.net.http.client as client
+
+let app = express.new()
+app.use(fn(req, next) {
+  req.mark = "global"
+  return next()
+})
+app.use("/api", fn(req) {
+  req.scope = "api"
+  return express.next()
+})
+app.get("/api/hello", fn(req) {
+  return express.text(req.mark + ":" + req.scope + ":" + req.path)
+})
+app.get("/stop", fn(req) {
+  return express.text(202, "stopped")
+})
+app.use("/stop", fn(req) {
+  panic("middleware after response should not run")
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let resp = client.get(server.url + "/api/hello")
+let stopResp = client.get(server.url + "/stop")
+server.close()
+
+if resp.status != 200 {
+  panic("unexpected express middleware status")
+}
+if resp.body != "global:api:/api/hello" {
+  panic("unexpected express middleware body")
+}
+if stopResp.status != 202 {
+  panic("unexpected express terminal middleware status")
+}
+if stopResp.body != "stopped" {
+  panic("unexpected express terminal middleware body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.express middleware to succeed, got: %v", err)
 	}
 }
 
