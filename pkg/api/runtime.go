@@ -118,6 +118,9 @@ func isExpression(line string) bool {
 	if trimmed == "" {
 		return false
 	}
+	if strings.HasPrefix(trimmed, "@") {
+		return false
+	}
 	keywords := []string{"let ", "const ", "fn ", "class ", "import ", "export ", "if ", "while ", "for ", "match ", "try ", "throw ", "break ", "continue ", "go ", "select ", "return ", "type ", "interface "}
 	for _, kw := range keywords {
 		if strings.HasPrefix(trimmed, kw) {

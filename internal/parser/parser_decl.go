@@ -14,6 +14,8 @@ func (p *Parser) parseTopLevelNode() ast.Node {
 		return p.parseVarDecl()
 	case token.Fn:
 		return p.parseFnDecl()
+	case token.At:
+		return p.parseDecoratedDecl()
 	case token.Import:
 		return p.parseImportDecl()
 	case token.Export:
@@ -88,6 +90,10 @@ func (p *Parser) parseExportDecl() ast.Decl {
 		decl = p.parseVarDecl()
 	case token.Fn:
 		decl = p.parseFnDecl()
+	case token.Class:
+		decl = p.parseClassDecl()
+	case token.At:
+		decl = p.parseDecoratedDecl()
 	default:
 		p.errorAtCurrent("expected declaration after export")
 		return nil
@@ -173,6 +179,35 @@ func (p *Parser) parseClassDecl() ast.Decl {
 		Super:   super,
 		Methods: methods,
 		Span_:   token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
+	}
+}
+
+func (p *Parser) parseDecoratedDecl() ast.Decl {
+	startTok := p.expect(token.At, "expected '@'")
+	decorators := make([]ast.Expr, 0, 2)
+	decorators = append(decorators, p.parseExpression(PrecLowest))
+	for p.match(token.At) {
+		decorators = append(decorators, p.parseExpression(PrecLowest))
+	}
+
+	var decl ast.Decl
+	switch p.current().Type {
+	case token.Fn:
+		decl = p.parseFnDecl()
+	case token.Class:
+		decl = p.parseClassDecl()
+	default:
+		p.errorAtCurrent("expected function or class declaration after decorators")
+		return nil
+	}
+	if decl == nil {
+		return nil
+	}
+
+	return &ast.DecoratedDecl{
+		Decl:       decl,
+		Decorators: decorators,
+		Span_:      token.Span{Start: startTok.Span.Start, End: decl.Span().End},
 	}
 }
 

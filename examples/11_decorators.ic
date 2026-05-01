@@ -1,0 +1,36 @@
+import std.io as io
+
+fn prefix(text) {
+  return fn(target) {
+    return fn(name) {
+      return text + target(name)
+    }
+  }
+}
+
+@prefix("hello ")
+fn greet(name) {
+  return name
+}
+
+fn mark(target) {
+  return fn(value) {
+    let obj = target(value)
+    obj.decorated = true
+    return obj
+  }
+}
+
+@mark
+class Box {
+  init(value) {
+    this.value = value
+  }
+}
+
+let box = Box(7)
+
+io.println("== decorators ==")
+io.println("greet:", greet("icoo"))
+io.println("box value:", box.value)
+io.println("box decorated:", box.decorated)

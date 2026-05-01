@@ -19,6 +19,8 @@ func (c *Compiler) compileDecl(decl ast.Decl) {
 			c.compileImportDecl(d)
 		case *ast.ExportDecl:
 			c.compileExportDecl(d)
+		case *ast.DecoratedDecl:
+			c.compileDecoratedDecl(d)
 		case *ast.ClassDecl:
 			c.compileClassDecl(d)
 		case *ast.TypeDecl:
@@ -121,6 +123,8 @@ func exportDeclName(decl ast.Decl) (string, error) {
 		return d.Name, nil
 	case *ast.FnDecl:
 		return d.Name, nil
+	case *ast.DecoratedDecl:
+		return exportDeclName(d.Decl)
 	case *ast.ClassDecl:
 		return d.Name, nil
 	case *ast.TypeDecl:
@@ -130,6 +134,70 @@ func exportDeclName(decl ast.Decl) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported export declaration")
 	}
+}
+
+func (c *Compiler) compileDecoratedDecl(d *ast.DecoratedDecl) {
+	if d == nil || d.Decl == nil {
+		c.errorf("decorated declaration requires target")
+		return
+	}
+
+	switch d.Decl.(type) {
+	case *ast.FnDecl, *ast.ClassDecl:
+	default:
+		c.errorf("decorators only support functions and classes")
+		return
+	}
+
+	c.compileDecl(d.Decl)
+
+	name, err := exportDeclName(d.Decl)
+	if err != nil {
+		c.errorf("%s", err.Error())
+		return
+	}
+
+	ref, _ := c.resolve(name)
+	for i := len(d.Decorators) - 1; i >= 0; i-- {
+		c.compileExpr(d.Decorators[i])
+		c.emitNamedRefGet(ref)
+		c.emit(bytecode.OpCall)
+		c.emitByte(1)
+		c.emitNamedRefSet(ref)
+		c.emit(bytecode.OpPop)
+	}
+}
+
+func (c *Compiler) emitNamedRefGet(ref VarRef) {
+	if ref.Kind == VarLocal {
+		c.emit(bytecode.OpGetLocal)
+		c.emitShort(uint16(ref.Index))
+		return
+	}
+	if ref.Kind == VarUpvalue {
+		c.emit(bytecode.OpGetUpvalue)
+		c.emitShort(uint16(ref.Index))
+		return
+	}
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: ref.Name})
+	c.emit(bytecode.OpGetGlobal)
+	c.emitShort(nameIdx)
+}
+
+func (c *Compiler) emitNamedRefSet(ref VarRef) {
+	if ref.Kind == VarLocal {
+		c.emit(bytecode.OpSetLocal)
+		c.emitShort(uint16(ref.Index))
+		return
+	}
+	if ref.Kind == VarUpvalue {
+		c.emit(bytecode.OpSetUpvalue)
+		c.emitShort(uint16(ref.Index))
+		return
+	}
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: ref.Name})
+	c.emit(bytecode.OpSetGlobal)
+	c.emitShort(nameIdx)
 }
 
 func (c *Compiler) compileTypeDecl(d *ast.TypeDecl) {

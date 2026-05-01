@@ -13,6 +13,24 @@ func (p *Parser) parseStatement() ast.Stmt {
 			return nil
 		}
 		return &ast.DeclStmt{Decl: decl, Span_: decl.Span()}
+	case token.Fn:
+		decl := p.parseFnDecl()
+		if decl == nil {
+			return nil
+		}
+		return &ast.DeclStmt{Decl: decl, Span_: decl.Span()}
+	case token.Class:
+		decl := p.parseClassDecl()
+		if decl == nil {
+			return nil
+		}
+		return &ast.DeclStmt{Decl: decl, Span_: decl.Span()}
+	case token.At:
+		decl := p.parseDecoratedDecl()
+		if decl == nil {
+			return nil
+		}
+		return &ast.DeclStmt{Decl: decl, Span_: decl.Span()}
 	case token.LBrace:
 		return p.parseBlockStmt()
 	case token.If:
@@ -171,10 +189,10 @@ func (p *Parser) parseMatchStmt() ast.Stmt {
 			return nil
 		}
 		arms = append(arms, ast.MatchArm{
-			Pattern: pattern,
+			Pattern:    pattern,
 			IsWildcard: isWildcard,
-			Body: body,
-			Span_: token.Span{Start: armStart, End: body.Span().End},
+			Body:       body,
+			Span_:      token.Span{Start: armStart, End: body.Span().End},
 		})
 	}
 	endTok := p.expect(token.RBrace, "expected '}' after match arms")

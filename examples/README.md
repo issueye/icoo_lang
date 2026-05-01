@@ -20,5 +20,6 @@ Suggested order:
 8. `08_modules_and_formats.ic` - local modules plus JSON/YAML/TOML/XML codecs
 9. `09_http_client_server.ic` - `std.http.client` and `std.http.server`
 10. `10_concurrency.ic` - channels, `go`, `select`
+11. `11_decorators.ic` - Python-style `@decorator` wrappers for functions and classes
 
 Helper modules used by the examples live under `examples/lib`.

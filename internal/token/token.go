@@ -13,39 +13,40 @@ const (
 	Float
 	String
 
-	Assign      // =
-	Plus        // +
-	Minus       // -
-	Star        // *
-	Slash       // /
-	Percent     // %
-	Bang        // !
-	Dot         // .
-	Comma       // ,
-	Colon       // :
-	Semicolon   // ;
-	LParen      // (
-	RParen      // )
-	LBrace      // {
-	RBrace      // }
-	LBracket    // [
-	RBracket    // ]
-	Underscore  // _
+	Assign     // =
+	Plus       // +
+	Minus      // -
+	Star       // *
+	Slash      // /
+	Percent    // %
+	Bang       // !
+	Dot        // .
+	Comma      // ,
+	Colon      // :
+	Semicolon  // ;
+	LParen     // (
+	RParen     // )
+	LBrace     // {
+	RBrace     // }
+	LBracket   // [
+	RBracket   // ]
+	Underscore // _
 
-	Eq        // ==
-	Neq       // !=
-	Lt        // <
-	Lte       // <=
-	Gt        // >
-	Gte       // >=
-	AndAnd    // &&
-	OrOr      // ||
+	Eq          // ==
+	Neq         // !=
+	Lt          // <
+	Lte         // <=
+	Gt          // >
+	Gte         // >=
+	AndAnd      // &&
+	OrOr        // ||
 	PlusAssign  // +=
 	MinusAssign // -=
 	StarAssign  // *=
 	SlashAssign // /=
 	Arrow       // =>
 	Question    // ?
+	At          // @
 
 	Fn
 	Return
@@ -219,6 +220,8 @@ func (t Type) String() string {
 		return "Arrow"
 	case Question:
 		return "Question"
+	case At:
+		return "At"
 	case Fn:
 		return "Fn"
 	case Return:

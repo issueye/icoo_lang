@@ -67,6 +67,18 @@ func (d *ExportDecl) Span() token.Span {
 	return d.Span_
 }
 
+type DecoratedDecl struct {
+	Decl       Decl
+	Decorators []Expr
+	Span_      token.Span
+}
+
+func (*DecoratedDecl) node() {}
+func (*DecoratedDecl) decl() {}
+func (d *DecoratedDecl) Span() token.Span {
+	return d.Span_
+}
+
 type ClassMethod struct {
 	Name   string
 	Params []Param
@@ -101,8 +113,8 @@ type SimpleTypeExpr struct {
 	Span_ token.Span
 }
 
-func (*SimpleTypeExpr) node()     {}
-func (*SimpleTypeExpr) typeExpr() {}
+func (*SimpleTypeExpr) node()              {}
+func (*SimpleTypeExpr) typeExpr()          {}
 func (e *SimpleTypeExpr) Span() token.Span { return e.Span_ }
 
 type FuncTypeExpr struct {
@@ -111,8 +123,8 @@ type FuncTypeExpr struct {
 	Span_  token.Span
 }
 
-func (*FuncTypeExpr) node()     {}
-func (*FuncTypeExpr) typeExpr() {}
+func (*FuncTypeExpr) node()              {}
+func (*FuncTypeExpr) typeExpr()          {}
 func (e *FuncTypeExpr) Span() token.Span { return e.Span_ }
 
 type TypeDecl struct {
@@ -121,8 +133,8 @@ type TypeDecl struct {
 	Span_   token.Span
 }
 
-func (*TypeDecl) node() {}
-func (*TypeDecl) decl() {}
+func (*TypeDecl) node()              {}
+func (*TypeDecl) decl()              {}
 func (d *TypeDecl) Span() token.Span { return d.Span_ }
 
 type InterfaceMethod struct {
@@ -138,6 +150,6 @@ type InterfaceDecl struct {
 	Span_   token.Span
 }
 
-func (*InterfaceDecl) node() {}
-func (*InterfaceDecl) decl() {}
+func (*InterfaceDecl) node()              {}
+func (*InterfaceDecl) decl()              {}
 func (d *InterfaceDecl) Span() token.Span { return d.Span_ }

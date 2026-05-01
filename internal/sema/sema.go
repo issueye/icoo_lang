@@ -62,6 +62,8 @@ func (a *Analyzer) visitDecl(decl ast.Decl) {
 		a.visitImportDecl(d)
 	case *ast.ExportDecl:
 		a.visitExportDecl(d)
+	case *ast.DecoratedDecl:
+		a.visitDecoratedDecl(d)
 	case *ast.ClassDecl:
 		a.visitClassDecl(d)
 	case *ast.TypeDecl:
@@ -112,6 +114,15 @@ func (a *Analyzer) visitImportDecl(d *ast.ImportDecl) {
 }
 
 func (a *Analyzer) visitExportDecl(d *ast.ExportDecl) {
+	if d.Decl != nil {
+		a.visitDecl(d.Decl)
+	}
+}
+
+func (a *Analyzer) visitDecoratedDecl(d *ast.DecoratedDecl) {
+	for _, decorator := range d.Decorators {
+		a.visitExpr(decorator)
+	}
 	if d.Decl != nil {
 		a.visitDecl(d.Decl)
 	}
