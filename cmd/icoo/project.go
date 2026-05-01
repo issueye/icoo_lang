@@ -28,6 +28,12 @@ type projectConfig struct {
 	EntryFunction string `toml:"entry_function"`
 }
 
+type initOptions struct {
+	Target        string
+	Entry         string
+	EntryFunction string
+}
+
 type resolvedProject struct {
 	Root          string
 	ConfigPath    string
@@ -37,16 +43,12 @@ type resolvedProject struct {
 }
 
 func runInit(args []string) error {
-	if len(args) > 1 {
-		return errors.New("usage: icoo init [dir]")
+	opts, err := parseInitArgs(args)
+	if err != nil {
+		return err
 	}
 
-	target := "."
-	if len(args) == 1 {
-		target = args[0]
-	}
-
-	root, err := filepath.Abs(target)
+	root, err := filepath.Abs(opts.Target)
 	if err != nil {
 		return fmt.Errorf("resolve project dir: %w", err)
 	}
@@ -61,11 +63,7 @@ func runInit(args []string) error {
 		return fmt.Errorf("stat project config: %w", err)
 	}
 
-	entry, err := normalizeProjectEntry(defaultProjectEntry)
-	if err != nil {
-		return err
-	}
-	entryPath, err := resolveProjectEntryPath(root, entry)
+	entryPath, err := resolveProjectEntryPath(root, opts.Entry)
 	if err != nil {
 		return err
 	}
@@ -84,8 +82,8 @@ func runInit(args []string) error {
 	}
 	cfg := projectFile{Project: projectConfig{
 		Name:          name,
-		Entry:         entry,
-		EntryFunction: defaultProjectEntryFunction,
+		Entry:         opts.Entry,
+		EntryFunction: opts.EntryFunction,
 	}}
 	encoded, err := toml.Marshal(cfg)
 	if err != nil {
@@ -98,7 +96,7 @@ func runInit(args []string) error {
 	source := strings.Join([]string{
 		"import std.io as io",
 		"",
-		"fn main() {",
+		fmt.Sprintf("fn %s() {", opts.EntryFunction),
 		"  io.println(\"Hello from icoo\")",
 		"}",
 		"",
@@ -109,6 +107,64 @@ func runInit(args []string) error {
 
 	fmt.Printf("initialized project: %s\n", root)
 	return nil
+}
+
+func parseInitArgs(args []string) (initOptions, error) {
+	opts := initOptions{
+		Target:        ".",
+		Entry:         defaultProjectEntry,
+		EntryFunction: defaultProjectEntryFunction,
+	}
+
+	positionals := make([]string, 0, 1)
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--entry":
+			i++
+			if i >= len(args) {
+				return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name]")
+			}
+			opts.Entry = args[i]
+		case strings.HasPrefix(arg, "--entry="):
+			opts.Entry = strings.TrimPrefix(arg, "--entry=")
+		case arg == "--entry-fn":
+			i++
+			if i >= len(args) {
+				return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name]")
+			}
+			opts.EntryFunction = args[i]
+		case strings.HasPrefix(arg, "--entry-fn="):
+			opts.EntryFunction = strings.TrimPrefix(arg, "--entry-fn=")
+		case strings.HasPrefix(arg, "--"):
+			return initOptions{}, fmt.Errorf("unknown option: %s", arg)
+		default:
+			positionals = append(positionals, arg)
+		}
+	}
+
+	if len(positionals) > 1 {
+		return initOptions{}, errors.New("usage: icoo init [dir] [--entry path] [--entry-fn name]")
+	}
+	if len(positionals) == 1 {
+		opts.Target = positionals[0]
+	}
+
+	entry, err := normalizeProjectEntry(opts.Entry)
+	if err != nil {
+		return initOptions{}, err
+	}
+	entryFn := strings.TrimSpace(opts.EntryFunction)
+	if entryFn == "" {
+		return initOptions{}, errors.New("project entry function is required")
+	}
+	if strings.ContainsAny(entryFn, " \t\r\n") {
+		return initOptions{}, fmt.Errorf("project entry function must not contain whitespace: %s", entryFn)
+	}
+
+	opts.Entry = entry
+	opts.EntryFunction = entryFn
+	return opts, nil
 }
 
 func runCheckPath(path string) error {

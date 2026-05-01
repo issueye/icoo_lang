@@ -38,8 +38,38 @@ func TestRunInitCreatesProjectScaffold(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read entry file: %v", err)
 	}
-	if strings.Contains(string(src), "main()") && !strings.Contains(string(src), "fn main()") {
-		t.Fatal("entry template should define main without manually calling it")
+	text := string(src)
+	if !strings.Contains(text, "fn main() {") {
+		t.Fatal("entry template should define the default main function")
+	}
+	if strings.Count(text, "main()") != 1 {
+		t.Fatal("entry template should not manually call the entry function")
+	}
+}
+
+func TestRunInitSupportsEntryFlags(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "demo")
+
+	if err := runInit([]string{root, "--entry", "app/start.ic", "--entry-fn", "bootstrap"}); err != nil {
+		t.Fatalf("expected init with flags to succeed, got: %v", err)
+	}
+
+	project, err := loadProject(root)
+	if err != nil {
+		t.Fatalf("expected project to load, got: %v", err)
+	}
+	if project.EntryFunction != "bootstrap" {
+		t.Fatalf("expected bootstrap entry function, got %q", project.EntryFunction)
+	}
+	if !strings.HasSuffix(filepath.ToSlash(project.EntryPath), "app/start.ic") {
+		t.Fatalf("expected custom entry path, got %q", project.EntryPath)
+	}
+	data, err := os.ReadFile(project.EntryPath)
+	if err != nil {
+		t.Fatalf("read custom entry file: %v", err)
+	}
+	if !strings.Contains(string(data), "fn bootstrap() {") {
+		t.Fatalf("expected custom entry function in template, got %q", string(data))
 	}
 }
 
@@ -51,6 +81,15 @@ func TestRunInitRejectsExistingProject(t *testing.T) {
 
 	if err := runInit([]string{root}); err == nil {
 		t.Fatal("expected init to reject existing project")
+	}
+}
+
+func TestParseInitArgsRejectsInvalidFlags(t *testing.T) {
+	if _, err := parseInitArgs([]string{"--entry-fn", ""}); err == nil {
+		t.Fatal("expected empty entry function to be rejected")
+	}
+	if _, err := parseInitArgs([]string{"--entry", "../main.ic"}); err == nil {
+		t.Fatal("expected entry outside project root to be rejected")
 	}
 }
 

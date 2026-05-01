@@ -61,11 +61,12 @@ func printUsage() {
 	fmt.Println("Icoo CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  icoo                  start REPL")
-	fmt.Println("  icoo repl             start REPL")
-	fmt.Println("  icoo init [dir]       initialize project")
-	fmt.Println("  icoo check <file|dir> check source file or project")
-	fmt.Println("  icoo run <file|dir>   run source file or project")
+	fmt.Println("  icoo                                start REPL")
+	fmt.Println("  icoo repl                           start REPL")
+	fmt.Println("  icoo init [dir] [--entry path] [--entry-fn name]")
+	fmt.Println("                                      initialize project")
+	fmt.Println("  icoo check <file|dir>               check source file or project")
+	fmt.Println("  icoo run <file|dir>                 run source file or project")
 }
 
 func runRepl() {
