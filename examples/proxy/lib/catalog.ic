@@ -1,0 +1,51 @@
+export fn buildCatalog(config) {
+  return {
+    defaultRoutes: config.defaultRoutes,
+    aliases: config.aliases
+  }
+}
+
+fn cloneRoute(route, selection, requestedModel) {
+  return {
+    name: route.name,
+    alias: route.alias,
+    endpoint: route.endpoint,
+    upstreamPath: route.upstreamPath,
+    upstreamModel: route.upstreamModel,
+    protocol: route.protocol,
+    selection: selection,
+    requestedModel: requestedModel
+  }
+}
+
+export fn resolveRoute(catalog, endpoint, requestedModel) {
+  if requestedModel != null {
+    for i, route in catalog.aliases {
+      if route.alias == requestedModel && route.endpoint == endpoint {
+        return cloneRoute(route, "alias", requestedModel)
+      }
+    }
+  }
+
+  for i, route in catalog.defaultRoutes {
+    if route.endpoint == endpoint {
+      return cloneRoute(route, "default", requestedModel)
+    }
+  }
+
+  return null
+}
+
+export fn snapshot(catalog) {
+  return {
+    defaults: catalog.defaultRoutes,
+    aliases: catalog.aliases
+  }
+}
+
+export fn modelsSnapshot(catalog) {
+  return {
+    defaults: catalog.defaultRoutes,
+    aliases: catalog.aliases
+  }
+}

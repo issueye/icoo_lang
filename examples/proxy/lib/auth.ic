@@ -1,0 +1,54 @@
+fn headerValue(req, name) {
+  for key, value in req.headers {
+    if key == name {
+      return value
+    }
+  }
+  return null
+}
+
+fn unauthorizedResponse() {
+  return {
+    status: 401,
+    json: {
+      ok: false,
+      error: "unauthorized",
+      message: "provide Authorization: Bearer <key> or X-Api-Key"
+    }
+  }
+}
+
+export fn authenticate(config, req) {
+  if config.allowUnauthenticatedLocal == true {
+    return {
+      ok: true,
+      key: "local-dev",
+      via: "dev-mode"
+    }
+  }
+
+  let authorization = headerValue(req, "Authorization")
+  let apiKey = headerValue(req, "X-Api-Key")
+
+  for i, key in config.apiKeys {
+    if authorization == "Bearer " + key {
+      return {
+        ok: true,
+        key: key,
+        via: "bearer"
+      }
+    }
+    if apiKey == key {
+      return {
+        ok: true,
+        key: key,
+        via: "x-api-key"
+      }
+    }
+  }
+
+  return {
+    ok: false,
+    response: unauthorizedResponse()
+  }
+}

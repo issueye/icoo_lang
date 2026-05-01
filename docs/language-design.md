@@ -15,6 +15,284 @@ Icoo 是一门用 Golang 实现的编译型脚本语言，目标是结合：
 
 ---
 
+## 当前实现概览
+
+结合当前代码与 `docs/architecture-analysis-report.md`，Icoo 已经不是只覆盖最小表达式求值的原型，而是一套包含语言前端、字节码 VM、模块系统、标准库和 CLI 工具链的完整实现。
+
+当前主链如下：
+
+```text
+源码
+  -> Lexer
+  -> Parser
+  -> AST
+  -> Sema
+  -> Compiler
+  -> Bytecode
+  -> VM
+  -> 标准库 / 模块系统 / CLI
+```
+
+从代码组织看，项目主要分为几层：
+
+- `cmd/icoo/`
+  - CLI 入口与命令分发
+  - 提供 `init`、`check`、`run`、`repl`、`bundle`、`build`、`extract`、`inspect`
+- `pkg/api/`
+  - 面向 CLI 与测试的运行时门面
+  - 封装检查、执行、模块加载、bundle 执行等主能力
+- `internal/token` / `lexer` / `ast` / `parser` / `sema`
+  - 语言前端与基础语义分析
+- `internal/compiler` / `internal/bytecode`
+  - AST 到字节码的单遍编译
+- `internal/runtime` / `internal/vm`
+  - 值系统、闭包、类、异常、并发、模块执行
+- `internal/stdlib`
+  - 标准库模块与内建函数注册
+
+如果你是第一次阅读项目，建议按这个顺序建立整体心智模型：
+
+1. `cmd/icoo/main.go`
+2. `pkg/api/runtime.go`
+3. `internal/parser/`
+4. `internal/sema/`
+5. `internal/compiler/`
+6. `internal/vm/`
+7. `internal/stdlib/modules.go`
+8. `cmd/icoo/bundle.go` / `cmd/icoo/build.go`
+
+---
+
+## 当前语言能力
+
+下面这部分描述的是**当前实现中已经可用或已经落到代码中的能力**，不是远期设想。
+
+### 基础数据与表达式
+
+已实现：
+
+- `null` / `bool` / `int` / `float` / `string`
+- `array` / `object`
+- 一元与二元表达式
+- 赋值表达式
+- 逻辑短路：`&&` / `||`
+- 三元表达式：`cond ? a : b`
+- 成员访问：`obj.name`
+- 下标访问：`arr[i]`
+- 函数调用：`fn(...)`
+
+### 变量、函数与闭包
+
+已实现：
+
+- `let` / `const`
+- 命名函数与匿名函数
+- 闭包捕获
+- 嵌套函数
+- 顶层表达式语句
+
+### 控制流
+
+已实现：
+
+- `if / else`
+- `while`
+- `for`
+- `for-in`
+- `break` / `continue`
+- `return`
+- `match`
+
+### 模块系统
+
+已实现：
+
+- `import`
+- `export`
+- 文件模块加载
+- 标准库模块加载
+- 模块缓存
+- 项目根别名导入（通过 `project.toml` 的 `root_alias` 配置）
+
+### 错误与异常
+
+已实现：
+
+- `throw`
+- `try / catch / finally`
+- `error(...)` 内建错误值
+- 后缀 try 表达式：`expr?`
+
+`expr?` 的语义是：
+
+- 如果表达式结果不是 `error`，直接返回该值
+- 如果结果是 `error`，则向外提前传播该错误值
+- 如果外层有 `finally`，会先执行 `finally`
+
+示例：
+
+```icoo
+fn parsePort(text) {
+  if text == "3000" {
+    return 3000
+  }
+  return error("invalid port: " + text)
+}
+
+fn loadPort(text) {
+  let port = parsePort(text)?
+  return port + 1
+}
+```
+
+### 类型与接口
+
+已实现：
+
+- 类型别名：`type UserID = int`
+- 接口声明：`interface Greeter { ... }`
+- `satisfies(value, InterfaceName)` 运行时检查
+
+当前类型系统更偏**声明与约束表达**，而不是完整静态类型推导系统。
+
+### 类、继承与装饰器
+
+已实现：
+
+- `class`
+- `this`
+- `init(...)`
+- 实例方法
+- 单继承：`class Dog < Animal`
+- `super.init(...)`
+- `super.method(...)`
+- 函数装饰器
+- 类装饰器
+- 方法装饰器
+
+示例：
+
+```icoo
+class Animal {
+  init(name) {
+    this.name = name
+  }
+
+  speak() {
+    return this.name + " makes a sound"
+  }
+}
+
+class Dog < Animal {
+  init(name, breed) {
+    super.init(name)
+    this.breed = breed
+  }
+
+  speak() {
+    return super.speak() + " and barks"
+  }
+}
+```
+
+### 并发
+
+已实现并采用对象风格 channel API：
+
+```icoo
+let ch = chan()
+let ch = chan(8)
+
+ch.send(v)
+let v, ok = ch.recv()
+let ok = ch.trySend(v)
+let v, ok = ch.tryRecv()
+ch.close()
+```
+
+并发启动：
+
+```icoo
+go worker(ch)
+```
+
+`select` 语法：
+
+```icoo
+select {
+  recv ch1 as msg {
+    print(msg)
+  }
+
+  send ch2, 1 {
+    print("sent")
+  }
+
+  else {
+    print("idle")
+  }
+}
+```
+
+运行时实现上，`go` 任务不是共享同一个活动 VM，而是由主 VM 调度、在子 VM 中隔离执行闭包或原生函数。这能减少解释器内部共享状态带来的并发复杂度。
+
+### 标准库与宿主能力
+
+当前标准库已按能力域拆分，已注册的模块包括：
+
+- `std.io`
+- `std.time`
+- `std.math`
+- `std.db`
+- `std.json`
+- `std.yaml`
+- `std.toml`
+- `std.xml`
+- `std.fs`
+- `std.exec`
+- `std.os`
+- `std.host`
+- `std.express`
+- `std.http.client`
+- `std.http.server`
+- `std.net.websocket.client`
+- `std.net.websocket.server`
+- `std.net.sse.client`
+- `std.net.sse.server`
+- `std.net.socket.client`
+- `std.net.socket.server`
+- `std.crypto`
+- `std.uuid`
+- `std.compress`
+
+示例可参考 `examples/README.md`。
+
+---
+
+## 工具链与执行入口
+
+当前 CLI 入口提供以下命令：
+
+- `icoo`
+- `icoo repl`
+- `icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]`
+- `icoo check <file|dir>`
+- `icoo run <file|dir>`
+- `icoo bundle <file|dir> [output]`
+- `icoo build <file|dir> [output] [--metadata file]`
+- `icoo extract <bundle|executable> [output]`
+- `icoo inspect <bundle|executable>`
+
+其中：
+
+- `check` 走词法、语法、语义分析，不进入编译执行
+- `run` 走完整主链：词法 -> 语法 -> 语义 -> 编译 -> VM 执行
+- `repl` 会对纯表达式自动包装 `return ...`，以便直接回显结果
+- `bundle` 打的是**源码级归档**，不是字节码级归档
+- `build` 会把 bundle 追加到 CLI stub，生成可分发执行文件
+
+---
+
 ## 并发风格
 
 采用对象风格 channel API，而不是 Go 的 `<-` 操作符。
@@ -76,6 +354,8 @@ TopLevelDecl    = ImportDecl
                 | VarDecl
                 | TypeDecl
                 | InterfaceDecl
+                | ClassDecl
+                | DecoratedDecl
                 | Statement ;
 ```
 
@@ -103,7 +383,7 @@ TypeAnnotation  = ":" TypeExpr ;
 ReturnType      = ":" TypeExpr ;
 ```
 
-### 类型声明
+### 类型声明、类与装饰器
 
 ```ebnf
 TypeDecl        = "type" Identifier "=" TypeExpr ;
@@ -111,8 +391,14 @@ TypeDecl        = "type" Identifier "=" TypeExpr ;
 InterfaceDecl   = "interface" Identifier "{" { InterfaceMethod } "}" ;
 InterfaceMethod = Identifier "(" [ ParamTypeList ] ")" [ ReturnType ] ;
 
+ClassDecl       = "class" Identifier [ "<" Expression ] "{" { ClassMethod } "}" ;
+ClassMethod     = { Decorator } Identifier "(" [ ParamList ] ")" Block ;
+
+DecoratedDecl   = Decorator { Decorator } ( FnDecl | ClassDecl ) ;
+Decorator       = "@" Expression ;
+
 ParamTypeList   = ParamType { "," ParamType } ;
-ParamType       = Identifier ":" TypeExpr ;
+ParamType       = Identifier TypeExpr ;
 ```
 
 ### 语句
@@ -127,6 +413,7 @@ Statement       = Block
                 | GoStmt
                 | SelectStmt
                 | ReturnStmt
+                | ThrowStmt
                 | BreakStmt
                 | ContinueStmt
                 | VarDecl
@@ -136,6 +423,7 @@ Block           = "{" { Statement } "}" ;
 
 ExprStmt        = Expression ;
 ReturnStmt      = "return" [ Expression ] ;
+ThrowStmt       = "throw" Expression ;
 BreakStmt       = "break" ;
 ContinueStmt    = "continue" ;
 GoStmt          = "go" Expression ;
@@ -288,10 +576,10 @@ ObjectPattern   = "{" [ ObjectPatternField { "," ObjectPatternField } ] "}" ;
 ObjectPatternField = Identifier [ ":" Pattern ] ;
 ```
 
-### try / catch
+### try / catch / finally
 
 ```ebnf
-TryCatchStmt    = "try" Block "catch" Identifier Block ;
+TryCatchStmt    = "try" Block [ "catch" Identifier Block ] [ "finally" Block ] ;
 ```
 
 ### select
@@ -311,8 +599,10 @@ ElseCase        = "else" Block ;
 ```ebnf
 Expression      = Assignment ;
 
-Assignment      = LogicOr [ AssignOp Assignment ] ;
+Assignment      = Ternary [ AssignOp Assignment ] ;
 AssignOp        = "=" | "+=" | "-=" | "*=" | "/=" ;
+
+Ternary         = LogicOr [ "?" Expression ":" Ternary ] ;
 
 LogicOr         = LogicAnd { "||" LogicAnd } ;
 LogicAnd        = Equality { "&&" Equality } ;
@@ -324,11 +614,12 @@ Factor          = Unary { ( "*" | "/" | "%" ) Unary } ;
 Unary           = ( "!" | "-" ) Unary | Postfix ;
 
 Postfix         = Primary { PostfixOp } ;
-PostfixOp       = CallOp | MemberOp | IndexOp ;
+PostfixOp       = CallOp | MemberOp | IndexOp | TryOp ;
 
 CallOp          = "(" [ ArgumentList ] ")" ;
 MemberOp        = "." Identifier ;
 IndexOp         = "[" Expression "]" ;
+TryOp           = "?" ;
 
 ArgumentList    = Expression { "," Expression } ;
 ```
@@ -374,6 +665,29 @@ FuncType        = "fn" "(" [ TypeExprList ] ")" [ ":" TypeExpr ] ;
 TypeExprList    = TypeExpr { "," TypeExpr } ;
 ChanType        = "chan" "[" TypeExpr "]" ;
 ```
+
+### 语法与实现对齐说明
+
+上面的 EBNF 仍然是“靠近实现的草案”，不是形式化规范。当前仓库里有几处实现细节值得额外说明：
+
+- `?` 同时承担两种角色：
+  - 三元表达式：`cond ? thenExpr : elseExpr`
+  - 后缀 try 表达式：`expr?`
+- `try` 语句当前支持：
+  - `try { ... } catch err { ... }`
+  - `try { ... } finally { ... }`
+  - `try { ... } catch err { ... } finally { ... }`
+- `class` 的继承写法是 `class Dog < Animal { ... }`
+- 类方法目前不写 `fn` 关键字，直接写方法名
+- 装饰器既可修饰函数，也可修饰类；类内部的方法也可单独带装饰器
+- `interface` 方法参数在当前实现里记录的是“参数名 + 类型表达式”序列，文档中的 EBNF 只表达结构，不试图精确反映内部 AST 细节
+
+如果要了解最准确的当前行为，应以这些文件为准：
+
+- `internal/parser/parser_decl.go`
+- `internal/parser/parser_stmt.go`
+- `internal/parser/parser_expr.go`
+- `pkg/api/*_test.go`
 
 ---
 
@@ -1903,69 +2217,105 @@ func (vm *VM) registerStdlib() {
 
 ### 宿主 Go 绑定策略
 
-建议在 `pkg/api` 暴露轻量运行时包装：
+当前代码中的 `pkg/api` 已提供一个面向宿主程序与 CLI 的轻量运行时门面，核心对象如下：
 
 ```go
 type Runtime struct {
-	vm *VM
+	vm               *vm.VM
+	modules          map[string]*runtime.Module
+	bundledSources   map[string]string
+	projectRoot      string
+	projectRootAlias string
 }
 ```
 
-建议提供：
+当前已经暴露的主要入口包括：
 
 ```go
 func NewRuntime() *Runtime
-func (r *Runtime) DefineFunc(name string, fn NativeFunc)
-func (r *Runtime) DefineValue(name string, v Value)
-func (r *Runtime) DefineModule(name string, mod *Module)
-func (r *Runtime) RunFile(path string) (Value, error)
-func (r *Runtime) RunSource(name string, src string) (Value, error)
-func (r *Runtime) Call(name string, args ...Value) (Value, error)
+func (r *Runtime) VM() *vm.VM
+func (r *Runtime) SetProjectRoot(root string, alias string)
+func (r *Runtime) SetBundledSources(sources map[string]string)
+
+func (r *Runtime) CheckSource(src string) []error
+func (r *Runtime) CheckFile(path string) []error
+func (r *Runtime) RunSource(src string) (runtime.Value, error)
+func (r *Runtime) RunFile(path string) (runtime.Value, error)
+func (r *Runtime) InvokeGlobal(name string) (runtime.Value, error)
+func (r *Runtime) RunReplLine(line string) (runtime.Value, error)
+
+func LoadBundle(data []byte) (*BundleArchive, error)
+func LoadBundleFile(path string) (*BundleArchive, error)
+func (r *Runtime) CheckBundleFile(path string) []error
+func (r *Runtime) CheckBundleArchive(archive *BundleArchive) []error
+func (r *Runtime) RunBundleFile(path string) (runtime.Value, error)
+func (r *Runtime) RunBundleArchive(path string, archive *BundleArchive) (runtime.Value, error)
 ```
+
+也就是说，当前 `pkg/api` 更像一个**运行、检查、bundle 执行门面**，而不是一个完整的宿主嵌入 SDK。像 `DefineFunc`、`DefineValue`、`DefineModule` 这类直接注入接口，目前并没有作为 `pkg/api` 的公开方法提供。
+
+如果宿主方需要更底层控制，可以通过 `Runtime.VM()` 取到底层 `*vm.VM` 继续扩展。
 
 ### Go 值与 Icoo 值转换
 
-建议先支持基础值转换：
-- `nil -> NullValue`
-- `bool -> BoolValue`
-- `int/int64 -> IntValue`
-- `float64 -> FloatValue`
-- `string -> StringValue`
-- `[]any -> ArrayValue`
-- `map[string]any -> ObjectValue`
-
-建议提供细粒度 helper：
+当前实现已经有清晰的运行时值模型，核心接口位于 `internal/runtime/value.go`：
 
 ```go
-func AsString(v Value) (string, bool)
-func AsInt(v Value) (int64, bool)
-func AsFloat(v Value) (float64, bool)
-func AsBool(v Value) (bool, bool)
+type Value interface {
+	Kind() ValueKind
+	String() string
+}
 ```
+
+当前值种类包括：
+
+- `null`
+- `bool`
+- `int`
+- `float`
+- `string`
+- `array`
+- `object`
+- `native function`
+- `closure`
+- `module`
+- `channel`
+- `error`
+- `iterator`
+- `interface`
+- `class`
+- `bound method`
+- `method proxy`
+- `method definition`
+
+对宿主开发者来说，最重要的边界是：`pkg/api` 返回的是 `runtime.Value`，而不是 Go 原生类型。因此在宿主集成时，通常需要：
+
+- 根据 `Kind()` 判断值类型
+- 再断言到具体值结构，例如 `runtime.StringValue`、`*runtime.ArrayValue`、`*runtime.ObjectValue`
+
+目前仓库里还没有对外导出的通用 `AsString` / `AsInt` 这类 helper API，因此这部分仍以底层值类型断言为主。
 
 ### Host Object 建议
 
-第一版**不要**直接支持任意 Go struct 反射暴露到脚本层。
+从当前实现看，Icoo 的宿主集成策略仍然偏保守：
 
-优先只支持：
-- `NativeFunction`
-- `Module`
-- 基础值
-- `ArrayValue` / `ObjectValue`
+- 内建函数通过 `runtime.NativeFunction` 暴露
+- 标准库模块通过 `runtime.Module` 暴露
+- 运行时值通过显式的 `runtime.Value` 体系传递
 
-这样可以避免：
-- 反射复杂度过高
-- 性能不可控
-- 安全边界模糊
+这意味着当前更适合：
+
+- 暴露函数
+- 暴露模块
+- 传递基础值、数组、对象
+
+而不适合直接把任意 Go struct 通过反射无约束暴露到脚本层。
 
 ### 首版实施顺序建议
 
-建议按下面顺序实现：
-1. builtin: `print`, `println`
-2. builtin: `len`, `typeOf`
-3. builtin: `chan`
-4. stdlib: `std.io`
-5. stdlib: `std.time`
-6. stdlib: `std.json`
-7. stdlib: `std.fs`
-8. stdlib: `std.math`
+如果后续继续扩展宿主嵌入能力，更合适的增量顺序通常是：
+
+1. 补齐 `pkg/api` 的嵌入式 API 文档
+2. 为常用 `runtime.Value` 提供安全的 helper 转换函数
+3. 在不引入反射泛滥的前提下补最小注入接口
+4. 最后再考虑更完整的宿主对象桥接

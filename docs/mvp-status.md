@@ -1,57 +1,99 @@
-# Icoo MVP 状态总览
+# Icoo 当前状态总览
 
-本文档用于收口当前 MVP 的实际状态，明确：
+本文档用于收口 Icoo 当前的实际状态，明确：
 
 - 已实现能力
-- 尚未实现或仍受限的能力
-- 当前验证方式
-- 建议的下一阶段方向
+- 当前边界与风险
+- 主要验证方式
+- 更适合继续投入的方向
+
+相关文档：
+
+- 架构分析：`docs/architecture-analysis-report.md`
+- 语言说明：`docs/language-design.md`
+- Runtime API：`docs/api.md`
+- 迭代器协议：`docs/iterators.md`
+- MVP 路线（历史规划）：`docs/mvp-roadmap.md`
 
 ## 当前结论
 
-截至目前，Icoo 的 MVP 主链已经打通：
+Icoo 的“最小可运行 MVP”阶段已经完成，而且当前实现已经明显超出最初 MVP 范围。
+
+当前已经具备完整主链：
 
 ```text
-源码 -> Lexer -> Parser -> AST -> 语义分析 -> 字节码 -> VM -> CLI
+源码 -> Lexer -> Parser -> AST -> 语义分析 -> Compiler -> Bytecode -> VM -> CLI
 ```
 
-已经具备：
+同时也已经具备：
 
-- `icoo check <file>`
-- `icoo run <file>`
-- 多文件 `import/export`
-- `for` / `for-in` / `match`
-- 统一 iterator 协议
-- 基础标准库模块
+- 项目级 `check` / `run`
+- `repl`
+- 源码级 `bundle`
+- 可分发 `build`
+- `extract` / `inspect`
+- 文件模块与标准库模块系统
+- 类、继承、装饰器
+- `throw` / `try/catch/finally` / `expr?`
+- `go` / `select` / channel
+- `type` / `interface` / `satisfies`
+- 覆盖多个能力域的标准库
+
+因此如果还沿用“是否完成 MVP”的口径，答案已经不再是“正在接近”，而是：
+
+- **MVP 早已完成**
+- 当前更适合按“已有能力固化与质量补强”来评估项目状态
 
 ## 已实现能力
 
-### 1. CLI 与执行主链
+### 1. CLI 与工具链
 
-已实现：
-
-- `icoo check <file>`
-- `icoo run <file>`
-
-入口文件：
+当前 CLI 入口位于：
 
 - `cmd/icoo/main.go`
+
+已提供命令：
+
+- `icoo`
+- `icoo repl`
+- `icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]`
+- `icoo check <file|dir>`
+- `icoo run <file|dir>`
+- `icoo bundle <file|dir> [output]`
+- `icoo build <file|dir> [output] [--metadata file]`
+- `icoo extract <bundle|executable> [output]`
+- `icoo inspect <bundle|executable>`
+
+这说明项目已经不只是“解释器主链可跑”，而是具备了相对完整的工具链闭环。
+
+### 2. API 门面层
+
+当前对外运行时门面集中在：
+
 - `pkg/api/runtime.go`
+- `pkg/api/bundle.go`
 
-### 2. 前端：词法 / 语法 / AST
+已提供的主要能力：
 
-已实现：
+- `NewRuntime()`
+- `CheckSource()` / `CheckFile()`
+- `RunSource()` / `RunFile()`
+- `InvokeGlobal()`
+- `RunReplLine()`
+- `LoadBundle()` / `LoadBundleFile()`
+- `CheckBundleFile()` / `CheckBundleArchive()`
+- `RunBundleFile()` / `RunBundleArchive()`
+- `SetProjectRoot()` / `SetBundledSources()`
 
-- 基础 token
-- 关键字识别
-- 表达式优先级解析
-- 顶层声明
-- 顶层表达式语句
-- block / `if` / `while` / `for`
-- `for-in`
-- `match`
-- 函数声明 / 匿名函数
-- `import` / `export`
+这层已经足以支撑：
+
+- CLI
+- 测试
+- REPL
+- bundle 执行
+- 基础宿主嵌入
+
+### 3. 语言前端
 
 关键目录：
 
@@ -59,33 +101,21 @@
 - `internal/lexer/`
 - `internal/ast/`
 - `internal/parser/`
-
-### 3. 语义分析
-
-已实现：
-
-- 基础作用域分析
-- 未定义标识符检查
-- 重复声明检查
-- `return` 合法性检查
-- `for-in` 绑定检查
-
-关键目录：
-
 - `internal/sema/`
 
+已实现或已落地到主链的能力包括：
+
+- token / span / 关键字表
+- 词法分析
+- 顶层声明解析
+- Pratt 风格表达式解析
+- 错误恢复
+- 基础语义分析
+- 作用域与标识符检查
+- 重复声明检查
+- 结构性合法性检查
+
 ### 4. 编译器与 VM
-
-已实现：
-
-- 基础表达式编译
-- 函数调用
-- 条件与循环
-- 数组 / 对象
-- 属性访问 / 下标访问
-- 顶层模块执行
-- 文件模块加载
-- 导出表
 
 关键目录：
 
@@ -94,171 +124,294 @@
 - `internal/runtime/`
 - `internal/vm/`
 
-### 5. `for-in` 与 iterator 协议
+已具备：
 
-已实现：
+- 单遍 AST -> 字节码编译
+- 局部变量槽位管理
+- 作用域深度跟踪
+- break/continue 跳转回填
+- 闭包捕获与 upvalue
+- 异常处理器栈
+- 模块执行上下文
+- 类/方法调用上下文
+- goroutine pool 支持的并发执行模型
 
-- `iter()` / `next()` 协议
+### 5. 当前语言能力
+
+#### 基础数据与表达式
+
+- `null` / `bool` / `int` / `float` / `string`
+- `array` / `object`
+- 一元与二元表达式
+- 赋值表达式
+- `&&` / `||`
+- 三元表达式 `cond ? a : b`
+- 成员访问与下标访问
+- 函数调用
+
+#### 变量、函数与闭包
+
+- `let` / `const`
+- 命名函数
+- 匿名函数
+- 闭包捕获
+- 嵌套函数
+
+#### 控制流
+
+- `if / else`
+- `while`
+- `for`
+- `for-in`
+- `break` / `continue`
+- `return`
+- `match`
+
+#### 模块系统
+
+- `import`
+- `export`
+- 文件模块加载
+- 标准库模块加载
+- 模块缓存
+- 项目根别名导入
+
+#### 错误与异常
+
+- `throw`
+- `try / catch / finally`
+- `error(...)`
+- 后缀 try 表达式 `expr?`
+
+#### 类型与接口
+
+- `type`
+- `interface`
+- `satisfies(value, InterfaceName)`
+
+#### 类、继承与装饰器
+
+- `class`
+- `this`
+- `init(...)`
+- 实例方法
+- 单继承 `class Dog < Animal`
+- `super.init(...)`
+- `super.method(...)`
+- 函数装饰器
+- 类装饰器
+- 方法装饰器
+
+#### 并发
+
+- `chan()`
+- `send` / `recv`
+- `trySend` / `tryRecv`
+- `close`
+- `go`
+- `select`
+
+### 6. 迭代器协议
+
+相关文档：
+
+- `docs/iterators.md`
+- `docs/language-design.md`
+
+当前 `for-in` 已基于统一迭代器协议实现，支持：
+
+- `iter()` / `next()`
 - 单绑定：`for item in iterable`
 - 双绑定：`for key, value in iterable`
 - `_` 忽略绑定
 - array / string / object / module / iterator 的默认迭代行为
-- 对象自定义 `iter` 覆盖默认行为
+- 对象通过自定义 `iter` 覆盖默认行为
 
-相关文档：
+### 7. 标准库
 
-- `docs/language-design.md`
-- `docs/iterators.md`
-
-### 6. 标准库模块
-
-当前已实现：
-
-- `std.io`
-  - `print`
-  - `println`
-- `std.time`
-  - `now`
-  - `sleep`
-- `std.math`
-  - `abs`
-  - `max`
-  - `min`
-  - `floor`
-  - `ceil`
-- `std.json`
-  - `encode`
-  - `decode`
-- `std.fs`
-  - `readFile`
-  - `writeFile`
-  - `exists`
-
-当前结构已经按“每个原生库一个单元”拆分：
+标准库注册入口：
 
 - `internal/stdlib/modules.go`
-- `internal/stdlib/io.go`
-- `internal/stdlib/time.go`
-- `internal/stdlib/math.go`
-- `internal/stdlib/json.go`
-- `internal/stdlib/fs.go`
 
-## 当前仍未实现 / 不完整部分
+当前已注册模块包括：
 
-以下能力仍不应视为当前 MVP 已完成：
+- `std.io`
+- `std.time`
+- `std.math`
+- `std.db`
+- `std.json`
+- `std.yaml`
+- `std.toml`
+- `std.xml`
+- `std.fs`
+- `std.exec`
+- `std.os`
+- `std.host`
+- `std.express`
+- `std.http.client`
+- `std.http.server`
+- `std.net.websocket.client`
+- `std.net.websocket.server`
+- `std.net.sse.client`
+- `std.net.sse.server`
+- `std.net.socket.client`
+- `std.net.socket.server`
+- `std.crypto`
+- `std.uuid`
+- `std.compress`
 
-### 1. 并发能力
+从能力域看，标准库已经不再是“最小集验证”，而是覆盖了：
 
-未实现：
+- core
+- format
+- system
+- net
+- database
+- data
+- express
 
-- `go`
-- `select`
-- channel 语言级能力
+## 当前边界与风险
 
-虽然设计文档已有方向，但当前运行时还没有这一批特性。
+结合当前代码和 `docs/architecture-analysis-report.md`，更值得关注的已经不是“哪些基础能力还没做”，而是下面这些风险点。
 
-### 2. 异常处理
+### 1. 文档与实现容易再次脱节
 
-未实现：
+虽然本轮已经补充说明文档和 API 文档，但项目特性扩展很快：
 
-- `try`
-- `catch`
-- 统一脚本级异常模型
+- class / inheritance
+- decorators
+- exceptions / finally / try expr
+- go / select
+- type / interface
+- build / bundle
 
-当前 `panic(...)` 仍主要通过宿主错误回传。
+后续如果继续快速迭代，文档仍然很容易再次落后于代码。
 
-### 3. 类型系统
+### 2. 特性交互复杂度高
 
-未实现：
+当前难点已经从“单个特性是否存在”转为“多个特性组合时是否稳定”，例如：
 
-- `type`
-- `interface`
-- 更完整的静态类型约束
+- `finally` 与 `return` / `break` / `continue` / `throw`
+- 闭包与 `go`
+- `select` 与作用域绑定
+- `super` 与闭包
+- 装饰器与类初始化
 
-### 4. 更完整的闭包/高级运行时能力
+### 3. 前端与编译层白盒测试仍可加强
 
-仍受限：
+`pkg/api/*_test.go` 已覆盖大量端到端行为，但从长期维护角度看，仍建议继续补强：
 
-- 完整闭包优化未完成
-- 更强的模块缓存/循环依赖细节未系统化验证
-- 还没有 REPL / build / debugger
+- lexer 单元测试
+- parser 单元测试
+- sema 单元测试
+- compiler 单元测试
 
-### 5. 标准库仍是最小集
+### 4. 标准库增长快于统一约束
 
-当前标准库偏 MVP，用于验证运行时闭环，尚未形成稳定的长期 API 面。
+当前标准库能力已经不少，但仍需要持续收敛：
+
+- 错误模型
+- 返回值风格
+- 资源生命周期
+- 命名一致性
+- 跨模块 API 手感
+
+### 5. bundle 仍是源码级归档
+
+当前 bundle / build 的方向是合理的，但也带来已知边界：
+
+- 运行时仍需重新 parse / compile
+- 启动速度仍受源码主链影响
+- 尚未进入字节码级打包阶段
+- 版本兼容策略仍较轻量
 
 ## 当前验证方式
 
-### 单元与运行时测试
+### 1. Go 测试
 
-通过：
+当前基础验证方式仍是：
 
 ```bash
 go test ./...
 ```
 
-重点覆盖：
+重点覆盖区域包括：
 
-- 运行时调用
+- `pkg/api/*_test.go`
+- `cmd/icoo/*_test.go`
+
+从现有测试名可以看到，已覆盖的主题包含：
+
+- 运行时主链
 - import/export
-- `for` / `for-in`
-- iterator 协议
-- `match`
-- 标准库模块
+- project root alias
+- 闭包
+- 逻辑短路
+- 三元表达式
+- `try` 表达式
+- 类型与接口
+- 类、继承、`super`
+- 装饰器
+- channel / `go` / `select`
+- bundle / build / extract / inspect
+- examples 批量运行
 
-### 集成脚本
+### 2. 示例脚本
 
-当前已存在：
+示例入口：
 
-- `testdata/integration/basic.ic`
-- `testdata/integration/import_main.ic`
-- `testdata/integration/iterators.ic`
-- `testdata/integration/stdlib.ic`
+- `examples/README.md`
 
-其中 `stdlib.ic` 会覆盖：
+当前 examples 已覆盖从基础语法到标准库、网络、数据库、并发、装饰器、继承的多种场景，可作为：
 
-- `std.io`
-- `std.time`
-- `std.math`
-- `std.json`
-- `std.fs`
-- `icoo run` 端到端执行链路
+- 冒烟测试
+- 回归测试素材
+- 新读者示例
 
-## 对 MVP 的判断
+### 3. CLI 闭环验证
 
-如果把 MVP 的定义限定为：
+当前除了 `run` / `check` 外，还可以通过下列命令验证工具链行为：
 
-- 有完整主链
-- 能执行脚本
-- 有模块能力
-- 有最小标准库
-- 有基本测试和 integration 覆盖
+- `icoo init`
+- `icoo bundle`
+- `icoo build`
+- `icoo extract`
+- `icoo inspect`
+- `icoo repl`
 
-那么当前状态已经可以视为 **MVP 基本完成**。
+## 对当前阶段的判断
 
-如果把 MVP 的定义扩大到：
+如果问题是“项目现在是否还处在 MVP 收口阶段”，更准确的回答是：
 
-- 并发
-- 异常
-- 类型系统
-- 更完整工具链
+- **不是**
 
-那么这些属于 **MVP 之后的下一阶段**，不应继续混入 MVP 范围。
+更合适的表述是：
 
-## 建议的下一阶段
+- 主链已经完整
+- 工具链已经成型
+- 高级语言特性已超过 MVP 范围
+- 当前工作重心应从“继续证明能跑”切换到“固化现有能力”
 
-建议从这里开始，不再继续扩大 MVP，而是进入“阶段 2”开发。
+## 更适合优先投入的方向
 
-优先顺序建议：
+按当前状态，更值得优先推进的方向是：
 
-1. `try/catch`
-2. 更完整的模块系统边界与错误处理
-3. `go/select` 与 channel
-4. `type/interface`
-5. CLI 扩展（如 `build` / `repl`）
+1. 文档持续同步
+2. parser / sema / compiler 白盒测试补强
+3. 高级特性交互测试
+4. 标准库 API 一致性整理
+5. 错误信息与调试体验优化
+
+如果继续往产品化方向推进，再考虑：
+
+6. bundle / build 的版本与启动体验优化
+7. 字节码级 bundle 方案
+8. 更清晰的嵌入式宿主 API
 
 ## 相关文档
 
-- `docs/mvp-roadmap.md`
+- `docs/architecture-analysis-report.md`
 - `docs/language-design.md`
+- `docs/api.md`
 - `docs/iterators.md`
+- `docs/mvp-roadmap.md`

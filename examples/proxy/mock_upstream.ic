@@ -1,0 +1,65 @@
+import std.io as io
+import std.json as json
+import std.os as os
+import std.time as time
+import std.http.server as server
+
+fn headerValue(req, name) {
+  for key, value in req.headers {
+    if key == name {
+      return value
+    }
+  }
+  return null
+}
+
+fn decodeBody(req) {
+  if req.body == "" {
+    return null
+  }
+  return json.decode(req.body)
+}
+
+let addr = os.getEnv("ICOO_PROXY_UPSTREAM_ADDR")
+if addr == null {
+  addr = "127.0.0.1:8096"
+}
+
+let upstream = server.listen({
+  addr: addr,
+  handler: fn(req) {
+    if req.path == "/healthz" {
+      return {
+        json: {
+          ok: true,
+          service: "mock-upstream"
+        }
+      }
+    }
+
+    let payload = decodeBody(req)
+    let model = null
+    if payload != null {
+      model = payload.model
+    }
+
+    return {
+      json: {
+        ok: true,
+        providerPath: req.path,
+        method: req.method,
+        model: model,
+        route: headerValue(req, "X-Proxy-Route"),
+        resolvedModel: headerValue(req, "X-Resolved-Model"),
+        auth: headerValue(req, "X-Proxy-Auth"),
+        body: payload
+      }
+    }
+  }
+})
+
+io.println("mock upstream listening:", upstream.url)
+
+for true {
+  time.sleep(1000)
+}

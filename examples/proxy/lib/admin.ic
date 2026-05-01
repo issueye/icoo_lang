@@ -1,0 +1,44 @@
+import std.express as express
+import "./catalog.ic" as catalog
+import "./store.ic" as store
+
+export fn registerRoutes(app, state) {
+  app.get("/healthz", fn(req) {
+    return express.json({
+      ok: true,
+      service: "icoo-proxy"
+    })
+  })
+
+  app.get("/readyz", fn(req) {
+    return express.json({
+      ok: true,
+      upstreamBaseUrl: state.config.upstreamBaseUrl,
+      requestCount: store.count(state.store)
+    })
+  })
+
+  app.get("/admin/routes", fn(req) {
+    return express.json({
+      ok: true,
+      routes: catalog.snapshot(state.catalog)
+    })
+  })
+
+  app.get("/admin/models", fn(req) {
+    return express.json({
+      ok: true,
+      models: catalog.modelsSnapshot(state.catalog)
+    })
+  })
+
+  app.get("/admin/requests", fn(req) {
+    return express.json({
+      ok: true,
+      total: store.count(state.store),
+      requests: store.listRecent(state.store)
+    })
+  })
+
+  return app
+}

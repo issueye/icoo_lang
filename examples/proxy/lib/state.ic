@@ -1,0 +1,17 @@
+import std.time as time
+import "./catalog.ic" as catalog
+import "./store.ic" as store
+
+export fn newState(config) {
+  return {
+    config: config,
+    catalog: catalog.buildCatalog(config),
+    store: store.createStore(config.recentLimit),
+    startedAt: time.now()
+  }
+}
+
+export fn close(state) {
+  store.close(state.store)
+  return null
+}

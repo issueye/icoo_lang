@@ -1,0 +1,113 @@
+import std.io as io
+import std.json as json
+import std.http.client as client
+import std.http.server as server
+import "./src/main.ic" as proxy
+
+fn decodeBody(req) {
+  if req.body == "" {
+    return null
+  }
+  return json.decode(req.body)
+}
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    let payload = decodeBody(req)
+    let model = null
+    if payload != null {
+      model = payload.model
+    }
+
+    return {
+      json: {
+        ok: true,
+        path: req.path,
+        method: req.method,
+        model: model,
+        route: req.headers["X-Proxy-Route"],
+        auth: req.headers["X-Proxy-Auth"]
+      }
+    }
+  }
+})
+
+let runtimeApp = proxy.start({
+  listenAddr: "127.0.0.1:0",
+  upstreamBaseUrl: upstream.url,
+  apiKeys: ["demo-key"],
+  recentLimit: 8
+})
+
+let okResp = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key"
+  },
+  json: {
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: "hello"
+      }
+    ]
+  }
+})
+
+if okResp.status != 200 {
+  panic("expected proxied request to succeed")
+}
+if okResp.json.path != "/openai/chat/completions" {
+  panic("expected upstream path rewrite")
+}
+if okResp.json.model != "gpt-4o-mini" {
+  panic("expected alias model rewrite")
+}
+if okResp.json.route != "chat-gpt-4o" {
+  panic("expected alias route selection")
+}
+
+let unauthorized = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  json: {
+    model: "gpt-4o"
+  }
+})
+
+if unauthorized.status != 401 {
+  panic("expected unauthorized response")
+}
+
+let health = client.getJSON(runtimeApp.server.url + "/healthz")
+let ready = client.getJSON(runtimeApp.server.url + "/readyz")
+let routes = client.getJSON(runtimeApp.server.url + "/admin/routes")
+let requests = client.getJSON(runtimeApp.server.url + "/admin/requests")
+
+if health.json.ok != true {
+  panic("expected healthz ok")
+}
+if ready.json.ok != true {
+  panic("expected readyz ok")
+}
+if len(routes.json.routes.defaults) != 2 {
+  panic("expected default routes in admin response")
+}
+if requests.json.total < 2 {
+  panic("expected recorded requests")
+}
+if requests.json.requests[0].resolved_model != "gpt-4o-mini" {
+  panic("expected recent request resolved model")
+}
+
+proxy.stop(runtimeApp)
+upstream.close()
+
+io.println("== proxy smoke ==")
+io.println("proxy status:", okResp.status)
+io.println("proxy path:", okResp.json.path)
+io.println("rewritten model:", okResp.json.model)
+io.println("admin request total:", requests.json.total)

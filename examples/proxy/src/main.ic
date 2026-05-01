@@ -1,0 +1,59 @@
+import std.io as io
+import std.time as time
+import std.express as express
+import "../lib/config.ic" as config
+import "../lib/state.ic" as state
+import "../lib/admin.ic" as admin
+import "../lib/proxy_handler.ic" as proxy
+
+export fn start(overrides) {
+  let cfg = config.loadConfig(overrides)
+  let runtimeState = state.newState(cfg)
+  let app = express.create()
+
+  app.get("/", fn(req) {
+    return express.json({
+      ok: true,
+      service: "icoo-proxy",
+      listenAddr: cfg.listenAddr,
+      upstreamBaseUrl: cfg.upstreamBaseUrl
+    })
+  })
+
+  app.post("/v1/chat/completions", fn(req) {
+    return proxy.handleProxy(req, runtimeState)
+  })
+
+  app.post("/v1/messages", fn(req) {
+    return proxy.handleProxy(req, runtimeState)
+  })
+
+  admin.registerRoutes(app, runtimeState)
+
+  let server = app.listen({addr: cfg.listenAddr})
+  return {
+    server: server,
+    state: runtimeState,
+    config: cfg
+  }
+}
+
+export fn stop(runtimeApp) {
+  if runtimeApp == null {
+    return null
+  }
+  runtimeApp.server.close()
+  state.close(runtimeApp.state)
+  return null
+}
+
+export fn main() {
+  let runtimeApp = start(null)
+  io.println("icoo proxy listening:", runtimeApp.server.url)
+  io.println("upstream:", runtimeApp.config.upstreamBaseUrl)
+  io.println("default routes:", len(runtimeApp.config.defaultRoutes))
+
+  for true {
+    time.sleep(1000)
+  }
+}

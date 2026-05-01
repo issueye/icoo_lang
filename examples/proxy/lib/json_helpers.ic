@@ -1,0 +1,28 @@
+import std.json as json
+
+export fn requestedModel(req) {
+  if req.json == null {
+    return null
+  }
+  return req.json.model
+}
+
+export fn rewriteBody(req, route) {
+  if req.json == null {
+    return {
+      body: req.body,
+      requestedModel: null
+    }
+  }
+
+  let payload = req.json
+  let requestedModel = payload.model
+  if route.upstreamModel != null {
+    payload.model = route.upstreamModel
+  }
+
+  return {
+    body: json.encode(payload),
+    requestedModel: requestedModel
+  }
+}
