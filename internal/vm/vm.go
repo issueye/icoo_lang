@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"sync"
 
@@ -68,13 +69,9 @@ func (vm *VM) goExecutor(task *concurrency.GoTask) {
 	case *runtime.Closure:
 		vm.mu.RLock()
 		globals := make(map[string]runtime.Value, len(vm.globals))
-		for k, v := range vm.globals {
-			globals[k] = v
-		}
+		maps.Copy(globals, vm.globals)
 		modules := make(map[string]*runtime.Module, len(vm.modules))
-		for k, v := range vm.modules {
-			modules[k] = v
-		}
+		maps.Copy(modules, vm.modules)
 		vm.mu.RUnlock()
 		sub := &VM{
 			stack:    make([]runtime.Value, 0, 64),
@@ -154,6 +151,13 @@ func (vm *VM) GlobalNames() []string {
 		names = append(names, k)
 	}
 	return names
+}
+
+func (vm *VM) GetGlobal(name string) (runtime.Value, bool) {
+	vm.mu.RLock()
+	defer vm.mu.RUnlock()
+	value, ok := vm.globals[name]
+	return value, ok
 }
 
 func runtimeError(format string, args ...any) error {

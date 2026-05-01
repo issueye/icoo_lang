@@ -18,9 +18,20 @@ func main() {
 
 	switch os.Args[1] {
 	case "check":
-		runCheck(os.Args[2:])
+		if err := runCheck(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	case "run":
-		runRun(os.Args[2:])
+		if err := runRun(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	case "init":
+		if err := runInit(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	case "repl":
 		runRepl()
 	case "help", "--help", "-h":
@@ -32,46 +43,29 @@ func main() {
 	}
 }
 
-func runCheck(args []string) {
+func runCheck(args []string) error {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: icoo check <file>")
-		os.Exit(1)
+		return fmt.Errorf("usage: icoo check <file|dir>")
 	}
-
-	rt := api.NewRuntime()
-	errs := rt.CheckFile(args[0])
-	if len(errs) > 0 {
-		for _, err := range errs {
-			fmt.Fprintln(os.Stderr, err)
-		}
-		os.Exit(1)
-	}
-
-	fmt.Printf("ok: %s\n", args[0])
+	return runCheckPath(args[0])
 }
 
-func runRun(args []string) {
+func runRun(args []string) error {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: icoo run <file>")
-		os.Exit(1)
+		return fmt.Errorf("usage: icoo run <file|dir>")
 	}
-
-	rt := api.NewRuntime()
-	_, err := rt.RunFile(args[0])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return runProjectPath(args[0])
 }
 
 func printUsage() {
 	fmt.Println("Icoo CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  icoo              start REPL")
-	fmt.Println("  icoo repl         start REPL")
-	fmt.Println("  icoo check <file> check source file")
-	fmt.Println("  icoo run <file>   run source file")
+	fmt.Println("  icoo                  start REPL")
+	fmt.Println("  icoo repl             start REPL")
+	fmt.Println("  icoo init [dir]       initialize project")
+	fmt.Println("  icoo check <file|dir> check source file or project")
+	fmt.Println("  icoo run <file|dir>   run source file or project")
 }
 
 func runRepl() {

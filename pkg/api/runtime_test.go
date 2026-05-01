@@ -38,6 +38,60 @@ let result = add(1, 2)
 	}
 }
 
+func TestRuntimeInvokeGlobal_CallsProjectEntryFunction(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.ic")
+	marker := filepath.Join(dir, "marker.txt")
+	if err := os.WriteFile(path, []byte(`import std.fs as fs
+
+fn main() {
+  fs.writeFile("`+filepath.ToSlash(marker)+`", "ok")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write entry file: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(path); err != nil {
+		t.Fatalf("expected run file to succeed, got: %v", err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("expected entry function not to run during RunFile, stat err=%v", err)
+	}
+	if _, err := rt.InvokeGlobal("main"); err != nil {
+		t.Fatalf("expected InvokeGlobal to succeed, got: %v", err)
+	}
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("expected marker file after InvokeGlobal, got: %v", err)
+	}
+	if string(data) != "ok" {
+		t.Fatalf("expected marker contents ok, got %q", string(data))
+	}
+}
+
+func TestRuntimeInvokeGlobal_RejectsMissingFunction(t *testing.T) {
+	rt := NewRuntime()
+	if _, err := rt.RunSource(`let value = 1`); err != nil {
+		t.Fatalf("expected source run to succeed, got: %v", err)
+	}
+	if _, err := rt.InvokeGlobal("main"); err == nil {
+		t.Fatal("expected missing global to return error")
+	}
+}
+
+func TestRuntimeInvokeGlobal_RejectsNonCallableGlobal(t *testing.T) {
+	rt := NewRuntime()
+	if _, err := rt.RunSource(`let main = 1`); err != nil {
+		t.Fatalf("expected source run to succeed, got: %v", err)
+	}
+	if _, err := rt.InvokeGlobal("main"); err == nil {
+		t.Fatal("expected non-callable global to return error")
+	} else if !strings.Contains(err.Error(), "not callable") {
+		t.Fatalf("expected not callable error, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_TryCatchCatchesPanic(t *testing.T) {
 	src := `
 let message = ""
@@ -260,7 +314,7 @@ if isNull != true {
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected null cause run to succeed, got error: %v", err)
+		t.Fatalf("expected error without cause run to succeed, got error: %v", err)
 	}
 }
 

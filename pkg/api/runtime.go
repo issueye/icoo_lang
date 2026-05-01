@@ -72,6 +72,20 @@ func (r *Runtime) VM() *vm.VM {
 	return r.vm
 }
 
+func (r *Runtime) InvokeGlobal(name string) (runtime.Value, error) {
+	value, ok := r.vm.GetGlobal(name)
+	if !ok {
+		return nil, fmt.Errorf("undefined global: %s", name)
+	}
+
+	switch value.(type) {
+	case *runtime.Closure, *runtime.NativeFunction:
+		return r.vm.CallDetached(value, nil)
+	default:
+		return nil, fmt.Errorf("global is not callable: %s", name)
+	}
+}
+
 func (r *Runtime) RunReplLine(line string) (runtime.Value, error) {
 	// If the line is a pure expression, wrap as return to capture value
 	wrapped := line
