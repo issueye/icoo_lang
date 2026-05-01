@@ -186,6 +186,19 @@ func parseInitArgs(args []string) (initOptions, error) {
 }
 
 func runCheckPath(path string) error {
+	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
+		rt := api.NewRuntime()
+		errs := rt.CheckBundleFile(path)
+		if len(errs) > 0 {
+			for _, checkErr := range errs {
+				fmt.Fprintln(os.Stderr, checkErr)
+			}
+			return errors.New("check failed")
+		}
+		fmt.Printf("ok: %s\n", path)
+		return nil
+	}
+
 	resolved, err := resolveRunTarget(path)
 	if err != nil {
 		return err
@@ -206,6 +219,12 @@ func runCheckPath(path string) error {
 }
 
 func runProjectPath(path string) error {
+	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
+		rt := api.NewRuntime()
+		_, err := rt.RunBundleFile(path)
+		return err
+	}
+
 	resolved, err := resolveRunTarget(path)
 	if err != nil {
 		return err

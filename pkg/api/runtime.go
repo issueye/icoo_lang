@@ -18,6 +18,7 @@ import (
 type Runtime struct {
 	vm               *vm.VM
 	modules          map[string]*runtime.Module
+	bundledSources   map[string]string
 	projectRoot      string
 	projectRootAlias string
 }
@@ -25,8 +26,9 @@ type Runtime struct {
 func NewRuntime() *Runtime {
 	machine := vm.New()
 	rt := &Runtime{
-		vm:      machine,
-		modules: make(map[string]*runtime.Module),
+		vm:             machine,
+		modules:        make(map[string]*runtime.Module),
+		bundledSources: make(map[string]string),
 	}
 	machine.SetModuleLoader(rt.loadModule)
 	stdlib.RegisterBuiltins(machine)
@@ -180,16 +182,20 @@ func (r *Runtime) loadModule(importerPath, spec string) (*runtime.Module, error)
 		return mod, nil
 	}
 
-	src, err := os.ReadFile(resolved)
-	if err != nil {
-		return nil, fmt.Errorf("read module: %w", err)
+	src, ok := r.bundledSources[filepath.Clean(resolved)]
+	if !ok {
+		data, err := os.ReadFile(resolved)
+		if err != nil {
+			return nil, fmt.Errorf("read module: %w", err)
+		}
+		src = string(data)
 	}
 
 	childVM := vm.New()
 	childVM.SetModuleLoader(r.loadModule)
 	stdlib.RegisterBuiltins(childVM)
 
-	tokens := lexer.LexAll(string(src))
+	tokens := lexer.LexAll(src)
 	p := parser.New(tokens)
 	program := p.ParseProgram()
 	if len(p.Errors()) > 0 {

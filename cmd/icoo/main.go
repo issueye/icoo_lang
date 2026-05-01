@@ -11,12 +11,46 @@ import (
 )
 
 func main() {
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "--icoo-cli" {
+		os.Args = append([]string{os.Args[0]}, args[1:]...)
+	} else {
+		ran, err := runEmbeddedBundleIfPresent()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if ran {
+			return
+		}
+	}
+
 	if len(os.Args) < 2 {
 		runRepl()
 		return
 	}
 
 	switch os.Args[1] {
+	case "build":
+		if err := runBuild(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	case "extract":
+		if err := runExtract(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	case "inspect":
+		if err := runInspect(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	case "bundle":
+		if err := runBundle(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	case "check":
 		if err := runCheck(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -65,6 +99,10 @@ func printUsage() {
 	fmt.Println("  icoo repl                                              start REPL")
 	fmt.Println("  icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]")
 	fmt.Println("                                                         initialize project")
+	fmt.Println("  icoo bundle <file|dir> [output]                        bundle source into one .icb file")
+	fmt.Println("  icoo build <file|dir> [output] [--metadata file]       build a standalone executable with embedded bundle")
+	fmt.Println("  icoo extract <bundle|executable> [output]              extract embedded bundle to an .icb file")
+	fmt.Println("  icoo inspect <bundle|executable>                       inspect bundled modules and entry metadata")
 	fmt.Println("  icoo check <file|dir>                                  check source file or project")
 	fmt.Println("  icoo run <file|dir>                                    run source file or project")
 }
