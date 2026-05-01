@@ -165,7 +165,7 @@ func (c *Compiler) compileInterfaceDecl(d *ast.InterfaceDecl) {
 }
 
 func (c *Compiler) compileClassDecl(d *ast.ClassDecl) {
-	constructorName := d.Name
+	hasSuper := d.Super != nil
 
 	var initMethod *ast.ClassMethod
 	for i := range d.Methods {
@@ -175,96 +175,35 @@ func (c *Compiler) compileClassDecl(d *ast.ClassDecl) {
 		}
 	}
 
-	child := newFuncCompiler(c.current, constructorName)
-	if initMethod != nil {
-		child.proto.Arity = len(initMethod.Params)
+	buildClassIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "__buildClass"})
+	c.emit(bytecode.OpGetGlobal)
+	c.emitShort(buildClassIdx)
+
+	c.emitConstant(runtime.StringValue{Value: d.Name})
+	if d.Super != nil {
+		c.compileExpr(d.Super)
+	} else {
+		c.emitNull()
 	}
 
-	prev := c.current
-	c.current = child
-
 	if initMethod != nil {
-		for _, param := range initMethod.Params {
-			c.addLocal(param.Name, false)
-		}
-	}
-
-	c.emit(bytecode.OpObject)
-	c.emitShort(0)
-	thisSlot := c.addLocal("this", false)
-
-	if initMethod != nil && initMethod.Body != nil {
-		c.compileBlockStmt(initMethod.Body, false)
+		c.compileClassMethod(initMethod, hasSuper)
+	} else {
+		c.emitNull()
 	}
 
 	for _, method := range d.Methods {
 		if method.Name == "init" {
 			continue
 		}
-
-		methodChild := newFuncCompiler(c.current, method.Name)
-		methodChild.proto.Arity = len(method.Params)
-
-		prev2 := c.current
-		c.current = methodChild
-
-		for _, param := range method.Params {
-			c.addLocal(param.Name, false)
-		}
-		if method.Body != nil {
-			c.compileBlockStmt(method.Body, false)
-		}
-		c.emitNull()
-		c.emit(bytecode.OpReturn)
-		methodChild.proto.LocalCount = len(methodChild.locals)
-
-		c.current = prev2
-
-		// Push method closure first
-		if len(methodChild.upvalues) > 0 {
-			closureValue := &runtime.Closure{Proto: methodChild.proto}
-			constIdx := c.current.chunk.AddConstant(closureValue)
-			c.emit(bytecode.OpClosure)
-			c.emitShort(constIdx)
-			for _, uv := range methodChild.upvalues {
-				if uv.IsLocal {
-					c.emitByte(1)
-				} else {
-					c.emitByte(0)
-				}
-				c.emitByte(byte(uv.Index))
-			}
-		} else {
-			protoValue := &runtime.Closure{Proto: methodChild.proto}
-			constIdx := c.current.chunk.AddConstant(protoValue)
-			c.emit(bytecode.OpClosure)
-			c.emitShort(constIdx)
-		}
-
-		// Push this (target for property assignment) AFTER closure
-		c.emit(bytecode.OpGetLocal)
-		c.emitShort(uint16(thisSlot))
-
-		methodNameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: method.Name})
-		c.emit(bytecode.OpSetProperty)
-		c.emitShort(methodNameIdx)
-		c.emit(bytecode.OpPop)
+		c.emitConstant(runtime.StringValue{Value: method.Name})
+		c.compileClassMethod(&method, hasSuper)
 	}
+	c.emit(bytecode.OpObject)
+	c.emitShort(uint16(len(d.Methods) - boolToInt(initMethod != nil)))
 
-	c.emit(bytecode.OpGetLocal)
-	c.emitShort(uint16(thisSlot))
-	c.emit(bytecode.OpReturn)
-	child.proto.LocalCount = len(child.locals)
-	c.current = prev
-
-	if len(child.upvalues) > 0 {
-		c.compileClosureWiring(child)
-	} else {
-		protoValue := &runtime.Closure{Proto: child.proto}
-		constIdx := c.current.chunk.AddConstant(protoValue)
-		c.emit(bytecode.OpClosure)
-		c.emitShort(constIdx)
-	}
+	c.emit(bytecode.OpCall)
+	c.emitByte(4)
 
 	if c.current.scopeDepth > 0 {
 		c.addLocal(d.Name, true)
@@ -274,4 +213,44 @@ func (c *Compiler) compileClassDecl(d *ast.ClassDecl) {
 	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: d.Name})
 	c.emit(bytecode.OpDefineGlobal)
 	c.emitShort(nameIdx)
+}
+
+func (c *Compiler) compileClassMethod(method *ast.ClassMethod, hasSuper bool) {
+	methodChild := newFuncCompiler(c.current, method.Name)
+	methodChild.proto.Arity = len(method.Params)
+
+	prev := c.current
+	c.current = methodChild
+
+	c.addLocal("this", false)
+	if hasSuper {
+		c.addLocal("super", true)
+	}
+	for _, param := range method.Params {
+		c.addLocal(param.Name, false)
+	}
+	if method.Body != nil {
+		c.compileBlockStmt(method.Body, false)
+	}
+	c.emitNull()
+	c.emit(bytecode.OpReturn)
+	methodChild.proto.LocalCount = len(methodChild.locals)
+	c.current = prev
+
+	if len(methodChild.upvalues) > 0 {
+		c.compileClosureWiring(methodChild)
+		return
+	}
+
+	protoValue := &runtime.Closure{Proto: methodChild.proto}
+	constIdx := c.current.chunk.AddConstant(protoValue)
+	c.emit(bytecode.OpClosure)
+	c.emitShort(constIdx)
+}
+
+func boolToInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }

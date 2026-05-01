@@ -1,0 +1,23 @@
+import std.io as io
+import std.json as json
+import std.yaml as yaml
+import "./lib/math_helpers.ic" as math
+
+let profile = {
+  name: "icoo",
+  version: 1,
+  tags: ["lang", "examples"]
+}
+
+let jsonText = json.encode(profile)
+let jsonValue = json.decode(jsonText)
+let yamlText = yaml.encode(profile)
+let yamlValue = yaml.decode(yamlText)
+
+io.println("== modules and formats ==")
+io.println("math version:", math.version)
+io.println("math add:", math.add(4, 5))
+io.println("json text:", jsonText)
+io.println("json name:", jsonValue.name)
+io.println("yaml text:", yamlText)
+io.println("yaml version:", yamlValue.version)

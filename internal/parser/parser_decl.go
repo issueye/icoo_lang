@@ -147,6 +147,10 @@ func moduleAliasFromPath(path string) string {
 func (p *Parser) parseClassDecl() ast.Decl {
 	startTok := p.expect(token.Class, "expected 'class'")
 	nameTok := p.expect(token.Ident, "expected class name")
+	var super ast.Expr
+	if p.match(token.Lt) {
+		super = p.parseExpression(PrecLowest)
+	}
 	p.expect(token.LBrace, "expected '{' after class name")
 	methods := make([]ast.ClassMethod, 0, 4)
 	for !p.check(token.RBrace) && !p.atEnd() {
@@ -166,6 +170,7 @@ func (p *Parser) parseClassDecl() ast.Decl {
 	endTok := p.expect(token.RBrace, "expected '}' after class body")
 	return &ast.ClassDecl{
 		Name:    nameTok.Lexeme,
+		Super:   super,
 		Methods: methods,
 		Span_:   token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
 	}

@@ -20,6 +20,8 @@ func RegisterBuiltins(machine *vm.VM) {
 	machine.DefineBuiltin("__select", &runtime.NativeFunction{Name: "__select", Arity: 1, Fn: builtinSelect})
 	machine.DefineBuiltin("satisfies", &runtime.NativeFunction{Name: "satisfies", Arity: 2, Fn: builtinSatisfies})
 	machine.DefineBuiltin("_tryCheck", &runtime.NativeFunction{Name: "_tryCheck", Arity: 1, Fn: builtinTryCheck})
+	machine.DefineBuiltin("__buildClass", &runtime.NativeFunction{Name: "__buildClass", Arity: 4, Fn: builtinBuildClass})
+	machine.DefineBuiltin("__superGet", &runtime.NativeFunction{Name: "__superGet", Arity: 3, Fn: builtinSuperGet})
 }
 
 func builtinPrint(args []runtime.Value) (runtime.Value, error) {
@@ -236,4 +238,86 @@ func builtinSatisfies(args []runtime.Value) (runtime.Value, error) {
 func builtinTryCheck(args []runtime.Value) (runtime.Value, error) {
 	_, isError := args[0].(*runtime.ErrorValue)
 	return runtime.BoolValue{Value: isError}, nil
+}
+
+func builtinBuildClass(args []runtime.Value) (runtime.Value, error) {
+	nameValue, ok := args[0].(runtime.StringValue)
+	if !ok {
+		return nil, fmt.Errorf("__buildClass: name must be string")
+	}
+
+	var super *runtime.ClassValue
+	switch value := args[1].(type) {
+	case runtime.NullValue:
+	case *runtime.ClassValue:
+		super = value
+	default:
+		return nil, fmt.Errorf("__buildClass: super must be class or null")
+	}
+
+	var init *runtime.Closure
+	switch value := args[2].(type) {
+	case runtime.NullValue:
+	case *runtime.Closure:
+		init = value
+	default:
+		return nil, fmt.Errorf("__buildClass: init must be function or null")
+	}
+
+	methodObj, ok := args[3].(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("__buildClass: methods must be object")
+	}
+	methods := make(map[string]*runtime.Closure, len(methodObj.Fields))
+	for name, value := range methodObj.Fields {
+		method, ok := value.(*runtime.Closure)
+		if !ok {
+			return nil, fmt.Errorf("__buildClass: method %s must be function", name)
+		}
+		methods[name] = method
+	}
+
+	return &runtime.ClassValue{
+		Name:    nameValue.Value,
+		Super:   super,
+		Init:    init,
+		Methods: methods,
+	}, nil
+}
+
+func builtinSuperGet(args []runtime.Value) (runtime.Value, error) {
+	super, ok := args[0].(*runtime.ClassValue)
+	if !ok || super == nil {
+		return nil, fmt.Errorf("__superGet: first argument must be superclass")
+	}
+	receiver, ok := args[1].(*runtime.ObjectValue)
+	if !ok || receiver == nil {
+		return nil, fmt.Errorf("__superGet: second argument must be object")
+	}
+	nameValue, ok := args[2].(runtime.StringValue)
+	if !ok {
+		return nil, fmt.Errorf("__superGet: third argument must be string")
+	}
+
+	var (
+		method *runtime.Closure
+		owner  *runtime.ClassValue
+		found  bool
+	)
+	if nameValue.Value == "init" {
+		method, owner, found = super.FindInitializer()
+	} else {
+		method, owner, found = super.FindMethod(nameValue.Value)
+	}
+	if !found {
+		return nil, fmt.Errorf("undefined super method: %s", nameValue.Value)
+	}
+
+	return &runtime.BoundMethod{
+		Name:     nameValue.Value,
+		Receiver: receiver,
+		Method:   method,
+		Super:    owner.Super,
+		Init:     nameValue.Value == "init",
+	}, nil
 }

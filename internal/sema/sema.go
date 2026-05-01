@@ -35,7 +35,7 @@ func AnalyzeWithGlobals(program *ast.Program, globalNames []string) []diag.Diagn
 }
 
 func (a *Analyzer) defineBuiltins() {
-	builtins := []string{"print", "println", "len", "typeOf", "chan", "satisfies", "panic", "error", "_tryCheck"}
+	builtins := []string{"print", "println", "len", "typeOf", "chan", "satisfies", "panic", "error", "_tryCheck", "__buildClass", "__superGet"}
 	for _, name := range builtins {
 		a.scope.Define(Symbol{Name: name})
 	}
@@ -122,6 +122,9 @@ func (a *Analyzer) visitClassDecl(d *ast.ClassDecl) {
 		a.report(d.Span(), "duplicate declaration: "+d.Name)
 		return
 	}
+	if d.Super != nil {
+		a.visitExpr(d.Super)
+	}
 	hasInit := false
 	for _, method := range d.Methods {
 		if method.Name == "init" {
@@ -130,7 +133,7 @@ func (a *Analyzer) visitClassDecl(d *ast.ClassDecl) {
 			}
 			hasInit = true
 		}
-		a.visitFnInScope(method.Params, method.Body)
+		a.visitClassMethod(method.Params, method.Body, d.Super != nil)
 	}
 }
 
@@ -144,6 +147,30 @@ func (a *Analyzer) visitFnInScope(params []ast.Param, body *ast.BlockStmt) {
 	}()
 
 	a.scope.Define(Symbol{Name: "this"})
+
+	for _, param := range params {
+		if !a.scope.Define(Symbol{Name: param.Name}) {
+			a.report(param.Span(), "duplicate parameter: "+param.Name)
+		}
+	}
+	if body != nil {
+		a.visitBlockStmt(body)
+	}
+}
+
+func (a *Analyzer) visitClassMethod(params []ast.Param, body *ast.BlockStmt, hasSuper bool) {
+	prevScope := a.scope
+	a.scope = NewScope(prevScope)
+	a.inFunction++
+	defer func() {
+		a.inFunction--
+		a.scope = prevScope
+	}()
+
+	a.scope.Define(Symbol{Name: "this"})
+	if hasSuper {
+		a.scope.Define(Symbol{Name: "super", IsConst: true})
+	}
 
 	for _, param := range params {
 		if !a.scope.Define(Symbol{Name: param.Name}) {
@@ -383,6 +410,10 @@ func (a *Analyzer) visitExpr(expr ast.Expr) {
 	case *ast.ThisExpr:
 		if _, ok := a.scope.Resolve("this"); !ok {
 			a.report(e.Span(), "this used outside class method")
+		}
+	case *ast.SuperExpr:
+		if _, ok := a.scope.Resolve("super"); !ok {
+			a.report(e.Span(), "super used outside subclass method")
 		}
 	case *ast.TryExpr:
 		a.visitExpr(e.Expr)

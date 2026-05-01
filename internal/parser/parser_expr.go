@@ -105,7 +105,7 @@ func (p *Parser) startsExpression(tt token.Type) bool {
 		token.True, token.False, token.Null,
 		token.Bang, token.Minus,
 		token.LParen, token.LBracket, token.LBrace,
-		token.Fn, token.This:
+		token.Fn, token.This, token.Super:
 		return true
 	default:
 		return false
@@ -154,6 +154,9 @@ func (p *Parser) parsePrefix() ast.Expr {
 	case token.This:
 		tok := p.advance()
 		return &ast.ThisExpr{Span_: tok.Span}
+	case token.Super:
+		tok := p.advance()
+		return &ast.SuperExpr{Span_: tok.Span}
 	default:
 		p.errorAtCurrent("expected expression")
 		return nil

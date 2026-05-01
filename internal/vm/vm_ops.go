@@ -381,6 +381,18 @@ func (vm *VM) execGetProperty(name string) error {
 			vm.Push(field)
 			return nil
 		}
+		if value.Class != nil {
+			if method, owner, found := value.Class.FindMethod(name); found {
+				vm.Push(&runtime.BoundMethod{
+					Name:     name,
+					Receiver: value,
+					Method:   method,
+					Super:    owner.Super,
+					Init:     name == "init",
+				})
+				return nil
+			}
+		}
 		if name == "iter" {
 			vm.Push(&runtime.NativeFunction{
 				Name:  "object.iter",

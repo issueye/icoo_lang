@@ -70,6 +70,7 @@ const (
 	TypeKw
 	Class
 	This
+	Super
 	Null
 	True
 	False
@@ -103,6 +104,7 @@ var Keywords = map[string]Type{
 	"type":      TypeKw,
 	"class":     Class,
 	"this":      This,
+	"super":     Super,
 	"null":      Null,
 	"true":      True,
 	"false":     False,
@@ -259,6 +261,8 @@ func (t Type) String() string {
 		return "Class"
 	case This:
 		return "This"
+	case Super:
+		return "Super"
 	case Interface:
 		return "Interface"
 	case TypeKw:

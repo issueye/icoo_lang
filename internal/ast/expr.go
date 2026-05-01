@@ -206,6 +206,16 @@ func (e *ThisExpr) Span() token.Span {
 	return e.Span_
 }
 
+type SuperExpr struct {
+	Span_ token.Span
+}
+
+func (*SuperExpr) node() {}
+func (*SuperExpr) expr() {}
+func (e *SuperExpr) Span() token.Span {
+	return e.Span_
+}
+
 type TryExpr struct {
 	Expr  Expr
 	Span_ token.Span

@@ -1,0 +1,20 @@
+import std.io as io
+
+let nothing = null
+let enabled = true
+let count = 42
+let ratio = 3.5
+let name = "icoo"
+let tags = ["lang", "vm", "examples"]
+let user = {name: "Ada", active: true, score: 99}
+
+io.println("== data types ==")
+io.println("nothing:", nothing)
+io.println("enabled:", enabled)
+io.println("count:", count)
+io.println("ratio:", ratio)
+io.println("name:", name)
+io.println("name type:", typeOf(name))
+io.println("second tag:", tags[1])
+io.println("user name:", user.name)
+io.println("user score type:", typeOf(user.score))

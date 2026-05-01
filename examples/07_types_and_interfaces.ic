@@ -1,0 +1,22 @@
+import std.io as io
+
+type UserID = int
+
+interface Greeter {
+  greet(name string) string
+}
+
+let greeter = {
+  greet: fn(name) {
+    return "hello " + name
+  }
+}
+
+let id = 7
+let ok = satisfies(greeter, Greeter)
+
+io.println("== types and interfaces ==")
+io.println("id:", id)
+io.println("id type:", typeOf(id))
+io.println("greeter ok:", ok)
+io.println("greet:", greeter.greet("icoo"))

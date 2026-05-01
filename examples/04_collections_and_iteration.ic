@@ -1,0 +1,31 @@
+import std.io as io
+
+let nums = [3, 5, 8]
+let total = 0
+let indexTotal = 0
+
+for idx, value in nums {
+  total = total + value
+  indexTotal = indexTotal + idx
+}
+
+let text = ""
+for ch in "icoo" {
+  text = text + ch
+}
+
+let obj = {name: "Ada", role: "engineer"}
+let pairs = ""
+for key, value in obj {
+  pairs = pairs + key + "=" + value + ";"
+}
+
+let iter = nums.iter()
+let first = iter.next()
+
+io.println("== collections and iteration ==")
+io.println("total:", total)
+io.println("index total:", indexTotal)
+io.println("text:", text)
+io.println("pairs:", pairs)
+io.println("first iterator value:", first.value)

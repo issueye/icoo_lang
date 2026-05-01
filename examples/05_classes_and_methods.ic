@@ -1,0 +1,30 @@
+import std.io as io
+
+class Counter {
+  init(name) {
+    this.name = name
+    this.value = 0
+  }
+
+  inc() {
+    this.value = this.value + 1
+    return this.value
+  }
+
+  reset() {
+    this.value = 0
+  }
+
+  label() {
+    return this.name
+  }
+}
+
+let counter = Counter("jobs")
+counter.inc()
+counter.inc()
+io.println("== classes and methods ==")
+io.println("label:", counter.label())
+io.println("value after inc:", counter.value)
+counter.reset()
+io.println("value after reset:", counter.value)

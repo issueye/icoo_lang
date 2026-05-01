@@ -74,7 +74,48 @@ func cloneDetachedValue(value runtime.Value) runtime.Value {
 		for key, fieldValue := range v.Fields {
 			fields[key] = cloneDetachedValue(fieldValue)
 		}
-		return &runtime.ObjectValue{Fields: fields}
+		var class *runtime.ClassValue
+		if v.Class != nil {
+			class = cloneDetachedValue(v.Class).(*runtime.ClassValue)
+		}
+		return &runtime.ObjectValue{Fields: fields, Class: class}
+	case *runtime.ClassValue:
+		methods := make(map[string]*runtime.Closure, len(v.Methods))
+		for key, method := range v.Methods {
+			if method == nil {
+				continue
+			}
+			methods[key] = cloneDetachedValue(method).(*runtime.Closure)
+		}
+		var super *runtime.ClassValue
+		if v.Super != nil {
+			super = cloneDetachedValue(v.Super).(*runtime.ClassValue)
+		}
+		var init *runtime.Closure
+		if v.Init != nil {
+			init = cloneDetachedValue(v.Init).(*runtime.Closure)
+		}
+		return &runtime.ClassValue{Name: v.Name, Super: super, Init: init, Methods: methods}
+	case *runtime.BoundMethod:
+		var receiver *runtime.ObjectValue
+		if v.Receiver != nil {
+			receiver = cloneDetachedValue(v.Receiver).(*runtime.ObjectValue)
+		}
+		var method *runtime.Closure
+		if v.Method != nil {
+			method = cloneDetachedValue(v.Method).(*runtime.Closure)
+		}
+		var super *runtime.ClassValue
+		if v.Super != nil {
+			super = cloneDetachedValue(v.Super).(*runtime.ClassValue)
+		}
+		return &runtime.BoundMethod{
+			Name:     v.Name,
+			Receiver: receiver,
+			Method:   method,
+			Super:    super,
+			Init:     v.Init,
+		}
 	case *runtime.ErrorValue:
 		cloned := &runtime.ErrorValue{
 			Message: v.Message,

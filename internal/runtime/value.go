@@ -23,6 +23,8 @@ const (
 	ErrorKind
 	IteratorKind
 	InterfaceKind
+	ClassKind
+	BoundMethodKind
 )
 
 type Value interface {
@@ -120,6 +122,7 @@ func (v *InterfaceValue) String() string  { return "<interface " + v.Name + ">" 
 
 type ObjectValue struct {
 	Fields map[string]Value
+	Class  *ClassValue
 }
 
 func (v *ObjectValue) Kind() ValueKind { return ObjectKind }
@@ -129,6 +132,59 @@ func (v *ObjectValue) String() string {
 		parts = append(parts, fmt.Sprintf("%s: %s", key, value.String()))
 	}
 	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+type ClassValue struct {
+	Name    string
+	Super   *ClassValue
+	Init    *Closure
+	Methods map[string]*Closure
+}
+
+func (v *ClassValue) Kind() ValueKind { return ClassKind }
+func (v *ClassValue) String() string {
+	name := "anonymous"
+	if v != nil && v.Name != "" {
+		name = v.Name
+	}
+	return "<class " + name + ">"
+}
+
+func (v *ClassValue) FindMethod(name string) (*Closure, *ClassValue, bool) {
+	for cls := v; cls != nil; cls = cls.Super {
+		if cls.Methods != nil {
+			if method, ok := cls.Methods[name]; ok {
+				return method, cls, true
+			}
+		}
+	}
+	return nil, nil, false
+}
+
+func (v *ClassValue) FindInitializer() (*Closure, *ClassValue, bool) {
+	for cls := v; cls != nil; cls = cls.Super {
+		if cls.Init != nil {
+			return cls.Init, cls, true
+		}
+	}
+	return nil, nil, false
+}
+
+type BoundMethod struct {
+	Name     string
+	Receiver *ObjectValue
+	Method   *Closure
+	Super    *ClassValue
+	Init     bool
+}
+
+func (v *BoundMethod) Kind() ValueKind { return BoundMethodKind }
+func (v *BoundMethod) String() string {
+	name := "anonymous"
+	if v != nil && v.Name != "" {
+		name = v.Name
+	}
+	return "<bound fn " + name + ">"
 }
 
 type NativeFunc func(args []Value) (Value, error)

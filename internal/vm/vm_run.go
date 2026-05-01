@@ -279,6 +279,11 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 		case bytecode.OpReturn:
 			result := vm.Pop()
 			frameBase := frame.Base
+			if frameBase >= 0 && frameBase < len(vm.stack) {
+				if bound, ok := vm.stack[frameBase].(*runtime.BoundMethod); ok && bound.Init {
+					result = bound.Receiver
+				}
+			}
 			vm.closeUpvalues(frameBase)
 			vm.frames = vm.frames[:len(vm.frames)-1]
 			for len(vm.handlers) > 0 && vm.handlers[len(vm.handlers)-1].FrameIndex >= len(vm.frames) {

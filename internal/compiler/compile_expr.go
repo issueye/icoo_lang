@@ -72,10 +72,14 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 			c.emit(bytecode.OpCall)
 			c.emitByte(byte(len(e.Args)))
 		case *ast.MemberExpr:
-			c.compileExpr(e.Object)
-			nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: e.Name})
-			c.emit(bytecode.OpGetProperty)
-			c.emitShort(nameIdx)
+			if _, ok := e.Object.(*ast.SuperExpr); ok {
+				c.compileSuperMemberExpr(e)
+			} else {
+				c.compileExpr(e.Object)
+				nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: e.Name})
+				c.emit(bytecode.OpGetProperty)
+				c.emitShort(nameIdx)
+			}
 		case *ast.IndexExpr:
 			c.compileExpr(e.Object)
 			c.compileExpr(e.Index)
@@ -107,6 +111,18 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 				c.errorf("this used outside class context")
 				c.emitNull()
 			}
+		case *ast.SuperExpr:
+			ref, _ := c.resolve("super")
+			if ref.Kind == VarLocal {
+				c.emit(bytecode.OpGetLocal)
+				c.emitShort(uint16(ref.Index))
+			} else if ref.Kind == VarUpvalue {
+				c.emit(bytecode.OpGetUpvalue)
+				c.emitShort(uint16(ref.Index))
+			} else {
+				c.errorf("super used outside subclass context")
+				c.emitNull()
+			}
 		case *ast.TryExpr:
 			c.compileTryExpr(e)
 		default:
@@ -114,6 +130,42 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 			c.emitNull()
 		}
 	})
+}
+
+func (c *Compiler) compileSuperMemberExpr(e *ast.MemberExpr) {
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: "__superGet"})
+	c.emit(bytecode.OpGetGlobal)
+	c.emitShort(nameIdx)
+
+	superRef, _ := c.resolve("super")
+	if superRef.Kind == VarLocal {
+		c.emit(bytecode.OpGetLocal)
+		c.emitShort(uint16(superRef.Index))
+	} else if superRef.Kind == VarUpvalue {
+		c.emit(bytecode.OpGetUpvalue)
+		c.emitShort(uint16(superRef.Index))
+	} else {
+		c.errorf("super used outside subclass context")
+		c.emitNull()
+		return
+	}
+
+	thisRef, _ := c.resolve("this")
+	if thisRef.Kind == VarLocal {
+		c.emit(bytecode.OpGetLocal)
+		c.emitShort(uint16(thisRef.Index))
+	} else if thisRef.Kind == VarUpvalue {
+		c.emit(bytecode.OpGetUpvalue)
+		c.emitShort(uint16(thisRef.Index))
+	} else {
+		c.errorf("this used outside class context")
+		c.emitNull()
+		return
+	}
+
+	c.emitConstant(runtime.StringValue{Value: e.Name})
+	c.emit(bytecode.OpCall)
+	c.emitByte(3)
 }
 
 func (c *Compiler) compileTernaryExpr(e *ast.TernaryExpr) {

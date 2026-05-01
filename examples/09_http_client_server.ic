@@ -1,0 +1,32 @@
+import std.io as io
+import std.http.client as client
+import std.http.server as server
+
+let app = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    if req.path == "/json" {
+      return {
+        json: {
+          method: req.method,
+          name: req.query.name
+        }
+      }
+    }
+
+    return {
+      status: 201,
+      body: req.method + ":" + req.path
+    }
+  }
+})
+
+let textResp = client.get(app.url + "/hello")
+let jsonResp = client.getJSON(app.url + "/json?name=icoo")
+app.close()
+
+io.println("== http client and server ==")
+io.println("text status:", textResp.status)
+io.println("text body:", textResp.body)
+io.println("json method:", jsonResp.json.method)
+io.println("json name:", jsonResp.json.name)

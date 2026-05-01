@@ -80,6 +80,7 @@ func (m ClassMethod) Span() token.Span {
 
 type ClassDecl struct {
 	Name    string
+	Super   Expr
 	Methods []ClassMethod
 	Span_   token.Span
 }

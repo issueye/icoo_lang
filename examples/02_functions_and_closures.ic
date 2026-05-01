@@ -1,0 +1,32 @@
+import std.io as io
+
+fn add(a, b) {
+  return a + b
+}
+
+fn makeAdder(base) {
+  return fn(value) {
+    return base + value
+  }
+}
+
+fn repeat(text, times) {
+  let out = ""
+  let i = 0
+  for i < times {
+    out = out + text
+    i = i + 1
+  }
+  return out
+}
+
+let add10 = makeAdder(10)
+let greet = fn(name) {
+  return "hello " + name
+}
+
+io.println("== functions and closures ==")
+io.println("add(2, 3):", add(2, 3))
+io.println("add10(5):", add10(5))
+io.println("repeat:", repeat("ha", 3))
+io.println("anonymous fn:", greet("icoo"))

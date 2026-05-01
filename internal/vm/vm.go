@@ -100,6 +100,15 @@ func (vm *VM) goExecutor(task *concurrency.GoTask) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "goroutine: %v\n", err)
 		}
+	case *runtime.BoundMethod:
+		sub := vm.cloneForInvocation()
+		if err := sub.beginMethodCall(callee.Name, callee.Method, callee.Receiver, callee.Super, task.Args); err != nil {
+			fmt.Fprintf(os.Stderr, "goroutine: %v\n", err)
+			return
+		}
+		if _, err := sub.runLoop(); err != nil {
+			fmt.Fprintf(os.Stderr, "goroutine: %v\n", err)
+		}
 	}
 }
 

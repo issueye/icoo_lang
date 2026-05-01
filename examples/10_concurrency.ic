@@ -1,0 +1,39 @@
+import std.io as io
+
+let jobs = chan(2)
+let done = chan(1)
+let ready = chan(1)
+
+go fn() {
+  let total = 0
+  let i = 0
+
+  for i < 2 {
+    let value = jobs.recv()
+    total = total + value
+    i = i + 1
+  }
+
+  done.send(total)
+}()
+
+jobs.send(20)
+jobs.send(22)
+
+let total = done.recv()
+
+ready.send("select-ready")
+
+let selected = ""
+select {
+  recv ready as value {
+    selected = value
+  }
+  else {
+    selected = "select-else"
+  }
+}
+
+io.println("== concurrency ==")
+io.println("worker total:", total)
+io.println("select result:", selected)

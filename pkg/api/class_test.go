@@ -237,3 +237,112 @@ class Foo {
 		t.Fatal("expected duplicate class error")
 	}
 }
+
+func TestClassInheritanceInheritsParentMethods(t *testing.T) {
+	src := `
+class Animal {
+  init(name) {
+    this.name = name
+  }
+  speak() {
+    return "Animal:" + this.name
+  }
+}
+
+class Dog < Animal {
+  wag() {
+    return this.name
+  }
+}
+
+let dog = Dog("Milo")
+if dog.speak() != "Animal:Milo" {
+  panic("expected inherited speak")
+}
+if dog.wag() != "Milo" {
+  panic("expected child method")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class inheritance failed: %v", err)
+	}
+}
+
+func TestClassSuperMethodAndInit(t *testing.T) {
+	src := `
+class Animal {
+  init(name) {
+    this.name = name
+  }
+  speak() {
+    return "Animal:" + this.name
+  }
+}
+
+class Dog < Animal {
+  init(name, breed) {
+    super.init(name)
+    this.breed = breed
+  }
+  speak() {
+    return super.speak() + ":" + this.breed
+  }
+}
+
+let dog = Dog("Milo", "corgi")
+if dog.name != "Milo" {
+  panic("expected super init to set name")
+}
+if dog.speak() != "Animal:Milo:corgi" {
+  panic("expected super speak call")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class super failed: %v", err)
+	}
+}
+
+func TestClassSuperInNestedClosure(t *testing.T) {
+	src := `
+class Base {
+  greet() {
+    return "base"
+  }
+}
+
+class Child < Base {
+  greet() {
+    let callSuper = fn() {
+      return super.greet()
+    }
+    return callSuper() + "-child"
+  }
+}
+
+let value = Child().greet()
+if value != "base-child" {
+  panic("expected nested super call")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("nested super failed: %v", err)
+	}
+}
+
+func TestClassSuperRequiresSubclass(t *testing.T) {
+	src := `
+class Person {
+  greet() {
+    return super.greet()
+  }
+}
+`
+	rt := NewRuntime()
+	errs := rt.CheckSource(src)
+	if len(errs) == 0 {
+		t.Fatal("expected super usage error")
+	}
+}

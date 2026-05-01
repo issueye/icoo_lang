@@ -88,6 +88,10 @@ func KindName(v Value) string {
 		return "iterator"
 	case InterfaceKind:
 		return "interface"
+	case ClassKind:
+		return "class"
+	case BoundMethodKind:
+		return "function"
 	default:
 		return "unknown"
 	}
