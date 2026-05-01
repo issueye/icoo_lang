@@ -1,0 +1,60 @@
+import std.io as io
+import std.http.client as client
+import std.http.server as server
+import std.fs as fs
+import std.os as os
+import std.uuid as uuid
+
+let app = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    if req.path == "/submit" {
+      return {
+        status: 201,
+        json: {
+          ok: true,
+          method: req.method,
+          name: req.body
+        }
+      }
+    }
+
+    if req.path == "/submit-json" {
+      return {
+        json: {
+          ok: true,
+          user: req.body
+        }
+      }
+    }
+
+    return {
+      body: "downloaded-from-server"
+    }
+  }
+})
+
+let postResp = client.post(app.url + "/submit", "icoo")
+let jsonResp = client.requestJSON({
+  url: app.url + "/submit-json",
+  method: "POST",
+  json: {
+    name: "Ada",
+    score: 9
+  }
+})
+
+let downloadPath = fs.join(os.tempDir(), "icoo-download-" + uuid.v4() + ".txt")
+let downloadResp = client.download(app.url + "/download", downloadPath)
+let downloadedText = fs.readFile(downloadPath)
+
+app.close()
+os.remove(downloadPath)
+
+io.println("== http json and download ==")
+io.println("post status:", postResp.status)
+io.println("post body:", postResp.body)
+io.println("json ok:", jsonResp.json.ok)
+io.println("json user:", jsonResp.json.user)
+io.println("download status:", downloadResp.status)
+io.println("downloaded text:", downloadedText)

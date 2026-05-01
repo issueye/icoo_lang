@@ -1,0 +1,38 @@
+import std.io as io
+
+class Animal {
+  init(name) {
+    this.name = name
+  }
+
+  describe() {
+    return "Animal(" + this.name + ")"
+  }
+
+  speak() {
+    return this.name + " makes a sound"
+  }
+}
+
+class Dog < Animal {
+  init(name, breed) {
+    super.init(name)
+    this.breed = breed
+  }
+
+  describe() {
+    return super.describe() + " breed=" + this.breed
+  }
+
+  speak() {
+    return super.speak() + " and barks"
+  }
+}
+
+let pet = Dog("Milo", "corgi")
+
+io.println("== inheritance and super ==")
+io.println("name:", pet.name)
+io.println("breed:", pet.breed)
+io.println("describe:", pet.describe())
+io.println("speak:", pet.speak())

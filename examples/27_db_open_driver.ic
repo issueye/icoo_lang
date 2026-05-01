@@ -1,0 +1,17 @@
+import std.io as io
+import std.db as db
+
+let conn = db.open("sqlite", ":memory:")
+conn.exec("create table logs (id integer primary key, level text, message text)")
+conn.exec("insert into logs (level, message) values (?, ?)", ["info", "boot ok"])
+conn.exec("insert into logs (level, message) values (?, ?)", ["warn", "cache cold"])
+
+let rows = conn.query("select level, message from logs order by id")
+let first = conn.queryOne("select level, message from logs where id = ?", [1])
+conn.close()
+
+io.println("== db open driver ==")
+io.println("row count:", len(rows))
+io.println("first level:", first.level)
+io.println("first message:", first.message)
+io.println("last level:", rows[1].level)

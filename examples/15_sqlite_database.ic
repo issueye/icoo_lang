@@ -1,0 +1,20 @@
+import std.io as io
+import std.db as db
+
+let conn = db.sqlite(":memory:")
+
+conn.exec("create table users (id integer primary key, name text, score integer)")
+conn.exec("insert into users (name, score) values (?, ?)", ["Ada", 10])
+conn.exec("insert into users (name, score) values (?, ?)", ["Linus", 12])
+
+let rows = conn.query("select name, score from users order by score desc")
+let one = conn.queryOne("select name, score from users where name = ?", ["Ada"])
+
+io.println("== sqlite database ==")
+io.println("row count:", len(rows))
+io.println("top name:", rows[0].name)
+io.println("top score:", rows[0].score)
+io.println("single name:", one.name)
+io.println("single score:", one.score)
+
+conn.close()

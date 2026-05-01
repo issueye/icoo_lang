@@ -1,0 +1,18 @@
+import std.io as io
+import std.os as os
+import std.host as host
+import std.exec as exec
+
+let command = "go"
+let args = ["env", "GOOS"]
+let result = exec.run(command, args)
+
+io.println("== system modules ==")
+io.println("cwd:", os.cwd())
+io.println("temp dir:", os.tempDir())
+io.println("arg count:", len(os.args()))
+io.println("host os:", host.goos())
+io.println("host arch:", host.arch())
+io.println("cpu count:", host.numCPU())
+io.println("exec ok:", result.ok)
+io.println("exec stdout:", result.stdout)

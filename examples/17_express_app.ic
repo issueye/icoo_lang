@@ -1,0 +1,27 @@
+import std.io as io
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+
+app.get("/hello", fn(req) {
+  return express.text(202, "hello " + req.query.name)
+})
+
+app.get("/json", fn(req) {
+  return express.json({
+    ok: true,
+    path: req.path
+  })
+})
+
+let server = app.listen(0)
+let textResp = client.get(server.url + "/hello?name=icoo")
+let jsonResp = client.getJSON(server.url + "/json")
+server.close()
+
+io.println("== express app ==")
+io.println("text status:", textResp.status)
+io.println("text body:", textResp.body)
+io.println("json ok:", jsonResp.json.ok)
+io.println("json path:", jsonResp.json.path)

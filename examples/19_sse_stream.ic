@@ -1,0 +1,29 @@
+import std.io as io
+import std.net.sse.server as sseServer
+import std.net.sse.client as sseClient
+
+let server = sseServer.listen({
+  addr: "127.0.0.1:0",
+  path: "/events",
+  handler: fn(stream, req) {
+    stream.send({
+      event: "ready",
+      data: "hello sse",
+      id: "evt-1"
+    })
+    stream.close()
+  }
+})
+
+let client = sseClient.connect({
+  url: server.url
+})
+
+let event = client.read()
+client.close()
+server.close()
+
+io.println("== sse stream ==")
+io.println("event:", event.event)
+io.println("data:", event.data)
+io.println("id:", event.id)

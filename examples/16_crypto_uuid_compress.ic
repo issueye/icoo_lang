@@ -1,0 +1,22 @@
+import std.io as io
+import std.crypto as crypto
+import std.uuid as uuid
+import std.compress as compress
+
+let text = "icoo-native-libs"
+let key = "0123456789abcdef"
+let encoded = crypto.base64Encode(text)
+let decoded = crypto.base64Decode(encoded)
+let digest = crypto.sha256(text)
+let token = uuid.v4()
+let gz = compress.gzipCompress(text)
+let plain = compress.gzipDecompress(gz)
+let encrypted = crypto.aesGCMEncrypt(key, text)
+let decrypted = crypto.aesGCMDecrypt(key, encrypted.nonce, encrypted.ciphertext)
+
+io.println("== crypto uuid compress ==")
+io.println("base64 round trip:", decoded)
+io.println("sha256:", digest)
+io.println("uuid valid:", uuid.isValid(token))
+io.println("gzip round trip:", plain)
+io.println("aes round trip:", decrypted)

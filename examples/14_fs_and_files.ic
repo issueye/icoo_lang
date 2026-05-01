@@ -1,0 +1,29 @@
+import std.io as io
+import std.fs as fs
+import std.os as os
+import std.uuid as uuid
+
+let root = fs.join(os.tempDir(), "icoo-fs-" + uuid.v4())
+let copied = fs.join(root, "copied.txt")
+let renamed = fs.join(root, "renamed.txt")
+let source = fs.join(root, "note.txt")
+
+os.mkdirAll(root)
+fs.writeFile(source, "hello file system")
+fs.copyFile(source, copied)
+fs.rename(copied, renamed)
+
+let content = fs.readFile(source)
+let info = fs.stat(renamed)
+let items = fs.readDir(root)
+
+io.println("== fs and files ==")
+io.println("root exists:", fs.exists(root))
+io.println("source content:", content)
+io.println("renamed base:", fs.base(renamed))
+io.println("renamed dir:", fs.dir(renamed))
+io.println("renamed size:", info.size)
+io.println("entry count:", len(items))
+io.println("first entry is dir:", items[0].isDir)
+
+os.removeAll(root)

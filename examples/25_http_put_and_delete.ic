@@ -1,0 +1,40 @@
+import std.io as io
+import std.http.client as client
+import std.http.server as server
+
+let app = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    if req.method == "PUT" {
+      return {
+        json: {
+          ok: true,
+          method: req.method,
+          body: req.body
+        }
+      }
+    }
+
+    if req.method == "DELETE" {
+      return {
+        status: 204,
+        body: ""
+      }
+    }
+
+    return {
+      status: 405,
+      body: "method not allowed"
+    }
+  }
+})
+
+let putResp = client.put(app.url + "/resource", "updated-value")
+let deleteResp = client.delete(app.url + "/resource")
+app.close()
+
+io.println("== http put and delete ==")
+io.println("put status:", putResp.status)
+io.println("put body:", putResp.body)
+io.println("delete status:", deleteResp.status)
+io.println("delete ok:", deleteResp.ok)

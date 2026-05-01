@@ -1,0 +1,33 @@
+import std.io as io
+import std.fs as fs
+import std.os as os
+import std.uuid as uuid
+import std.json as json
+import std.yaml as yaml
+
+let root = fs.join(os.tempDir(), "icoo-config-" + uuid.v4())
+os.mkdirAll(root)
+
+let settings = {
+  app: "icoo",
+  port: 8080,
+  features: ["http", "yaml"]
+}
+
+let jsonPath = fs.join(root, "settings.json")
+let yamlPath = fs.join(root, "settings.yaml")
+
+json.saveToFile(jsonPath, settings)
+let loaded = json.fromFile(jsonPath)
+loaded.port = loaded.port + 1
+yaml.saveToFile(yamlPath, loaded)
+let yamlLoaded = yaml.fromFile(yamlPath)
+
+io.println("== config file tool ==")
+io.println("json exists:", fs.exists(jsonPath))
+io.println("yaml exists:", fs.exists(yamlPath))
+io.println("app name:", yamlLoaded.app)
+io.println("port:", yamlLoaded.port)
+io.println("feature count:", len(yamlLoaded.features))
+
+os.removeAll(root)

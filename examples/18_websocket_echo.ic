@@ -1,0 +1,25 @@
+import std.io as io
+import std.net.websocket.server as wsServer
+import std.net.websocket.client as wsClient
+
+let server = wsServer.listen({
+  addr: "127.0.0.1:0",
+  path: "/ws",
+  handler: fn(conn, req) {
+    let message = conn.read()
+    conn.write("echo:" + message + ":" + req.path)
+    conn.close()
+  }
+})
+
+let client = wsClient.connect({
+  url: server.url
+})
+
+client.write("ping")
+let reply = client.read()
+client.close()
+server.close()
+
+io.println("== websocket echo ==")
+io.println("reply:", reply)

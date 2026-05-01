@@ -1,0 +1,17 @@
+import std.io as io
+import std.crypto as crypto
+
+let text = "icoo"
+let key = "secret-key"
+let hexText = crypto.hexEncode(text)
+let plainText = crypto.hexDecode(hexText)
+let hmac256 = crypto.hmacSHA256(key, text)
+let hmac512 = crypto.hmacSHA512(key, text)
+let randomText = crypto.randomBytes(12)
+
+io.println("== crypto helpers ==")
+io.println("hex text:", hexText)
+io.println("hex plain:", plainText)
+io.println("hmac256:", hmac256)
+io.println("hmac512:", hmac512)
+io.println("random bytes:", randomText)

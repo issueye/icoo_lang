@@ -1,0 +1,58 @@
+import std.io as io
+import std.fs as fs
+import std.os as os
+import std.uuid as uuid
+import std.json as json
+import std.yaml as yaml
+import std.toml as toml
+import std.xml as xml
+
+let root = fs.join(os.tempDir(), "icoo-formats-" + uuid.v4())
+os.mkdirAll(root)
+
+let profile = {
+  name: "icoo",
+  version: 2,
+  tags: ["lang", "runtime"]
+}
+
+let xmlDoc = {
+  name: "project",
+  attrs: {
+    kind: "demo"
+  },
+  children: [
+    {
+      name: "name",
+      text: "icoo"
+    },
+    {
+      name: "version",
+      text: "2"
+    }
+  ]
+}
+
+let jsonPath = fs.join(root, "profile.json")
+let yamlPath = fs.join(root, "profile.yaml")
+let tomlPath = fs.join(root, "profile.toml")
+let xmlPath = fs.join(root, "project.xml")
+
+json.saveToFile(jsonPath, profile)
+yaml.saveToFile(yamlPath, profile)
+toml.saveToFile(tomlPath, profile)
+xml.saveToFile(xmlPath, xmlDoc)
+
+let jsonValue = json.fromFile(jsonPath)
+let yamlValue = yaml.fromFile(yamlPath)
+let tomlValue = toml.fromFile(tomlPath)
+let xmlValue = xml.fromFile(xmlPath)
+
+io.println("== format files roundtrip ==")
+io.println("json name:", jsonValue.name)
+io.println("yaml version:", yamlValue.version)
+io.println("toml first tag:", tomlValue.tags[0])
+io.println("xml root:", xmlValue.name)
+io.println("xml child text:", xmlValue.children[0].text)
+
+os.removeAll(root)

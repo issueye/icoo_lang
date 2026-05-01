@@ -1,0 +1,39 @@
+import std.io as io
+import std.net.socket.server as socketServer
+import std.net.socket.client as socketClient
+
+let tcpServer = socketServer.listenTCP({
+  addr: "127.0.0.1:0",
+  handler: fn(conn) {
+    let text = conn.read(32)
+    conn.write("tcp:" + text)
+    conn.close()
+  }
+})
+
+let tcpClient = socketClient.connectTCP({
+  addr: tcpServer.addr
+})
+tcpClient.write("hello")
+let tcpReply = tcpClient.read(32)
+tcpClient.close()
+tcpServer.close()
+
+let udpServer = socketServer.listenUDP({
+  addr: "127.0.0.1:0",
+  handler: fn(packet) {
+    packet.reply("udp:" + packet.data)
+  }
+})
+
+let udpClient = socketClient.dialUDP({
+  addr: udpServer.addr
+})
+udpClient.write("ping")
+let udpReply = udpClient.read(32)
+udpClient.close()
+udpServer.close()
+
+io.println("== socket tcp udp ==")
+io.println("tcp reply:", tcpReply)
+io.println("udp reply:", udpReply)

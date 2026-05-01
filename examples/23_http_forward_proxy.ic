@@ -1,0 +1,38 @@
+import std.io as io
+import std.http.client as client
+import std.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      json: {
+        method: req.method,
+        path: req.path,
+        body: req.body,
+        forwardedHost: req.host
+      }
+    }
+  }
+})
+
+let proxy = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return server.forward(req, {
+      url: upstream.url + "/upstream",
+      method: "POST"
+    })
+  }
+})
+
+let resp = client.getJSON(proxy.url + "/hello?name=proxy")
+
+proxy.close()
+upstream.close()
+
+io.println("== http forward proxy ==")
+io.println("method:", resp.json.method)
+io.println("path:", resp.json.path)
+io.println("body:", resp.json.body)
+io.println("forwarded host:", resp.json.forwardedHost)
