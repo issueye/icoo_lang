@@ -1,4 +1,4 @@
-package stdlib
+package format
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"icoo_lang/internal/runtime"
+	"icoo_lang/internal/stdlib/utils"
 )
 
 type xmlNode struct {
@@ -18,7 +19,7 @@ type xmlNode struct {
 	Children []*xmlNode
 }
 
-func loadStdXMLModule() *runtime.Module {
+func LoadStdXMLModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.xml",
 		Path: "std.xml",
@@ -74,7 +75,7 @@ func xmlDecode(args []runtime.Value) (runtime.Value, error) {
 }
 
 func xmlFromFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("fromFile", args[0])
+	path, err := utils.RequireStringArg("fromFile", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +87,7 @@ func xmlFromFile(args []runtime.Value) (runtime.Value, error) {
 }
 
 func xmlSaveToFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("saveToFile", args[0])
+	path, err := utils.RequireStringArg("saveToFile", args[0])
 	if err != nil {
 		return nil, err
 	}

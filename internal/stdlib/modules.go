@@ -3,6 +3,7 @@ package stdlib
 import (
 	"icoo_lang/internal/runtime"
 	express "icoo_lang/internal/stdlib/express"
+	stdformat "icoo_lang/internal/stdlib/format"
 	stdnet "icoo_lang/internal/stdlib/net"
 )
 
@@ -15,13 +16,13 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 	case "std.math":
 		return loadStdMathModule(), true
 	case "std.json":
-		return loadStdJSONModule(), true
+		return stdformat.LoadStdJSONModule(), true
 	case "std.yaml":
-		return loadStdYAMLModule(), true
+		return stdformat.LoadStdYAMLModule(), true
 	case "std.toml":
-		return loadStdTOMLModule(), true
+		return stdformat.LoadStdTOMLModule(), true
 	case "std.xml":
-		return loadStdXMLModule(), true
+		return stdformat.LoadStdXMLModule(), true
 	case "std.fs":
 		return loadStdFSModule(), true
 	case "std.exec":

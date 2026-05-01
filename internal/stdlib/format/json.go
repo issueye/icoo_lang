@@ -1,4 +1,4 @@
-package stdlib
+package format
 
 import (
 	"encoding/json"
@@ -9,7 +9,7 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func loadStdJSONModule() *runtime.Module {
+func LoadStdJSONModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.json",
 		Path: "std.json",
@@ -60,7 +60,7 @@ func jsonFromFile(args []runtime.Value) (runtime.Value, error) {
 }
 
 func jsonSaveToFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("saveToFile", args[0])
+	path, err := utils.RequireStringArg("saveToFile", args[0])
 	if err != nil {
 		return nil, err
 	}

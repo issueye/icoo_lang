@@ -1,4 +1,4 @@
-package stdlib
+package format
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func loadStdYAMLModule() *runtime.Module {
+func LoadStdYAMLModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.yaml",
 		Path: "std.yaml",
@@ -49,7 +49,7 @@ func yamlDecode(args []runtime.Value) (runtime.Value, error) {
 }
 
 func yamlFromFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("fromFile", args[0])
+	path, err := utils.RequireStringArg("fromFile", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func yamlFromFile(args []runtime.Value) (runtime.Value, error) {
 }
 
 func yamlSaveToFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("saveToFile", args[0])
+	path, err := utils.RequireStringArg("saveToFile", args[0])
 	if err != nil {
 		return nil, err
 	}

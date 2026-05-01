@@ -1,4 +1,4 @@
-package stdlib
+package format
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-func loadStdTOMLModule() *runtime.Module {
+func LoadStdTOMLModule() *runtime.Module {
 	return &runtime.Module{
 		Name: "std.toml",
 		Path: "std.toml",
@@ -49,7 +49,7 @@ func tomlDecode(args []runtime.Value) (runtime.Value, error) {
 }
 
 func tomlFromFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("fromFile", args[0])
+	path, err := utils.RequireStringArg("fromFile", args[0])
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func tomlFromFile(args []runtime.Value) (runtime.Value, error) {
 }
 
 func tomlSaveToFile(args []runtime.Value) (runtime.Value, error) {
-	path, err := requireStringArg("saveToFile", args[0])
+	path, err := utils.RequireStringArg("saveToFile", args[0])
 	if err != nil {
 		return nil, err
 	}
