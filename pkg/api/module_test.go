@@ -101,7 +101,7 @@ for key, value in io {
   }
 }
 
-if keys != "printprintln" {
+if keys != "CopycopyopenReaderopenWriterprintprintlnreadAll" {
   panic("unexpected std.io iteration order")
 }
 `
@@ -112,6 +112,42 @@ if keys != "printprintln" {
 	}
 }
 
+func TestRuntimeRunSource_StdIOCopy(t *testing.T) {
+	dir := t.TempDir()
+	srcPath := filepath.Join(dir, "source.txt")
+	dstPath := filepath.Join(dir, "dest.txt")
+
+	if err := os.WriteFile(srcPath, []byte("hello copy"), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	src := `
+import std.io as io
+
+let reader = io.openReader("` + srcPath + `")
+let writer = io.openWriter("` + dstPath + `")
+let copied = io.copy(writer, reader)
+reader.close()
+writer.close()
+
+if copied != 10 {
+  panic("unexpected copied byte count")
+}
+
+let resultReader = io.openReader("` + dstPath + `")
+let text = io.readAll(resultReader)
+resultReader.close()
+
+if text != "hello copy" {
+  panic("unexpected copied contents")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.io copy to succeed, got: %v", err)
+	}
+}
 func TestRuntimeRunSource_ImportsStdTimeModule(t *testing.T) {
 	src := `
 import std.time as time
