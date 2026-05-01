@@ -1,0 +1,40 @@
+import std.net.http.client as client
+import std.net.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      status: 200,
+      headers: {ContentType: "text/plain"},
+      body: "upstream method=" + req.method + " path=" + req.path + " from=" + req.query.from + " trace=" + req.headers.Trace + " body=" + req.body
+    }
+  }
+})
+
+let proxy = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return server.forward(req, {
+      url: upstream.url + "/api/forwarded?from=proxy",
+      method: "POST",
+      headers: {Accept: "text/plain", Trace: "demo-forward"},
+      body: "proxy-body:" + req.body,
+      timeoutMs: 5000
+    })
+  }
+})
+
+let resp = client.request({
+  url: proxy.url + "/original?from=client",
+  method: "GET",
+  headers: {Accept: "application/json", Trace: "client"},
+  body: "client-body",
+  timeoutMs: 5000
+})
+
+println(resp.status)
+println(resp.body)
+
+proxy.close()
+upstream.close()

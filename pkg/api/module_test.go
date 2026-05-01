@@ -280,6 +280,102 @@ math.abs("x")
 	}
 }
 
+func TestRuntimeRunSource_ImportsStdDBModule(t *testing.T) {
+	src := `
+import std.db as db
+
+let conn = db.sqlite(":memory:")
+if !conn.ping() {
+  panic("expected db ping success")
+}
+conn.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.db import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdDBModule(t *testing.T) {
+	src := `
+import std.db as db
+
+let keys = ""
+let count = 0
+for key, value in db {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.db export kind")
+  }
+}
+
+if keys != "mysqlopenpgsqlpostgressqlite" {
+  panic("unexpected std.db iteration order")
+}
+if count != 5 {
+  panic("unexpected std.db export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.db iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdDBSQLite(t *testing.T) {
+	src := `
+import std.db as db
+
+let conn = db.sqlite(":memory:")
+let createResult = conn.exec("create table users(id integer primary key, name text, age integer, note text)")
+if createResult.rowsAffected != 0 {
+  panic("unexpected create rowsAffected")
+}
+
+let insertOne = conn.exec("insert into users(name, age, note) values (?, ?, ?)", ["alice", 18, null])
+let insertTwo = conn.exec("insert into users(name, age, note) values (?, ?, ?)", ["bob", 20, "hi"])
+if insertOne.rowsAffected != 1 || insertTwo.rowsAffected != 1 {
+  panic("unexpected insert rowsAffected")
+}
+if typeOf(insertOne.lastInsertId) != "int" {
+  panic("expected sqlite lastInsertId")
+}
+
+let rows = conn.query("select id, name, age, note from users order by id")
+if typeOf(rows) != "array" {
+  panic("query should return array")
+}
+if rows[0].name != "alice" || rows[0].age != 18 {
+  panic("unexpected first row")
+}
+if rows[0].note != null {
+  panic("unexpected null field")
+}
+if rows[1].name != "bob" || rows[1].note != "hi" {
+  panic("unexpected second row")
+}
+
+let one = conn.queryOne("select name, age from users where name = ?", ["bob"])
+if one.name != "bob" || one.age != 20 {
+  panic("unexpected queryOne row")
+}
+let missing = conn.queryOne("select name from users where name = ?", ["missing"])
+if missing != null {
+  panic("missing queryOne should return null")
+}
+
+conn.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.db sqlite to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ImportsStdJSONModule(t *testing.T) {
 	src := `
 import std.json as json
@@ -1140,10 +1236,10 @@ for key, value in http {
   }
 }
 
-if keys != "listen" {
+if keys != "forwardlisten" {
   panic("unexpected std.net.http.server iteration order")
 }
-if count != 1 {
+if count != 2 {
   panic("unexpected std.net.http.server export count")
 }
 `
@@ -1309,6 +1405,184 @@ if resp.json.ok != true {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.net.http listen JSON response to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPForwardPassThrough(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.URL.Path != "/forward" || r.URL.Query().Get("name") != "icoo" {
+			http.Error(w, "bad url", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Accept") != "text/plain" {
+			http.Error(w, "bad header", http.StatusBadRequest)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != "payload" {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("X-Upstream", "seen")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte("forwarded"))
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.net.http.client as client
+import std.net.http.server as server
+
+let serverHandle = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return server.forward(req, {
+      url: "` + upstream.URL + `" + req.path + "?name=" + req.query.name,
+      timeoutMs: 5000
+    })
+  }
+})
+
+let resp = client.request({
+  url: serverHandle.url + "/forward?name=icoo",
+  method: "POST",
+  headers: {Accept: "text/plain"},
+  body: "payload"
+})
+serverHandle.close()
+
+if resp.status != 202 {
+  panic("unexpected forward status")
+}
+if resp.body != "forwarded" {
+  panic("unexpected forward body")
+}
+if resp.headers["X-Upstream"] != "seen" {
+  panic("unexpected forward response header")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.net.http forward pass-through to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPForwardOverridesRequest(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.URL.Path != "/override" || r.URL.Query().Get("ok") != "1" {
+			http.Error(w, "bad url", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Accept") != "application/json" {
+			http.Error(w, "bad header", http.StatusBadRequest)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != "changed" {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte("overridden"))
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.net.http.client as client
+import std.net.http.server as server
+
+let serverHandle = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return server.forward(req, {
+      url: "` + upstream.URL + `/override?ok=1",
+      method: "PUT",
+      headers: {Accept: "application/json"},
+      body: "changed",
+      timeoutMs: 5000
+    })
+  }
+})
+
+let resp = client.request({
+  url: serverHandle.url + "/ignored",
+  method: "POST",
+  headers: {Accept: "text/plain"},
+  body: "original"
+})
+serverHandle.close()
+
+if resp.status != 200 {
+  panic("unexpected override forward status")
+}
+if resp.body != "overridden" {
+  panic("unexpected override forward body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.net.http forward overrides to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPForwardFiltersHopByHopHeaders(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Connection") != "" {
+			http.Error(w, "connection header forwarded", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Upgrade") != "" {
+			http.Error(w, "upgrade header forwarded", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Accept") != "text/plain" {
+			http.Error(w, "regular header missing", http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte("filtered"))
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.net.http.client as client
+import std.net.http.server as server
+
+let serverHandle = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return server.forward(req, {
+      url: "` + upstream.URL + `/headers",
+      timeoutMs: 5000
+    })
+  }
+})
+
+let resp = client.request({
+  url: serverHandle.url + "/headers",
+  headers: {Accept: "text/plain", Connection: "close", Upgrade: "websocket"}
+})
+serverHandle.close()
+
+if resp.status != 200 {
+  panic("unexpected filtered forward status")
+}
+if resp.body != "filtered" {
+  panic("unexpected filtered forward body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.net.http forward header filtering to succeed, got: %v", err)
 	}
 }
 

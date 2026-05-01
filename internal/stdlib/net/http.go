@@ -38,7 +38,8 @@ func LoadStdNetHTTPServerModule() *runtime.Module {
 		Name: "std.net.http.server",
 		Path: "std.net.http.server",
 		Exports: map[string]runtime.Value{
-			"listen": &runtime.NativeFunction{Name: "listen", Arity: 1, CtxFn: httpListen},
+			"forward": &runtime.NativeFunction{Name: "forward", Arity: 2, Fn: httpForward},
+			"listen":  &runtime.NativeFunction{Name: "listen", Arity: 1, CtxFn: httpListen},
 		},
 		Done: true,
 	}
@@ -158,6 +159,7 @@ type httpRequestOptions struct {
 	Body       string
 	Timeout    time.Duration
 	ExpectJSON bool
+	Host       string
 }
 
 func parseHTTPRequestOptions(v runtime.Value) (*httpRequestOptions, error) {
@@ -176,15 +178,9 @@ func parseHTTPRequestOptions(v runtime.Value) (*httpRequestOptions, error) {
 		method = strings.ToUpper(methodValue.Value)
 	}
 
-	headers := make(map[string]string)
-	if headerValue, ok := obj.Fields["headers"]; ok {
-		headerObj, ok := headerValue.(*runtime.ObjectValue)
-		if !ok {
-			return nil, fmt.Errorf("request headers must be object")
-		}
-		for key, value := range headerObj.Fields {
-			headers[key] = value.String()
-		}
+	headers, err := httpHeadersFromRuntime("request", obj.Fields["headers"])
+	if err != nil {
+		return nil, err
 	}
 
 	body := ""
@@ -192,16 +188,9 @@ func parseHTTPRequestOptions(v runtime.Value) (*httpRequestOptions, error) {
 		body = bodyValue.String()
 	}
 
-	timeout := 30 * time.Second
-	if timeoutValue, ok := obj.Fields["timeoutMs"]; ok {
-		intValue, ok := timeoutValue.(runtime.IntValue)
-		if !ok {
-			return nil, fmt.Errorf("request timeoutMs must be int")
-		}
-		if intValue.Value < 0 {
-			return nil, fmt.Errorf("request timeoutMs must be non-negative")
-		}
-		timeout = time.Duration(intValue.Value) * time.Millisecond
+	timeout, err := httpTimeoutFromOptions("request", obj)
+	if err != nil {
+		return nil, err
 	}
 
 	return &httpRequestOptions{
@@ -220,6 +209,10 @@ func doHTTPRequest(opts *httpRequestOptions) (runtime.Value, error) {
 	}
 	for key, value := range opts.Headers {
 		req.Header.Set(key, value)
+	}
+
+	if opts.Host != "" {
+		req.Host = opts.Host
 	}
 
 	client := &http.Client{Timeout: opts.Timeout}
@@ -251,6 +244,81 @@ func doHTTPRequest(opts *httpRequestOptions) (runtime.Value, error) {
 		result.Fields["json"] = utils.PlainToRuntimeValue(decoded)
 	}
 	return result, nil
+}
+
+func httpForward(args []runtime.Value) (runtime.Value, error) {
+	inbound, ok := args[0].(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("forward expects request object")
+	}
+	options, ok := args[1].(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("forward expects options object")
+	}
+
+	urlValue, ok := options.Fields["url"].(runtime.StringValue)
+	if !ok || strings.TrimSpace(urlValue.Value) == "" {
+		return nil, fmt.Errorf("forward options require non-empty url")
+	}
+
+	methodValue, ok := inbound.Fields["method"].(runtime.StringValue)
+	if !ok || methodValue.Value == "" {
+		return nil, fmt.Errorf("forward request requires method")
+	}
+	method := methodValue.Value
+	if overrideValue, ok := options.Fields["method"].(runtime.StringValue); ok && overrideValue.Value != "" {
+		method = overrideValue.Value
+	}
+	method = strings.ToUpper(method)
+
+	bodyValue, ok := inbound.Fields["body"].(runtime.StringValue)
+	if !ok {
+		return nil, fmt.Errorf("forward request requires body")
+	}
+	body := bodyValue.Value
+	if overrideValue, ok := options.Fields["body"]; ok {
+		body = overrideValue.String()
+	}
+
+	headers := make(map[string]string)
+	inboundHeaders, err := httpHeadersFromRuntime("forward request", inbound.Fields["headers"])
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range inboundHeaders {
+		if !isHopByHopHeader(key) && !strings.EqualFold(key, "Host") {
+			headers[key] = value
+		}
+	}
+	overrideHeaders, err := httpHeadersFromRuntime("forward", options.Fields["headers"])
+	if err != nil {
+		return nil, err
+	}
+	host := ""
+	for key, value := range overrideHeaders {
+		if isHopByHopHeader(key) {
+			continue
+		}
+		if strings.EqualFold(key, "Host") {
+			host = value
+			continue
+		}
+		headers[key] = value
+	}
+
+	timeout, err := httpTimeoutFromOptions("forward", options)
+	if err != nil {
+		return nil, err
+	}
+
+	return doHTTPRequest(&httpRequestOptions{
+		Method:  method,
+		URL:     urlValue.Value,
+		Headers: headers,
+		Body:    body,
+		Timeout: timeout,
+		Host:    host,
+	})
 }
 
 func httpListen(ctx *runtime.NativeContext, args []runtime.Value) (runtime.Value, error) {
@@ -438,6 +506,45 @@ func httpHeadersToRuntime(headers http.Header) runtime.Value {
 		fields[key] = &runtime.ArrayValue{Elements: items}
 	}
 	return &runtime.ObjectValue{Fields: fields}
+}
+
+func httpHeadersFromRuntime(name string, value runtime.Value) (map[string]string, error) {
+	headers := make(map[string]string)
+	if value == nil {
+		return headers, nil
+	}
+	headerObj, ok := value.(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("%s headers must be object", name)
+	}
+	for key, value := range headerObj.Fields {
+		headers[key] = value.String()
+	}
+	return headers, nil
+}
+
+func httpTimeoutFromOptions(name string, obj *runtime.ObjectValue) (time.Duration, error) {
+	timeout := 30 * time.Second
+	if timeoutValue, ok := obj.Fields["timeoutMs"]; ok {
+		intValue, ok := timeoutValue.(runtime.IntValue)
+		if !ok {
+			return 0, fmt.Errorf("%s timeoutMs must be int", name)
+		}
+		if intValue.Value < 0 {
+			return 0, fmt.Errorf("%s timeoutMs must be non-negative", name)
+		}
+		timeout = time.Duration(intValue.Value) * time.Millisecond
+	}
+	return timeout, nil
+}
+
+func isHopByHopHeader(header string) bool {
+	switch strings.ToLower(header) {
+	case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade":
+		return true
+	default:
+		return false
+	}
 }
 
 func httpSimpleBodyRequest(name string, method string, args []runtime.Value) (runtime.Value, error) {

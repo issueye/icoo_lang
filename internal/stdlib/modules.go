@@ -4,6 +4,7 @@ import (
 	"icoo_lang/internal/runtime"
 	stdcore "icoo_lang/internal/stdlib/core"
 	stddata "icoo_lang/internal/stdlib/data"
+	stddb "icoo_lang/internal/stdlib/database"
 	express "icoo_lang/internal/stdlib/express"
 	stdformat "icoo_lang/internal/stdlib/format"
 	stdnet "icoo_lang/internal/stdlib/net"
@@ -18,6 +19,8 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stdcore.LoadStdTimeModule(), true
 	case "std.math":
 		return stdcore.LoadStdMathModule(), true
+	case "std.db":
+		return stddb.LoadStdDBModule(), true
 	case "std.json":
 		return stdformat.LoadStdJSONModule(), true
 	case "std.yaml":

@@ -23,6 +23,7 @@ func LoadStdIOModule() *runtime.Module {
 		Name: "std.io",
 		Path: "std.io",
 		Exports: map[string]runtime.Value{
+			"Copy":       &runtime.NativeFunction{Name: "Copy", Arity: 2, Fn: ioCopy},
 			"copy":       &runtime.NativeFunction{Name: "copy", Arity: 2, Fn: ioCopy},
 			"openReader": &runtime.NativeFunction{Name: "openReader", Arity: 1, Fn: ioOpenReader},
 			"openWriter": &runtime.NativeFunction{Name: "openWriter", Arity: 1, Fn: ioOpenWriter},

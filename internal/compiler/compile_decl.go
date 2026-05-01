@@ -104,7 +104,7 @@ func (c *Compiler) compileExportDecl(d *ast.ExportDecl) {
 
 	name, err := exportDeclName(d.Decl)
 	if err != nil {
-		c.errorf(err.Error())
+		c.errorf("%s", err.Error())
 		return
 	}
 
