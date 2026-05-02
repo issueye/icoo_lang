@@ -3,7 +3,7 @@ import std.object as object
 import std.time as time
 import "./auth.ic" as auth
 import "./catalog.ic" as catalog
-import "./json_helpers.ic" as jsonHelpers
+import "./translate.ic" as translate
 
 const proxyHandlerApi = fn() {
   fn buildForwardHeaders(req, authResult, route) {
@@ -12,6 +12,8 @@ const proxyHandlerApi = fn() {
     headers["X-Proxy-Route"] = route.name
     headers["X-Resolved-Model"] = route.upstreamModel
     headers["X-Proxy-Auth"] = authResult.via
+    headers["X-Proxy-Downstream"] = translate.downstreamProtocol(route)
+    headers["X-Proxy-Upstream"] = translate.upstreamProtocol(route)
 
     let accept = req.header("Accept")
     if accept != null {
@@ -50,9 +52,66 @@ const proxyHandlerApi = fn() {
     return null
   }
 
+  fn forwardTranslatedImpl(req, state, route, authResult, bodyInfo, startedAt) {
+    let upstreamUrl = state.config.upstreamBaseUrl + route.upstreamPath
+    let headers = buildForwardHeaders(req, authResult, route)
+    headers.Accept = "application/json"
+
+    try {
+      let resp = server.forward(req, {
+        url: upstreamUrl,
+        headers: headers,
+        body: bodyInfo.body,
+        timeoutMs: state.config.timeoutMs
+      })
+      let translated = translate.translateResponse(resp, route)
+
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        resp.status,
+        upstreamUrl,
+        route.selection + ":translated",
+        elapsedMs(startedAt)
+      )
+      state.monitor.increment("proxy.forwarded")
+      state.monitor.increment("proxy.translated")
+      return translated
+    } catch err {
+      state.monitor.increment("proxy.upstream_error")
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        502,
+        upstreamUrl,
+        err.message,
+        elapsedMs(startedAt)
+      )
+      return {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+    }
+  }
+
   fn handleProxyImpl(req, state) {
     let startedAt = time.now()
-    let requestedModel = jsonHelpers.requestedModel(req)
+    let requestedModel = object.get(req, "json")
+    if requestedModel != null {
+      requestedModel = object.get(requestedModel, "model")
+    }
     let authResult = auth.authenticate(state.config, req)
     if authResult.ok != true {
       state.monitor.increment("auth.unauthorized")
@@ -75,7 +134,11 @@ const proxyHandlerApi = fn() {
       }
     }
 
-    let bodyInfo = jsonHelpers.rewriteBody(req, route)
+    let bodyInfo = translate.prepareRequest(req, route)
+    if translate.needsTranslation(route) {
+      return forwardTranslatedImpl(req, state, route, authResult, bodyInfo, startedAt)
+    }
+
     let upstreamUrl = state.config.upstreamBaseUrl + route.upstreamPath
     let headers = buildForwardHeaders(req, authResult, route)
 
@@ -128,7 +191,10 @@ const proxyHandlerApi = fn() {
 
   fn handleProxyDirectImpl(req, res, state) {
     let startedAt = time.now()
-    let requestedModel = jsonHelpers.requestedModel(req)
+    let requestedModel = object.get(req, "json")
+    if requestedModel != null {
+      requestedModel = object.get(requestedModel, "model")
+    }
     let authResult = auth.authenticate(state.config, req)
     if authResult.ok != true {
       state.monitor.increment("auth.unauthorized")
@@ -151,7 +217,11 @@ const proxyHandlerApi = fn() {
       }
     }
 
-    let bodyInfo = jsonHelpers.rewriteBody(req, route)
+    let bodyInfo = translate.prepareRequest(req, route)
+    if translate.needsTranslation(route) {
+      return forwardTranslatedImpl(req, state, route, authResult, bodyInfo, startedAt)
+    }
+
     let upstreamUrl = state.config.upstreamBaseUrl + route.upstreamPath
     let headers = buildForwardHeaders(req, authResult, route)
 

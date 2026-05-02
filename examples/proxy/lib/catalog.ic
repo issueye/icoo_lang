@@ -9,13 +9,18 @@ const catalogApi = fn() {
   }
 
   fn cloneRoute(route, selection, requestedModel) {
+    let downstreamProtocol = route.protocol
+    let upstreamProtocol = object.get(route, "upstreamProtocol", downstreamProtocol)
+
     return {
       name: route.name,
       alias: object.get(route, "alias"),
       endpoint: route.endpoint,
       upstreamPath: route.upstreamPath,
       upstreamModel: route.upstreamModel,
-      protocol: route.protocol,
+      protocol: downstreamProtocol,
+      downstreamProtocol: downstreamProtocol,
+      upstreamProtocol: upstreamProtocol,
       selection: selection,
       requestedModel: requestedModel
     }

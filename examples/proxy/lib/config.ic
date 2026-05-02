@@ -60,6 +60,24 @@ const configApi = fn() {
           protocol: "openai-responses"
         },
         {
+          alias: "gpt-4o-responses",
+          endpoint: "/v1/chat/completions",
+          name: "chat-gpt-4o-responses",
+          upstreamPath: "/openai/responses",
+          upstreamModel: "gpt-4.1-mini",
+          protocol: "openai",
+          upstreamProtocol: "openai-responses"
+        },
+        {
+          alias: "gpt-4.1-chat",
+          endpoint: "/v1/responses",
+          name: "responses-gpt-4.1-chat",
+          upstreamPath: "/openai/chat/completions",
+          upstreamModel: "gpt-4o-mini",
+          protocol: "openai-responses",
+          upstreamProtocol: "openai"
+        },
+        {
           alias: "claude-sonnet",
           endpoint: "/v1/messages",
           name: "messages-claude-sonnet",

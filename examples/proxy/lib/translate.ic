@@ -1,0 +1,479 @@
+import std.json as json
+import std.object as object
+
+const translateApi = fn() {
+  fn downstreamProtocolImpl(route) {
+    return object.get(route, "downstreamProtocol", object.get(route, "protocol"))
+  }
+
+  fn upstreamProtocolImpl(route) {
+    return object.get(route, "upstreamProtocol", object.get(route, "protocol"))
+  }
+
+  fn needsTranslationImpl(route) {
+    return downstreamProtocolImpl(route) != upstreamProtocolImpl(route)
+  }
+
+  fn contentTextImpl(value) {
+    if value == null {
+      return ""
+    }
+    if typeOf(value) == "string" {
+      return value
+    }
+    if typeOf(value) != "array" {
+      return ""
+    }
+
+    let texts = value
+      .map(fn(part) {
+        if typeOf(part) != "object" {
+          return ""
+        }
+        let kind = object.get(part, "type")
+        if kind == "text" || kind == "input_text" || kind == "output_text" {
+          return object.get(part, "text", "")
+        }
+        return ""
+      })
+      .filter(fn(text) {
+        return text != ""
+      })
+
+    if len(texts) == 0 {
+      return ""
+    }
+
+    return texts.reduce(fn(acc, text) {
+      if acc == "" {
+        return text
+      }
+      return acc + "\n" + text
+    }, "")
+  }
+
+  fn chatInstructionsImpl(messages) {
+    if typeOf(messages) != "array" {
+      return ""
+    }
+
+    let texts = messages
+      .filter(fn(message) {
+        return typeOf(message) == "object" && object.get(message, "role", "user") == "system"
+      })
+      .map(fn(message) {
+        return contentTextImpl(object.get(message, "content"))
+      })
+      .filter(fn(text) {
+        return text != ""
+      })
+
+    if len(texts) == 0 {
+      return ""
+    }
+
+    return texts.reduce(fn(acc, text) {
+      if acc == "" {
+        return text
+      }
+      return acc + "\n" + text
+    }, "")
+  }
+
+  fn chatMessagesToResponsesInputImpl(messages) {
+    if typeOf(messages) != "array" {
+      return []
+    }
+
+    return messages
+      .filter(fn(message) {
+        return typeOf(message) == "object" && object.get(message, "role", "user") != "system"
+      })
+      .map(fn(message) {
+        return {
+          role: object.get(message, "role", "user"),
+          content: contentTextImpl(object.get(message, "content"))
+        }
+      })
+  }
+
+  fn responsesInputTextImpl(item) {
+    if item == null {
+      return ""
+    }
+    if typeOf(item) == "string" {
+      return item
+    }
+    if typeOf(item) != "object" {
+      return ""
+    }
+
+    let content = object.get(item, "content")
+    if content != null {
+      return contentTextImpl(content)
+    }
+
+    return object.get(item, "text", "")
+  }
+
+  fn responsesInputToChatMessagesImpl(input, instructions) {
+    if typeOf(input) == "string" {
+      if instructions != "" {
+        return [
+          {
+            role: "system",
+            content: instructions
+          },
+          {
+            role: "user",
+            content: input
+          }
+        ]
+      }
+
+      return [
+        {
+          role: "user",
+          content: input
+        }
+      ]
+    }
+
+    if typeOf(input) != "array" {
+      if instructions != "" {
+        return [
+          {
+            role: "system",
+            content: instructions
+          }
+        ]
+      }
+      return []
+    }
+
+    let messages = input
+      .filter(fn(item) {
+        return typeOf(item) == "object"
+      })
+      .map(fn(item, index) {
+        let content = responsesInputTextImpl(item)
+        if index == 0 && instructions != "" {
+          if content == "" {
+            content = instructions
+          } else {
+            content = instructions + "\n" + content
+          }
+        }
+        return {
+          role: object.get(item, "role", "user"),
+          content: content
+        }
+      })
+
+    if len(messages) == 0 && instructions != "" {
+      return [
+        {
+          role: "system",
+          content: instructions
+        }
+      ]
+    }
+
+    return messages
+  }
+
+  fn responsesOutputTextImpl(output) {
+    if typeOf(output) != "array" {
+      return ""
+    }
+
+    let texts = output
+      .filter(fn(item) {
+        return typeOf(item) == "object"
+      })
+      .map(fn(item) {
+        return contentTextImpl(object.get(item, "content"))
+      })
+      .filter(fn(text) {
+        return text != ""
+      })
+
+    if len(texts) == 0 {
+      return ""
+    }
+
+    return texts.reduce(fn(acc, text) {
+      if acc == "" {
+        return text
+      }
+      return acc + "\n" + text
+    }, "")
+  }
+
+  fn mapResponsesUsageToChatImpl(usage) {
+    if usage == null {
+      return null
+    }
+
+    let promptTokens = object.get(usage, "input_tokens", 0)
+    let completionTokens = object.get(usage, "output_tokens", 0)
+    let totalTokens = object.get(usage, "total_tokens")
+    if totalTokens == null {
+      totalTokens = promptTokens + completionTokens
+    }
+
+    return {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens
+    }
+  }
+
+  fn mapChatUsageToResponsesImpl(usage) {
+    if usage == null {
+      return null
+    }
+
+    let inputTokens = object.get(usage, "prompt_tokens", 0)
+    let outputTokens = object.get(usage, "completion_tokens", 0)
+    let totalTokens = object.get(usage, "total_tokens")
+    if totalTokens == null {
+      totalTokens = inputTokens + outputTokens
+    }
+
+    return {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: totalTokens
+    }
+  }
+
+  fn rewriteSameProtocolRequestImpl(payload, route) {
+    if route.upstreamModel != null {
+      payload.model = route.upstreamModel
+    }
+    return payload
+  }
+
+  fn chatRequestToResponsesImpl(payload, route) {
+    let request = {
+      model: route.upstreamModel,
+      input: chatMessagesToResponsesInputImpl(object.get(payload, "messages"))
+    }
+
+    let instructions = chatInstructionsImpl(object.get(payload, "messages"))
+    if instructions != "" {
+      request.instructions = instructions
+    }
+
+    let stream = object.get(payload, "stream")
+    if stream == true {
+      request.stream = true
+    }
+
+    let temperature = object.get(payload, "temperature")
+    if temperature != null {
+      request.temperature = temperature
+    }
+
+    let topP = object.get(payload, "top_p")
+    if topP != null {
+      request.top_p = topP
+    }
+
+    let maxOutputTokens = object.get(payload, "max_completion_tokens")
+    if maxOutputTokens == null {
+      maxOutputTokens = object.get(payload, "max_tokens")
+    }
+    if maxOutputTokens != null {
+      request.max_output_tokens = maxOutputTokens
+    }
+
+    return request
+  }
+
+  fn responsesRequestToChatImpl(payload, route) {
+    let instructions = object.get(payload, "instructions", "")
+    let request = {
+      model: route.upstreamModel,
+      messages: responsesInputToChatMessagesImpl(object.get(payload, "input"), instructions)
+    }
+
+    let stream = object.get(payload, "stream")
+    if stream == true {
+      request.stream = true
+    }
+
+    let temperature = object.get(payload, "temperature")
+    if temperature != null {
+      request.temperature = temperature
+    }
+
+    let topP = object.get(payload, "top_p")
+    if topP != null {
+      request.top_p = topP
+    }
+
+    let maxTokens = object.get(payload, "max_output_tokens")
+    if maxTokens != null {
+      request.max_tokens = maxTokens
+    }
+
+    return request
+  }
+
+  fn responsesResponseToChatImpl(payload, route) {
+    let response = {
+      id: object.get(payload, "id", "chatcmpl-proxy"),
+      object: "chat.completion",
+      model: object.get(payload, "model", route.upstreamModel),
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: responsesOutputTextImpl(object.get(payload, "output"))
+          },
+          finish_reason: "stop"
+        }
+      ]
+    }
+
+    let usage = mapResponsesUsageToChatImpl(object.get(payload, "usage"))
+    if usage != null {
+      response.usage = usage
+    }
+
+    return response
+  }
+
+  fn chatResponseToResponsesImpl(payload, route) {
+    let text = ""
+    let choices = object.get(payload, "choices")
+    if typeOf(choices) == "array" && len(choices) > 0 {
+      text = contentTextImpl(object.get(object.get(choices[0], "message"), "content"))
+    }
+
+    let response = {
+      id: object.get(payload, "id", "resp-proxy"),
+      object: "response",
+      model: object.get(payload, "model", route.upstreamModel),
+      status: "completed",
+      output: [
+        {
+          id: "msg_proxy_1",
+          type: "message",
+          role: "assistant",
+          content: [
+            {
+              type: "output_text",
+              text: text
+            }
+          ]
+        }
+      ]
+    }
+
+    let usage = mapChatUsageToResponsesImpl(object.get(payload, "usage"))
+    if usage != null {
+      response.usage = usage
+    }
+
+    return response
+  }
+
+  fn prepareRequestImpl(req, route) {
+    let payload = object.get(req, "json")
+    if payload == null {
+      return {
+        body: req.body,
+        requestedModel: null,
+        translated: false
+      }
+    }
+
+    let requestedModel = object.get(payload, "model")
+    let down = downstreamProtocolImpl(route)
+    let up = upstreamProtocolImpl(route)
+    let translated = needsTranslationImpl(route)
+
+    if translated != true {
+      let rewritten = rewriteSameProtocolRequestImpl(payload, route)
+      return {
+        body: json.encode(rewritten),
+        requestedModel: requestedModel,
+        translated: false
+      }
+    }
+
+    let translatedPayload = null
+    if down == "openai" && up == "openai-responses" {
+      translatedPayload = chatRequestToResponsesImpl(payload, route)
+    } else if down == "openai-responses" && up == "openai" {
+      translatedPayload = responsesRequestToChatImpl(payload, route)
+    } else {
+      panic("request translation not implemented: " + down + " -> " + up)
+    }
+
+    return {
+      body: json.encode(translatedPayload),
+      requestedModel: requestedModel,
+      translated: true
+    }
+  }
+
+  fn translateResponseImpl(resp, route) {
+    if resp.status >= 400 {
+      let errorResponse = {
+        status: resp.status,
+        body: resp.body
+      }
+      let contentType = resp.header("Content-Type")
+      if contentType != null {
+        errorResponse.headers = {
+          "Content-Type": contentType
+        }
+      }
+      return errorResponse
+    }
+
+    let payload = json.decode(resp.body)
+    let down = downstreamProtocolImpl(route)
+    let up = upstreamProtocolImpl(route)
+
+    if down == up {
+      return {
+        status: resp.status,
+        json: payload
+      }
+    }
+
+    let translatedPayload = null
+    if down == "openai" && up == "openai-responses" {
+      translatedPayload = responsesResponseToChatImpl(payload, route)
+    } else if down == "openai-responses" && up == "openai" {
+      translatedPayload = chatResponseToResponsesImpl(payload, route)
+    } else {
+      panic("response translation not implemented: " + up + " -> " + down)
+    }
+
+    return {
+      status: resp.status,
+      json: translatedPayload
+    }
+  }
+
+  return {
+    downstreamProtocol: downstreamProtocolImpl,
+    upstreamProtocol: upstreamProtocolImpl,
+    needsTranslation: needsTranslationImpl,
+    prepareRequest: prepareRequestImpl,
+    translateResponse: translateResponseImpl
+  }
+}()
+
+export const downstreamProtocol = translateApi.downstreamProtocol
+export const upstreamProtocol = translateApi.upstreamProtocol
+export const needsTranslation = translateApi.needsTranslation
+export const prepareRequest = translateApi.prepareRequest
+export const translateResponse = translateApi.translateResponse

@@ -12,6 +12,72 @@ let upstream = server.listen({
       model = payload.model
     }
 
+    if req.path == "/openai/chat/completions" {
+      return {
+        json: {
+          id: "chatcmpl-upstream",
+          object: "chat.completion",
+          path: req.path,
+          method: req.method,
+          model: model,
+          requestId: req.requestId,
+          route: req.header("X-Proxy-Route"),
+          forwardedRequestId: req.header("X-Request-Id"),
+          auth: req.header("X-Proxy-Auth"),
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant",
+                content: "chat:" + model
+              },
+              finish_reason: "stop"
+            }
+          ],
+          usage: {
+            prompt_tokens: 11,
+            completion_tokens: 7,
+            total_tokens: 18
+          }
+        }
+      }
+    }
+
+    if req.path == "/openai/responses" {
+      return {
+        json: {
+          id: "resp-upstream",
+          object: "response",
+          path: req.path,
+          method: req.method,
+          model: model,
+          status: "completed",
+          requestId: req.requestId,
+          route: req.header("X-Proxy-Route"),
+          forwardedRequestId: req.header("X-Request-Id"),
+          auth: req.header("X-Proxy-Auth"),
+          output: [
+            {
+              id: "msg-upstream",
+              type: "message",
+              role: "assistant",
+              content: [
+                {
+                  type: "output_text",
+                  text: "response:" + model
+                }
+              ]
+            }
+          ],
+          usage: {
+            input_tokens: 13,
+            output_tokens: 5,
+            total_tokens: 18
+          }
+        }
+      }
+    }
+
     return {
       json: {
         ok: true,
@@ -98,6 +164,65 @@ if responsesResp.json.route != "responses-gpt-4.1" {
   panic("expected responses alias route selection")
 }
 
+let translatedChat = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key"
+  },
+  json: {
+    model: "gpt-4o-responses",
+    messages: [
+      {
+        role: "system",
+        content: "be concise"
+      },
+      {
+        role: "user",
+        content: "translate me"
+      }
+    ]
+  }
+})
+
+if translatedChat.status != 200 {
+  panic("expected translated chat request to succeed")
+}
+if translatedChat.json.object != "chat.completion" {
+  panic("expected translated chat response shape")
+}
+if translatedChat.json.choices[0].message.content != "response:gpt-4.1-mini" {
+  panic("expected translated chat response content")
+}
+if translatedChat.json.usage.prompt_tokens != 13 || translatedChat.json.usage.completion_tokens != 5 {
+  panic("expected translated chat usage mapping")
+}
+
+let translatedResponses = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/responses",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key"
+  },
+  json: {
+    model: "gpt-4.1-chat",
+    input: "translate back"
+  }
+})
+
+if translatedResponses.status != 200 {
+  panic("expected translated responses request to succeed")
+}
+if translatedResponses.json.object != "response" {
+  panic("expected translated responses response shape")
+}
+if translatedResponses.json.output[0].content[0].text != "chat:gpt-4o-mini" {
+  panic("expected translated responses response content")
+}
+if translatedResponses.json.usage.input_tokens != 11 || translatedResponses.json.usage.output_tokens != 7 {
+  panic("expected translated responses usage mapping")
+}
+
 let unauthorized = client.requestJSON({
   url: runtimeApp.server.url + "/v1/chat/completions",
   method: "POST",
@@ -125,16 +250,16 @@ if ready.json.ok != true {
 if monitor.json.ready.ok != true {
   panic("expected monitor ready ok")
 }
-if monitor.json.requestCount != 3 {
+if monitor.json.requestCount != 5 {
   panic("expected monitor request count")
 }
-if len(monitor.json.recentRequests) != 3 {
+if len(monitor.json.recentRequests) != 5 {
   panic("expected monitor recent requests")
 }
-if monitor.json.counters["requests.total"] != 3 {
+if monitor.json.counters["requests.total"] != 5 {
   panic("expected monitor total counter")
 }
-if monitor.json.counters["requests.status.2xx"] != 2 {
+if monitor.json.counters["requests.status.2xx"] != 4 {
   panic("expected monitor 2xx counter")
 }
 if monitor.json.counters["requests.status.4xx"] != 1 {
@@ -143,34 +268,45 @@ if monitor.json.counters["requests.status.4xx"] != 1 {
 if monitor.json.counters["auth.unauthorized"] != 1 {
   panic("expected auth unauthorized counter")
 }
-if monitor.json.counters["proxy.forwarded"] != 2 {
+if monitor.json.counters["proxy.forwarded"] != 4 {
   panic("expected proxy forwarded counter")
 }
-if monitor.json.latency.count != 3 {
+if monitor.json.counters["proxy.translated"] != 2 {
+  panic("expected translated proxy counter")
+}
+if monitor.json.latency.count != 5 {
   panic("expected latency sample count")
 }
 if len(routes.json.routes.defaults) != 3 {
   panic("expected default routes in admin response")
 }
-if requests.json.total != 3 {
+if requests.json.total != 5 {
   panic("expected recorded requests")
 }
-if requests.json.counters["requests.status.200"] != 2 {
+if requests.json.counters["requests.status.200"] != 4 {
   panic("expected request counters on admin requests")
 }
-if requests.json.latency.count != 3 {
+if requests.json.latency.count != 5 {
   panic("expected latency summary on admin requests")
 }
 
 let foundResolved = false
 let foundResponses = false
 let foundRequestID = false
+let foundTranslatedChat = false
+let foundTranslatedResponses = false
 for request in requests.json.requests {
   if request.route_name == "chat-gpt-4o" && request.resolved_model == "gpt-4o-mini" {
     foundResolved = true
   }
   if request.route_name == "responses-gpt-4.1" && request.resolved_model == "gpt-4.1-mini" {
     foundResponses = true
+  }
+  if request.route_name == "chat-gpt-4o-responses" && request.note == "alias:translated" {
+    foundTranslatedChat = true
+  }
+  if request.route_name == "responses-gpt-4.1-chat" && request.note == "alias:translated" {
+    foundTranslatedResponses = true
   }
   if request.request_id == okResp.header("X-Request-Id") {
     foundRequestID = true
@@ -184,6 +320,12 @@ if foundResolved != true {
 }
 if foundResponses != true {
   panic("expected responses request record")
+}
+if foundTranslatedChat != true {
+  panic("expected translated chat request record")
+}
+if foundTranslatedResponses != true {
+  panic("expected translated responses request record")
 }
 if foundRequestID != true {
   panic("expected request id in recent request record")
