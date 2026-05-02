@@ -16,6 +16,7 @@
 - v0.1 交付规划：`docs/v0.1-delivery-plan.md`
 - v0.1 发布说明：`docs/v0.1-release-notes.md`
 - v0.1 验收清单：`docs/v0.1-acceptance-checklist.md`
+- v0.1.1 开发计划：`docs/v0.1.1-development-plan.md`
 - 迭代器协议：`docs/iterators.md`
 - MVP 路线（历史规划）：`docs/mvp-roadmap.md`
 

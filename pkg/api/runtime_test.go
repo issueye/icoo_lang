@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRuntimeCheckSource_AllowsTopLevelExprStmt(t *testing.T) {
@@ -578,5 +580,56 @@ func TestRuntimeRunFile_TryCatchIntegrationScript(t *testing.T) {
 	path := filepath.Join("..", "..", "testdata", "integration", "trycatch.ic")
 	if _, err := rt.RunFile(path); err != nil {
 		t.Fatalf("expected try/catch integration script to succeed, got error: %v", err)
+	}
+}
+
+func TestRuntimeStatsAndShutdown(t *testing.T) {
+	rt := NewRuntime()
+	if err := rt.ConfigureGoPool(2, 3); err != nil {
+		t.Fatalf("configure go pool failed: %v", err)
+	}
+
+	src := `
+let ch = chan(1)
+go fn() {
+  ch.send(7)
+}()
+if ch.recv() != 7 {
+  panic("expected goroutine result")
+}
+`
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("run source failed: %v", err)
+	}
+
+	stats := rt.Stats()
+	if stats.NumCPU < 1 {
+		t.Fatalf("expected cpu count, got %d", stats.NumCPU)
+	}
+	if stats.NumGoroutine < 1 {
+		t.Fatalf("expected goroutine count, got %d", stats.NumGoroutine)
+	}
+	if stats.Memory.HeapAllocBytes == 0 {
+		t.Fatal("expected heap allocation stats")
+	}
+	if stats.Pool.Workers != 2 {
+		t.Fatalf("expected 2 pool workers, got %d", stats.Pool.Workers)
+	}
+	if stats.Pool.QueueCapacity != 3 {
+		t.Fatalf("expected queue capacity 3, got %d", stats.Pool.QueueCapacity)
+	}
+	if stats.Pool.Submitted < 1 {
+		t.Fatalf("expected submitted tasks, got %d", stats.Pool.Submitted)
+	}
+
+	afterGC := rt.CollectGarbage()
+	if afterGC.Memory.NumGC < stats.Memory.NumGC {
+		t.Fatalf("expected gc count to stay monotonic, before=%d after=%d", stats.Memory.NumGC, afterGC.Memory.NumGC)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := rt.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown failed: %v", err)
 	}
 }

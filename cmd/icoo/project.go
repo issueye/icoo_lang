@@ -188,6 +188,9 @@ func parseInitArgs(args []string) (initOptions, error) {
 func runCheckPath(path string) error {
 	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
 		rt := api.NewRuntime()
+		defer func() {
+			_ = rt.Close()
+		}()
 		errs := rt.CheckBundleFile(path)
 		if len(errs) > 0 {
 			for _, checkErr := range errs {
@@ -205,6 +208,9 @@ func runCheckPath(path string) error {
 	}
 
 	rt := api.NewRuntime()
+	defer func() {
+		_ = rt.Close()
+	}()
 	rt.SetProjectRoot(resolved.Root, resolved.RootAlias)
 	errs := rt.CheckFile(resolved.EntryPath)
 	if len(errs) > 0 {
@@ -221,6 +227,9 @@ func runCheckPath(path string) error {
 func runProjectPath(path string) error {
 	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
 		rt := api.NewRuntime()
+		defer func() {
+			_ = rt.Close()
+		}()
 		_, err := rt.RunBundleFile(path)
 		return err
 	}
@@ -231,6 +240,9 @@ func runProjectPath(path string) error {
 	}
 
 	rt := api.NewRuntime()
+	defer func() {
+		_ = rt.Close()
+	}()
 	rt.SetProjectRoot(resolved.Root, resolved.RootAlias)
 	if _, err := rt.RunFile(resolved.EntryPath); err != nil {
 		return err

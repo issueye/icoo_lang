@@ -136,6 +136,78 @@ func (r *Runtime) VM() *vm.VM
 
 注意：一旦直接操作底层 VM，就需要自己理解 `internal/vm` 的状态约束。
 
+### `ConfigureGoPool(workers, queueSize)`
+
+定义位置：`pkg/api/runtime.go`
+
+```go
+func (r *Runtime) ConfigureGoPool(workers, queueSize int) error
+```
+
+作用：
+
+- 配置脚本 `go` 语句使用的 goroutine pool
+- 为并发任务设置 worker 数和排队上限
+- 避免队列打满后继续无限制创建宿主 goroutine
+
+行为说明：
+
+- `workers <= 0` 时会回退到默认值
+- `queueSize <= 0` 时会按 `workers * 16` 计算默认队列长度
+- 如果池中仍有活动或排队任务，拒绝热重配
+
+### `Stats()`
+
+定义位置：`pkg/api/runtime.go`
+
+```go
+func (r *Runtime) Stats() vm.RuntimeStats
+```
+
+作用：
+
+- 读取当前运行时资源快照
+- 返回 CPU、goroutine、内存以及 goroutine pool 统计
+
+可用于：
+
+- 宿主程序监控
+- 压测时观测队列积压
+- 排查内存或协程异常增长
+
+### `CollectGarbage()`
+
+定义位置：`pkg/api/runtime.go`
+
+```go
+func (r *Runtime) CollectGarbage() vm.RuntimeStats
+```
+
+作用：
+
+- 主动触发一次 Go GC
+- 返回 GC 后的最新资源快照
+
+### `Shutdown(ctx)` / `Close()`
+
+定义位置：`pkg/api/runtime.go`
+
+```go
+func (r *Runtime) Shutdown(ctx context.Context) error
+func (r *Runtime) Close() error
+```
+
+作用：
+
+- 停止接收新的脚本 goroutine 任务
+- 关闭 goroutine pool，减少运行时残留 worker
+
+行为说明：
+
+- `Shutdown(ctx)` 支持调用方控制等待时长
+- `Close()` 提供一个带默认超时的便捷关闭入口
+- CLI 已在 REPL / run / bundle 执行链路里主动调用关闭逻辑
+
 ### `SetProjectRoot(root, alias)`
 
 定义位置：`pkg/api/runtime.go:37`

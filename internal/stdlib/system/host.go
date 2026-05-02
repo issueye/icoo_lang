@@ -76,9 +76,9 @@ func hostRuntimeStats(ctx *langruntime.NativeContext, args []langruntime.Value) 
 		return ctx.RuntimeStats(), nil
 	}
 	return &langruntime.ObjectValue{Fields: map[string]langruntime.Value{
-		"numCPU":       langruntime.IntValue{Value: int64(runtime.NumCPU())},
-		"goroutines":   langruntime.IntValue{Value: int64(runtime.NumGoroutine())},
-		"memory":       mustHostMemoryValue(),
+		"numCPU":        langruntime.IntValue{Value: int64(runtime.NumCPU())},
+		"goroutines":    langruntime.IntValue{Value: int64(runtime.NumGoroutine())},
+		"memory":        mustHostMemoryValue(),
 		"goroutinePool": &langruntime.ObjectValue{Fields: map[string]langruntime.Value{}},
 	}}, nil
 }

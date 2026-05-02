@@ -485,6 +485,9 @@ func runEmbeddedBundleIfPresent() (bool, error) {
 		return true, err
 	}
 	rt := api.NewRuntime()
+	defer func() {
+		_ = rt.Close()
+	}()
 	_, err = rt.RunBundleArchive(execPath, archive)
 	return true, err
 }

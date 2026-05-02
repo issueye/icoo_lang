@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 
 	"icoo_lang/internal/compiler"
@@ -32,6 +34,9 @@ func NewRuntime() *Runtime {
 	}
 	machine.SetModuleLoader(rt.loadModule)
 	stdlib.RegisterBuiltins(machine)
+	goruntime.SetFinalizer(rt, func(runtime *Runtime) {
+		_ = runtime.vm.Close()
+	})
 	return rt
 }
 
@@ -79,6 +84,26 @@ func (r *Runtime) RunFile(path string) (runtime.Value, error) {
 
 func (r *Runtime) VM() *vm.VM {
 	return r.vm
+}
+
+func (r *Runtime) ConfigureGoPool(workers, queueSize int) error {
+	return r.vm.ConfigureGoPool(workers, queueSize)
+}
+
+func (r *Runtime) Stats() vm.RuntimeStats {
+	return r.vm.Stats()
+}
+
+func (r *Runtime) CollectGarbage() vm.RuntimeStats {
+	return r.vm.CollectGarbage()
+}
+
+func (r *Runtime) Shutdown(ctx context.Context) error {
+	return r.vm.Shutdown(ctx)
+}
+
+func (r *Runtime) Close() error {
+	return r.vm.Close()
 }
 
 func (r *Runtime) InvokeGlobal(name string) (runtime.Value, error) {

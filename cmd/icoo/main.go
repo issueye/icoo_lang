@@ -113,6 +113,9 @@ func runRepl() {
 	fmt.Println()
 
 	rt := api.NewRuntime()
+	defer func() {
+		_ = rt.Close()
+	}()
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {

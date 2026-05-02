@@ -1382,10 +1382,10 @@ for key, value in host {
   }
 }
 
-if keys != "archgooshostnamenumCPUpid" {
+if keys != "archgcgoosgoroutineshostnamememorynumCPUpidruntime" {
   panic("unexpected std.host iteration order")
 }
-if count != 5 {
+if count != 9 {
   panic("unexpected std.host export count")
 }
 `
@@ -1393,6 +1393,56 @@ if count != 5 {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.host iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHostRuntimeMetrics(t *testing.T) {
+	src := `
+import std.host as host
+
+let ch = chan(1)
+go fn() {
+  ch.send(1)
+}()
+
+if ch.recv() != 1 {
+  panic("expected goroutine to finish")
+}
+
+let snapshot = host.runtime()
+if snapshot.numCPU < 1 {
+  panic("expected runtime cpu count")
+}
+if snapshot.goroutines < 1 {
+  panic("expected goroutine count")
+}
+if snapshot.memory.heapAllocBytes < 1 {
+  panic("expected memory stats")
+}
+if snapshot.goroutinePool.workers < 1 {
+  panic("expected goroutine pool workers")
+}
+if snapshot.goroutinePool.submitted < 1 {
+  panic("expected goroutine pool submissions")
+}
+
+let memory = host.memory()
+if memory.heapObjects < 1 {
+  panic("expected heap objects")
+}
+if host.goroutines() < 1 {
+  panic("expected goroutine count from host")
+}
+
+let afterGC = host.gc()
+if afterGC.memory.numGC < snapshot.memory.numGC {
+  panic("expected gc count to increase or stay equal")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.host runtime metrics to succeed, got: %v", err)
 	}
 }
 

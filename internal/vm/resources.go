@@ -72,9 +72,9 @@ func (vm *VM) collectGarbageValue() runtime.Value {
 
 func runtimeStatsToValue(stats RuntimeStats) runtime.Value {
 	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
-		"numCPU":       runtime.IntValue{Value: int64(stats.NumCPU)},
-		"goroutines":   runtime.IntValue{Value: int64(stats.NumGoroutine)},
-		"memory":       memoryStatsToValue(stats.Memory),
+		"numCPU":        runtime.IntValue{Value: int64(stats.NumCPU)},
+		"goroutines":    runtime.IntValue{Value: int64(stats.NumGoroutine)},
+		"memory":        memoryStatsToValue(stats.Memory),
 		"goroutinePool": poolStatsToValue(stats.Pool),
 	}}
 }
