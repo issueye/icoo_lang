@@ -47,3 +47,4 @@ go run ./cmd/icoo run examples/01_data_types.ic
   - 一个可运行的代理服务示例
   - 也是当前 `v0.1` 阶段最重要的服务端回归样例
   - 运行说明见 `examples/proxy/README.md`
+  - 可用交付说明见 `examples/proxy/v0.1-delivery.md`

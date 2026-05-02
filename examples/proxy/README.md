@@ -7,6 +7,12 @@
 1. 证明 `icoo` 语言和标准库已经能支撑一个可运行的代理服务
 2. 证明这轮从 `proxy/icoo_server` 反哺出来的能力已经真正落进语言侧，而不是停留在分析文档里
 
+相关文档：
+
+- `v0.1` 可用交付说明：`examples/proxy/v0.1-delivery.md`
+- 总交付规划：`docs/v0.1-delivery-plan.md`
+- proxy 重构反馈：`docs/proxy_refactor_feedback.md`
+
 ## 目录说明
 
 - `app.ic`
