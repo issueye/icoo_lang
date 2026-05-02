@@ -48,6 +48,83 @@ let upstream = server.listen({
 
     if req.path == "/openai/responses" {
       if object.get(payload, "stream", false) == true {
+        let firstInput = null
+        let rawInput = object.get(payload, "input")
+        if typeOf(rawInput) == "array" && len(rawInput) > 0 {
+          firstInput = rawInput[0]
+        }
+        let firstInputContent = ""
+        if typeOf(firstInput) == "object" {
+          firstInputContent = object.get(firstInput, "content", "")
+        }
+
+        if firstInputContent == "tool stream" {
+          let responseCreated = json.encode({
+            type: "response.created",
+            response: {
+              id: "resp-upstream-tool-stream",
+              object: "response",
+              model: model,
+              status: "in_progress"
+            }
+          })
+          let toolAdded = json.encode({
+            type: "response.output_item.added",
+            item_id: "fc_1",
+            output_index: 0,
+            item: {
+              id: "fc_1",
+              type: "function_call",
+              call_id: "call_1",
+              name: "weather"
+            }
+          })
+          let toolArgumentsDelta1 = json.encode({
+            type: "response.function_call_arguments.delta",
+            item_id: "fc_1",
+            output_index: 0,
+            delta: "{\"city\":"
+          })
+          let toolArgumentsDelta2 = json.encode({
+            type: "response.function_call_arguments.delta",
+            item_id: "fc_1",
+            output_index: 0,
+            delta: "\"Paris\"}"
+          })
+          let responseCompleted = json.encode({
+            type: "response.completed",
+            response: {
+              id: "resp-upstream-tool-stream",
+              object: "response",
+              model: model,
+              status: "completed"
+            }
+          })
+
+          res.setHeader("Content-Type", "text/event-stream")
+          res.sse({
+            event: "response.created",
+            data: responseCreated
+          })
+          res.sse({
+            event: "response.output_item.added",
+            data: toolAdded
+          })
+          res.sse({
+            event: "response.function_call_arguments.delta",
+            data: toolArgumentsDelta1
+          })
+          res.sse({
+            event: "response.function_call_arguments.delta",
+            data: toolArgumentsDelta2
+          })
+          res.sse({
+            event: "response.completed",
+            data: responseCompleted
+          })
+          return res.sse("[DONE]")
+        }
+
         let responseCreated = json.encode({
           type: "response.created",
           response: {
@@ -364,6 +441,71 @@ if streamDoneEvent.data != "[DONE]" {
   panic("expected stream done marker")
 }
 
+let translatedToolStreamClient = sseClient.connect({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key",
+    "Content-Type": "application/json"
+  },
+  body: json.encode({
+    model: "gpt-4o-responses",
+    stream: true,
+    messages: [
+      {
+        role: "user",
+        content: "tool stream"
+      }
+    ]
+  })
+})
+
+if translatedToolStreamClient.status != 200 {
+  panic("expected translated tool stream request to succeed")
+}
+
+let toolRoleEvent = translatedToolStreamClient.read()
+let toolStartEvent = translatedToolStreamClient.read()
+let toolArgEvent1 = translatedToolStreamClient.read()
+let toolArgEvent2 = translatedToolStreamClient.read()
+let toolFinishEvent = translatedToolStreamClient.read()
+let toolDoneEvent = translatedToolStreamClient.read()
+translatedToolStreamClient.close()
+
+let toolRoleChunk = json.decode(toolRoleEvent.data)
+let toolStartChunk = json.decode(toolStartEvent.data)
+let toolArgChunk1 = json.decode(toolArgEvent1.data)
+let toolArgChunk2 = json.decode(toolArgEvent2.data)
+let toolFinishChunk = json.decode(toolFinishEvent.data)
+
+if toolRoleChunk.choices[0].delta.role != "assistant" {
+  panic("expected tool stream role chunk assistant delta")
+}
+if toolStartChunk.choices[0].delta.tool_calls[0].id != "call_1" {
+  panic("expected tool stream call id")
+}
+if toolStartChunk.choices[0].delta.tool_calls[0].type != "function" {
+  panic("expected tool stream call type")
+}
+if toolStartChunk.choices[0].delta.tool_calls[0].function.name != "weather" {
+  panic("expected tool stream function name")
+}
+if toolStartChunk.choices[0].delta.tool_calls[0].function.arguments != "" {
+  panic("expected tool stream initial arguments")
+}
+if toolArgChunk1.choices[0].delta.tool_calls[0].function.arguments != "{\"city\":" {
+  panic("expected tool stream first arguments delta")
+}
+if toolArgChunk2.choices[0].delta.tool_calls[0].function.arguments != "\"Paris\"}" {
+  panic("expected tool stream second arguments delta")
+}
+if toolFinishChunk.choices[0].finish_reason != "tool_calls" {
+  panic("expected tool stream finish reason")
+}
+if toolDoneEvent.data != "[DONE]" {
+  panic("expected tool stream done marker")
+}
+
 let unauthorized = client.requestJSON({
   url: runtimeApp.server.url + "/v1/chat/completions",
   method: "POST",
@@ -391,16 +533,16 @@ if ready.json.ok != true {
 if monitor.json.ready.ok != true {
   panic("expected monitor ready ok")
 }
-if monitor.json.requestCount != 7 {
+if monitor.json.requestCount != 8 {
   panic("expected monitor request count")
 }
-if len(monitor.json.recentRequests) != 7 {
+if len(monitor.json.recentRequests) != 8 {
   panic("expected monitor recent requests")
 }
-if monitor.json.counters["requests.total"] != 7 {
+if monitor.json.counters["requests.total"] != 8 {
   panic("expected monitor total counter")
 }
-if monitor.json.counters["requests.status.2xx"] != 6 {
+if monitor.json.counters["requests.status.2xx"] != 7 {
   panic("expected monitor 2xx counter")
 }
 if monitor.json.counters["requests.status.4xx"] != 1 {
@@ -409,31 +551,31 @@ if monitor.json.counters["requests.status.4xx"] != 1 {
 if monitor.json.counters["auth.unauthorized"] != 1 {
   panic("expected auth unauthorized counter")
 }
-if monitor.json.counters["proxy.forwarded"] != 6 {
+if monitor.json.counters["proxy.forwarded"] != 7 {
   panic("expected proxy forwarded counter")
 }
-if monitor.json.counters["proxy.translated"] != 4 {
+if monitor.json.counters["proxy.translated"] != 5 {
   panic("expected translated proxy counter")
 }
 if monitor.json.counters["proxy.stream_aggregated"] != 1 {
   panic("expected aggregated stream counter")
 }
-if monitor.json.counters["proxy.stream_translated"] != 1 {
+if monitor.json.counters["proxy.stream_translated"] != 2 {
   panic("expected translated stream counter")
 }
-if monitor.json.latency.count != 7 {
+if monitor.json.latency.count != 8 {
   panic("expected latency sample count")
 }
 if len(routes.json.routes.defaults) != 3 {
   panic("expected default routes in admin response")
 }
-if requests.json.total != 7 {
+if requests.json.total != 8 {
   panic("expected recorded requests")
 }
-if requests.json.counters["requests.status.200"] != 6 {
+if requests.json.counters["requests.status.200"] != 7 {
   panic("expected request counters on admin requests")
 }
-if requests.json.latency.count != 7 {
+if requests.json.latency.count != 8 {
   panic("expected latency summary on admin requests")
 }
 

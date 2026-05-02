@@ -52,6 +52,10 @@ const streamApi = fn() {
     if content != null {
       choice.delta.content = content
     }
+    let toolCalls = object.get(delta, "tool_calls")
+    if toolCalls != null {
+      choice.delta.tool_calls = toolCalls
+    }
     if finishReason != null {
       choice.finish_reason = finishReason
     } else {
@@ -74,6 +78,35 @@ const streamApi = fn() {
         type: "api_error"
       }
     }))
+  }
+
+  fn toolStartChunkImpl(index, callId, name) {
+    return {
+      tool_calls: [
+        {
+          index: index,
+          id: callId,
+          type: "function",
+          function: {
+            name: name,
+            arguments: ""
+          }
+        }
+      ]
+    }
+  }
+
+  fn toolArgumentsChunkImpl(index, delta) {
+    return {
+      tool_calls: [
+        {
+          index: index,
+          function: {
+            arguments: delta
+          }
+        }
+      ]
+    }
   }
 
   fn aggregateResponsesJSONImpl(options) {
@@ -168,7 +201,10 @@ const streamApi = fn() {
     let responseModel = object.get(options, "model", "")
     let sentAssistantRole = false
     let sawTextDelta = false
+    let sawToolUse = false
     let finished = false
+    let toolStates = {}
+    let nextToolIndex = 0
 
     res.status(status)
     res.setHeader("Content-Type", "text/event-stream")
@@ -224,6 +260,92 @@ const streamApi = fn() {
           continue
         }
 
+        if eventType == "response.output_item.added" {
+          let item = object.get(payload, "item")
+          if object.get(item, "type") != "function_call" {
+            continue
+          }
+          if sentAssistantRole != true {
+            emitChatChunkImpl(res, responseId, responseModel, {role: "assistant"}, null)
+            sentAssistantRole = true
+          }
+          let key = object.get(payload, "item_id", object.get(item, "id", "tool"))
+          let existingTool = object.get(toolStates, key)
+          if existingTool == null {
+            existingTool = {
+              index: nextToolIndex,
+              call_id: object.get(item, "call_id", object.get(item, "id", key)),
+              name: object.get(item, "name", ""),
+              arguments_seen: false
+            }
+            toolStates[key] = existingTool
+            nextToolIndex = nextToolIndex + 1
+          }
+          sawToolUse = true
+          emitChatChunkImpl(res, responseId, responseModel, toolStartChunkImpl(existingTool.index, existingTool.call_id, existingTool.name), null)
+          continue
+        }
+
+        if eventType == "response.function_call_arguments.delta" {
+          if sentAssistantRole != true {
+            emitChatChunkImpl(res, responseId, responseModel, {role: "assistant"}, null)
+            sentAssistantRole = true
+          }
+          let key = object.get(payload, "item_id", "tool")
+          let toolState = object.get(toolStates, key)
+          if toolState == null {
+            toolState = {
+              index: nextToolIndex,
+              call_id: object.get(payload, "call_id", key),
+              name: object.get(payload, "name", ""),
+              arguments_seen: false
+            }
+            toolStates[key] = toolState
+            nextToolIndex = nextToolIndex + 1
+            sawToolUse = true
+            emitChatChunkImpl(res, responseId, responseModel, toolStartChunkImpl(toolState.index, toolState.call_id, toolState.name), null)
+          }
+          let delta = object.get(payload, "delta", "")
+          if delta != "" {
+            toolState.arguments_seen = true
+            sawToolUse = true
+            emitChatChunkImpl(res, responseId, responseModel, toolArgumentsChunkImpl(toolState.index, delta), null)
+          }
+          continue
+        }
+
+        if eventType == "response.output_item.done" {
+          let item = object.get(payload, "item")
+          if object.get(item, "type") != "function_call" {
+            continue
+          }
+          let key = object.get(payload, "item_id", object.get(item, "id", "tool"))
+          let toolState = object.get(toolStates, key)
+          if toolState == null {
+            toolState = {
+              index: nextToolIndex,
+              call_id: object.get(item, "call_id", object.get(item, "id", key)),
+              name: object.get(item, "name", ""),
+              arguments_seen: false
+            }
+            toolStates[key] = toolState
+            nextToolIndex = nextToolIndex + 1
+            if sentAssistantRole != true {
+              emitChatChunkImpl(res, responseId, responseModel, {role: "assistant"}, null)
+              sentAssistantRole = true
+            }
+            sawToolUse = true
+            emitChatChunkImpl(res, responseId, responseModel, toolStartChunkImpl(toolState.index, toolState.call_id, toolState.name), null)
+          }
+          let arguments = object.get(item, "arguments", "")
+          if arguments != "" && object.get(toolState, "arguments_seen", false) != true {
+            toolState.arguments_seen = true
+            sawToolUse = true
+            emitChatChunkImpl(res, responseId, responseModel, toolArgumentsChunkImpl(toolState.index, arguments), null)
+          }
+          continue
+        }
+
         if eventType == "response.completed" {
           let response = object.get(payload, "response")
           responseId = object.get(response, "id", responseId)
@@ -232,7 +354,11 @@ const streamApi = fn() {
             emitChatChunkImpl(res, responseId, responseModel, {role: "assistant"}, null)
             sentAssistantRole = true
           }
-          emitChatChunkImpl(res, responseId, responseModel, {}, "stop")
+          let finishReason = "stop"
+          if sawToolUse == true {
+            finishReason = "tool_calls"
+          }
+          emitChatChunkImpl(res, responseId, responseModel, {}, finishReason)
           res.sse("[DONE]")
           finished = true
           return {
@@ -262,7 +388,11 @@ const streamApi = fn() {
       if sentAssistantRole != true {
         emitChatChunkImpl(res, responseId, responseModel, {role: "assistant"}, null)
       }
-      emitChatChunkImpl(res, responseId, responseModel, {}, "stop")
+      let finishReason = "stop"
+      if sawToolUse == true {
+        finishReason = "tool_calls"
+      }
+      emitChatChunkImpl(res, responseId, responseModel, {}, finishReason)
       res.sse("[DONE]")
     }
 

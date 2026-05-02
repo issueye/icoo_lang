@@ -119,11 +119,12 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 
 - 可把上游 `OpenAI Responses` 的 SSE 响应聚合回 JSON
 - 可把上游 `OpenAI Responses` 的文本 SSE 响应直接翻译成 `OpenAI Chat` SSE 响应
+- 可把上游 `OpenAI Responses` 的最小 tool call SSE 事件翻译成 `OpenAI Chat` `tool_calls` delta
 
 当前仍然没有直接完成：
 
 - 通用化的下游流式跨协议翻译
-- `Responses -> Chat` 的 tool call / reasoning 等复杂事件翻译
+- `Responses -> Chat` 的 reasoning 等复杂事件翻译
 - `Responses -> Anthropic` 的逐事件 SSE 翻译
 
 也就是说，当前已经有了“流式底座 + 聚合回退路径 + 最小直译路径”，但还没有进入完整的“流式协议桥”阶段。
