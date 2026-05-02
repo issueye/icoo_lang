@@ -55,9 +55,9 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stdsystem.LoadStdHostModule(), true
 	case "std.express":
 		return express.LoadStdExpressModule(), true
-	case "std.http.client":
+	case "std.net.http.client":
 		return stdnet.LoadStdNetHTTPClientModule(), true
-	case "std.http.server":
+	case "std.net.http.server":
 		return stdnet.LoadStdNetHTTPServerModule(), true
 	case "std.net.websocket.client":
 		return stdnet.LoadStdNetWebSocketClientModule(), true

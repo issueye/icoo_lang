@@ -24,8 +24,8 @@ import (
 
 func LoadStdNetHTTPClientModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.http.client",
-		Path: "std.http.client",
+		Name: "std.net.http.client",
+		Path: "std.net.http.client",
 		Exports: map[string]runtime.Value{
 			"delete":        &runtime.NativeFunction{Name: "delete", Arity: 1, Fn: httpDelete},
 			"download":      &runtime.NativeFunction{Name: "download", Arity: 2, Fn: httpDownload},
@@ -43,8 +43,8 @@ func LoadStdNetHTTPClientModule() *runtime.Module {
 
 func LoadStdNetHTTPServerModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.http.server",
-		Path: "std.http.server",
+		Name: "std.net.http.server",
+		Path: "std.net.http.server",
 		Exports: map[string]runtime.Value{
 			"forward": &runtime.NativeFunction{Name: "forward", Arity: 2, Fn: httpForward},
 			"listen":  &runtime.NativeFunction{Name: "listen", Arity: 1, CtxFn: httpListen},

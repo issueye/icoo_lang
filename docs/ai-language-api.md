@@ -789,7 +789,7 @@ client.close()
 
 ## 5.6 net
 
-### `std.http.client`
+### `std.net.http.client`
 
 常用导出：
 
@@ -803,11 +803,11 @@ client.close()
 - `download`
 
 ```icoo
-import std.http.client as http
+import std.net.http.client as http
 let resp = http.get("https://example.com")
 ```
 
-### `std.http.server`
+### `std.net.http.server`
 
 常用导出：
 
@@ -1042,8 +1042,8 @@ class User {
 
 优先从这些模块选：
 
-- `std.http.client`
-- `std.http.server`
+- `std.net.http.client`
+- `std.net.http.server`
 - `std.express`
 - `std.net.websocket.*`
 - `std.net.sse.*`

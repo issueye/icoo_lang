@@ -1,6 +1,6 @@
 import std.io as io
 import std.express as express
-import std.http.client as client
+import std.net.http.client as client
 
 let app = express.create()
 

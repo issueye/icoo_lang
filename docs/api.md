@@ -525,8 +525,8 @@ func (r *Runtime) RunBundleArchive(path string, archive *BundleArchive) (runtime
 - `std.exec`
 - `std.os`
 - `std.host`
-- `std.http.client`
-- `std.http.server`
+- `std.net.http.client`
+- `std.net.http.server`
 - `std.net.websocket.client`
 - `std.net.websocket.server`
 - `std.net.sse.client`

@@ -1,7 +1,7 @@
 import std.io as io
 import std.os as os
 import std.time as time
-import std.http.server as server
+import std.net.http.server as server
 
 let addr = os.getEnv("ICOO_PROXY_UPSTREAM_ADDR")
 if addr == null {

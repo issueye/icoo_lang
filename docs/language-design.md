@@ -262,8 +262,8 @@ select {
 - `std.os`
 - `std.host`
 - `std.express`
-- `std.http.client`
-- `std.http.server`
+- `std.net.http.client`
+- `std.net.http.server`
 - `std.net.websocket.client`
 - `std.net.websocket.server`
 - `std.net.sse.client`

@@ -1,6 +1,6 @@
 import std.io as io
-import std.http.client as client
-import std.http.server as server
+import std.net.http.client as client
+import std.net.http.server as server
 
 let app = server.listen({
   addr: "127.0.0.1:0",

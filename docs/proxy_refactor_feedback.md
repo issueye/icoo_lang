@@ -42,7 +42,7 @@
 - 响应头过滤和细粒度控制
 - 统一错误格式与链路观测
 
-这说明当前 `std.http.server` / `std.express` 更像“轻量 Web API 工具”，还不是“代理/网关工具”。
+这说明当前 `std.net.http.server` / `std.express` 更像“轻量 Web API 工具”，还不是“代理/网关工具”。
 
 ### 3. 缺少面向服务代码的观测与中间件骨架
 
@@ -181,7 +181,7 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 1. 新增 `std.object` 标准库模块。
 2. 补齐顶层 `import` 在闭包/IIFE 中的可捕获性。
 3. 补齐字符串键对象字面量，以及服务端请求对象的 `req.header(name)` / `req.hasHeader(name)` / `req.json`。
-4. 为 `std.http.server` 和 `std.express` 增加双参 handler 形态 `fn(req, res)`，支持 `res.status(...)` / `res.statusCode()` / `res.setHeader(...)` / `res.write(...)` / `res.json(...)` / `res.end(...)`，让脚本层第一次具备“直接控制响应”的能力。
+4. 为 `std.net.http.server` 和 `std.express` 增加双参 handler 形态 `fn(req, res)`，支持 `res.status(...)` / `res.statusCode()` / `res.setHeader(...)` / `res.write(...)` / `res.json(...)` / `res.end(...)`，让脚本层第一次具备“直接控制响应”的能力。
 5. 继续补上 `res.proxy(req, options)`，让代理型服务可以把上游响应直接流式写回下游，而不是像 `forward()` 一样先整包读入内存再返回对象。
 6. 把已有 `std.db` 链式查询能力收口成 `std.orm.model(...)`，并补齐 `create()` 与更直观的模型入口。
 7. 继续补上 `req.requestId` 和默认 `X-Request-Id` 响应头，让脚本服务第一次具备统一的请求链路标识，并把它直接回流到 proxy 示例的上游透传和 recent requests 记录中。
@@ -198,6 +198,6 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 ## 五、建议的下一步顺序
 
 1. 继续把 `examples/proxy` 当作语言回归样例，专门观察服务端样板代码密度。
-2. 继续沿 `std.http.server` / `std.express` 补代理友好的低层 HTTP 能力，尤其是请求流和真正的流式上游桥接，而不是直接追求更多语法。
+2. 继续沿 `std.net.http.server` / `std.express` 补代理友好的低层 HTTP 能力，尤其是请求流和真正的流式上游桥接，而不是直接追求更多语法。
 3. 观察 `std.service` 是否还需要再向上补“事件/日志/脱敏辅助”，但尽量避免把它做成重量级 metrics 框架。
 4. 等服务端样例稳定后，再判断是否需要对象展开、可空访问等语法级增强。

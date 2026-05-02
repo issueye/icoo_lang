@@ -1,5 +1,5 @@
 import std.json as json
-import std.http.server as server
+import std.net.http.server as server
 import std.object as object
 import std.time as time
 import "./auth.ic" as auth
