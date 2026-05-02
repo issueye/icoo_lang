@@ -1,30 +1,17 @@
 import std.json as json
+import std.object as object
 
 const jsonHelpersApi = fn() {
-  let jsonModule = json
-
-  fn lookup(obj, name) {
-    if obj == null {
-      return null
-    }
-    for key, value in obj {
-      if key == name {
-        return value
-      }
-    }
-    return null
-  }
-
   fn requestedModelImpl(req) {
-    let payload = lookup(req, "json")
+    let payload = object.get(req, "json")
     if payload == null {
       return null
     }
-    return lookup(payload, "model")
+    return object.get(payload, "model")
   }
 
   fn rewriteBodyImpl(req, route) {
-    let payload = lookup(req, "json")
+    let payload = object.get(req, "json")
     if payload == null {
       return {
         body: req.body,
@@ -32,13 +19,13 @@ const jsonHelpersApi = fn() {
       }
     }
 
-    let requestedModel = lookup(payload, "model")
+    let requestedModel = object.get(payload, "model")
     if route.upstreamModel != null {
       payload.model = route.upstreamModel
     }
 
     return {
-      body: jsonModule.encode(payload),
+      body: json.encode(payload),
       requestedModel: requestedModel
     }
   }

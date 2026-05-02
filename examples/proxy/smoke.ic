@@ -26,8 +26,8 @@ let upstream = server.listen({
         path: req.path,
         method: req.method,
         model: model,
-        route: req.headers["X-Proxy-Route"],
-        auth: req.headers["X-Proxy-Auth"]
+        route: req.header("X-Proxy-Route"),
+        auth: req.header("X-Proxy-Auth")
       }
     }
   }

@@ -1,10 +1,8 @@
 import std.json as json
+import std.object as object
 import std.os as os
 
 const configApi = fn() {
-  let jsonModule = json
-  let osModule = os
-
   fn defaultConfig() {
     return {
       listenAddr: "127.0.0.1:8086",
@@ -81,90 +79,30 @@ const configApi = fn() {
     }
   }
 
-  fn lookup(obj, name) {
-    if obj == null {
-      return null
-    }
-    for key, value in obj {
-      if key == name {
-        return value
-      }
-    }
-    return null
-  }
-
-  fn applyOverride(config, override) {
-    if override == null {
-      return config
-    }
-
-    let listenAddr = lookup(override, "listenAddr")
-    if listenAddr != null {
-      config.listenAddr = listenAddr
-    }
-
-    let upstreamBaseUrl = lookup(override, "upstreamBaseUrl")
-    if upstreamBaseUrl != null {
-      config.upstreamBaseUrl = upstreamBaseUrl
-    }
-
-    let apiKeys = lookup(override, "apiKeys")
-    if apiKeys != null {
-      config.apiKeys = apiKeys
-    }
-
-    let allowUnauthenticatedLocal = lookup(override, "allowUnauthenticatedLocal")
-    if allowUnauthenticatedLocal != null {
-      config.allowUnauthenticatedLocal = allowUnauthenticatedLocal
-    }
-
-    let timeoutMs = lookup(override, "timeoutMs")
-    if timeoutMs != null {
-      config.timeoutMs = timeoutMs
-    }
-
-    let recentLimit = lookup(override, "recentLimit")
-    if recentLimit != null {
-      config.recentLimit = recentLimit
-    }
-
-    let defaultRoutes = lookup(override, "defaultRoutes")
-    if defaultRoutes != null {
-      config.defaultRoutes = defaultRoutes
-    }
-
-    let aliases = lookup(override, "aliases")
-    if aliases != null {
-      config.aliases = aliases
-    }
-
-    return config
-  }
-
   fn loadConfigImpl(overrides) {
     let config = defaultConfig()
 
-    let configPath = osModule.getEnv("ICOO_PROXY_CONFIG")
+    let configPath = os.getEnv("ICOO_PROXY_CONFIG")
     if configPath != null {
-      config = applyOverride(config, jsonModule.fromFile(configPath))
+      config = object.merge(config, json.fromFile(configPath))
     }
 
-    let listenAddr = osModule.getEnv("ICOO_PROXY_LISTEN")
+    let listenAddr = os.getEnv("ICOO_PROXY_LISTEN")
     if listenAddr != null {
       config.listenAddr = listenAddr
     }
 
-    let upstreamBaseUrl = osModule.getEnv("ICOO_PROXY_UPSTREAM")
+    let upstreamBaseUrl = os.getEnv("ICOO_PROXY_UPSTREAM")
     if upstreamBaseUrl != null {
       config.upstreamBaseUrl = upstreamBaseUrl
     }
 
-    let allowLocal = osModule.getEnv("ICOO_PROXY_ALLOW_LOCAL")
+    let allowLocal = os.getEnv("ICOO_PROXY_ALLOW_LOCAL")
     if allowLocal == "1" || allowLocal == "true" {
       config.allowUnauthenticatedLocal = true
     }
 
-    return applyOverride(config, overrides)
+    return object.merge(config, overrides)
   }
 
   fn sampleConfigImpl() {

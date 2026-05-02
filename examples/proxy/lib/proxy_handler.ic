@@ -1,49 +1,23 @@
 import std.http.server as server
+import std.object as object
 import "./auth.ic" as auth
 import "./catalog.ic" as catalog
 import "./json_helpers.ic" as jsonHelpers
 import "./store.ic" as store
 
 const proxyHandlerApi = fn() {
-  let serverModule = server
-  let authModule = auth
-  let catalogModule = catalog
-  let jsonHelpersModule = jsonHelpers
-  let storeModule = store
-
-  fn headerValue(req, name) {
-    for key, value in req.headers {
-      if key == name {
-        return value
-      }
-    }
-    return null
-  }
-
-  fn lookup(obj, name) {
-    if obj == null {
-      return null
-    }
-    for key, value in obj {
-      if key == name {
-        return value
-      }
-    }
-    return null
-  }
-
   fn buildForwardHeaders(req, authResult, route) {
     let headers = {}
     headers["X-Proxy-Route"] = route.name
     headers["X-Resolved-Model"] = route.upstreamModel
     headers["X-Proxy-Auth"] = authResult.via
 
-    let accept = headerValue(req, "Accept")
+    let accept = req.header("Accept")
     if accept != null {
       headers.Accept = accept
     }
 
-    if lookup(req, "json") != null {
+    if object.has(req, "json") {
       headers["Content-Type"] = "application/json"
     }
 
@@ -51,7 +25,7 @@ const proxyHandlerApi = fn() {
   }
 
   fn recordOutcome(state, req, routeName, requestedModel, resolvedModel, authVia, status, upstreamUrl, note) {
-    storeModule.recordRequest(state.store, {
+    store.recordRequest(state.store, {
       method: req.method,
       path: req.path,
       route_name: routeName,
@@ -66,14 +40,14 @@ const proxyHandlerApi = fn() {
   }
 
   fn handleProxyImpl(req, state) {
-    let requestedModel = jsonHelpersModule.requestedModel(req)
-    let authResult = authModule.authenticate(state.config, req)
+    let requestedModel = jsonHelpers.requestedModel(req)
+    let authResult = auth.authenticate(state.config, req)
     if authResult.ok != true {
       recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized")
       return authResult.response
     }
 
-    let route = catalogModule.resolveRoute(state.catalog, req.path, requestedModel)
+    let route = catalog.resolveRoute(state.catalog, req.path, requestedModel)
     if route == null {
       recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found")
       return {
@@ -87,12 +61,12 @@ const proxyHandlerApi = fn() {
       }
     }
 
-    let bodyInfo = jsonHelpersModule.rewriteBody(req, route)
+    let bodyInfo = jsonHelpers.rewriteBody(req, route)
     let upstreamUrl = state.config.upstreamBaseUrl + route.upstreamPath
     let headers = buildForwardHeaders(req, authResult, route)
 
     try {
-      let resp = serverModule.forward(req, {
+      let resp = server.forward(req, {
         url: upstreamUrl,
         headers: headers,
         body: bodyInfo.body,

@@ -231,6 +231,8 @@ func doHTTPRequest(opts *httpRequestOptions) (runtime.Value, error) {
 		"status":        runtime.IntValue{Value: int64(resp.StatusCode)},
 		"statusText":    runtime.StringValue{Value: resp.Status},
 		"body":          runtime.StringValue{Value: string(body)},
+		"header":        httpHeaderGetter(resp.Header),
+		"hasHeader":     httpHasHeaderGetter(resp.Header),
 		"url":           runtime.StringValue{Value: resp.Request.URL.String()},
 		"method":        runtime.StringValue{Value: opts.Method},
 		"headers":       httpHeadersToRuntime(resp.Header),
@@ -406,6 +408,8 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 		"url":           runtime.StringValue{Value: r.URL.String()},
 		"path":          runtime.StringValue{Value: r.URL.Path},
 		"query":         &runtime.ObjectValue{Fields: queryFields},
+		"header":        httpHeaderGetter(r.Header),
+		"hasHeader":     httpHasHeaderGetter(r.Header),
 		"headers":       httpHeadersToRuntime(r.Header),
 		"body":          runtime.StringValue{Value: string(body)},
 		"contentLength": runtime.IntValue{Value: r.ContentLength},
@@ -521,6 +525,38 @@ func httpHeadersFromRuntime(name string, value runtime.Value) (map[string]string
 		headers[key] = value.String()
 	}
 	return headers, nil
+}
+
+func httpHeaderGetter(headers http.Header) runtime.Value {
+	return &runtime.NativeFunction{
+		Name:  "http.header",
+		Arity: 1,
+		Fn: func(args []runtime.Value) (runtime.Value, error) {
+			name, err := utils.RequireStringArg("header", args[0])
+			if err != nil {
+				return nil, err
+			}
+			value := headers.Get(name)
+			if value == "" {
+				return runtime.NullValue{}, nil
+			}
+			return runtime.StringValue{Value: value}, nil
+		},
+	}
+}
+
+func httpHasHeaderGetter(headers http.Header) runtime.Value {
+	return &runtime.NativeFunction{
+		Name:  "http.hasHeader",
+		Arity: 1,
+		Fn: func(args []runtime.Value) (runtime.Value, error) {
+			name, err := utils.RequireStringArg("hasHeader", args[0])
+			if err != nil {
+				return nil, err
+			}
+			return runtime.BoolValue{Value: headers.Get(name) != ""}, nil
+		},
+	}
 }
 
 func httpTimeoutFromOptions(name string, obj *runtime.ObjectValue) (time.Duration, error) {

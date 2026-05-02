@@ -1,13 +1,4 @@
 const authApi = fn() {
-  fn headerValue(req, name) {
-    for key, value in req.headers {
-      if key == name {
-        return value
-      }
-    }
-    return null
-  }
-
   fn unauthorizedResponse() {
     return {
       status: 401,
@@ -28,8 +19,8 @@ const authApi = fn() {
       }
     }
 
-    let authorization = headerValue(req, "Authorization")
-    let apiKey = headerValue(req, "X-Api-Key")
+    let authorization = req.header("Authorization")
+    let apiKey = req.header("X-Api-Key")
 
     for i, key in config.apiKeys {
       if authorization == "Bearer " + key {

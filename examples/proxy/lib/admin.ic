@@ -3,45 +3,41 @@ import "./catalog.ic" as catalog
 import "./store.ic" as store
 
 const adminApi = fn() {
-  let expressModule = express
-  let catalogModule = catalog
-  let storeModule = store
-
   fn registerRoutesImpl(app, state) {
     app.get("/healthz", fn(req) {
-      return expressModule.json({
+      return express.json({
         ok: true,
         service: "icoo-proxy"
       })
     })
 
     app.get("/readyz", fn(req) {
-      return expressModule.json({
+      return express.json({
         ok: true,
         upstreamBaseUrl: state.config.upstreamBaseUrl,
-        requestCount: storeModule.count(state.store)
+        requestCount: store.count(state.store)
       })
     })
 
     app.get("/admin/routes", fn(req) {
-      return expressModule.json({
+      return express.json({
         ok: true,
-        routes: catalogModule.snapshot(state.catalog)
+        routes: catalog.snapshot(state.catalog)
       })
     })
 
     app.get("/admin/models", fn(req) {
-      return expressModule.json({
+      return express.json({
         ok: true,
-        models: catalogModule.modelsSnapshot(state.catalog)
+        models: catalog.modelsSnapshot(state.catalog)
       })
     })
 
     app.get("/admin/requests", fn(req) {
-      return expressModule.json({
+      return express.json({
         ok: true,
-        total: storeModule.count(state.store),
-        requests: storeModule.listRecent(state.store)
+        total: store.count(state.store),
+        requests: store.listRecent(state.store)
       })
     })
 

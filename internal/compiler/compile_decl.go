@@ -93,6 +93,9 @@ func (c *Compiler) compileImportDecl(d *ast.ImportDecl) {
 		return
 	}
 
+	slot := c.addLocal(d.Alias, true)
+	c.emit(bytecode.OpGetLocal)
+	c.emitShort(uint16(slot))
 	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: d.Alias})
 	c.emit(bytecode.OpDefineGlobal)
 	c.emitShort(nameIdx)
@@ -202,6 +205,7 @@ func (c *Compiler) emitNamedRefSet(ref VarRef) {
 }
 
 func (c *Compiler) compileTypeDecl(d *ast.TypeDecl) {
+	c.emitNull()
 	if c.current.scopeDepth > 0 {
 		c.addLocal(d.Name, true)
 		return

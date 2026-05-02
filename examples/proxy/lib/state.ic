@@ -3,21 +3,17 @@ import "./catalog.ic" as catalog
 import "./store.ic" as store
 
 const stateApi = fn() {
-  let timeModule = time
-  let catalogModule = catalog
-  let storeModule = store
-
   fn newStateImpl(config) {
     return {
       config: config,
-      catalog: catalogModule.buildCatalog(config),
-      store: storeModule.createStore(config.recentLimit),
-      startedAt: timeModule.now()
+      catalog: catalog.buildCatalog(config),
+      store: store.createStore(config.recentLimit),
+      startedAt: time.now()
     }
   }
 
   fn closeImpl(state) {
-    storeModule.close(state.store)
+    store.close(state.store)
     return null
   }
 

@@ -211,6 +211,71 @@ if keys != "CopycopyopenReaderopenWriterprintprintlnreadAll" {
 	}
 }
 
+func TestRuntimeRunSource_CapturesImportedStdModuleInClosure(t *testing.T) {
+	src := `
+import std.object as object
+
+const api = fn() {
+  fn readName(value) {
+    return object.get(value, "name", "missing")
+  }
+
+  return {
+    readName: readName
+  }
+}()
+
+if api.readName({name: "icoo"}) != "icoo" {
+  panic("expected imported std module capture to work")
+}
+if api.readName({}) != "missing" {
+  panic("expected imported std module fallback in closure")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected imported std module capture to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunFile_CapturesImportedFileModuleInClosure(t *testing.T) {
+	dir := t.TempDir()
+	helperPath := filepath.Join(dir, "helper.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(helperPath, []byte(`export fn tag(value) {
+  return "[" + value + "]"
+}
+`), 0o644); err != nil {
+		t.Fatalf("write helper module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "./helper.ic" as helper
+
+const api = fn() {
+  fn render(value) {
+    return helper.tag(value)
+  }
+
+  return {
+    render: render
+  }
+}()
+
+if api.render("icoo") != "[icoo]" {
+  panic("expected imported file module capture to work")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected imported file module capture to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_StdIOCopy(t *testing.T) {
 	dir := t.TempDir()
 	srcPath := filepath.Join(dir, "source.txt")
@@ -247,6 +312,63 @@ if text != "hello copy" {
 		t.Fatalf("expected std.io copy to succeed, got: %v", err)
 	}
 }
+
+func TestRuntimeRunSource_ImportsStdObjectModule(t *testing.T) {
+	src := `
+import std.object as object
+
+let source = {
+  name: "icoo",
+  nested: {
+    ok: true
+  }
+}
+
+if object.get(source, "name") != "icoo" {
+  panic("expected object.get to return existing field")
+}
+if object.get(source, "missing") != null {
+  panic("expected object.get to return null for missing field")
+}
+if object.get(source, "missing", "fallback") != "fallback" {
+  panic("expected object.get fallback")
+}
+if object.has(source, "nested") != true {
+  panic("expected object.has to find field")
+}
+if object.has(source, "missing") != false {
+  panic("expected object.has to miss field")
+}
+
+let merged = object.merge(source, {
+  port: 8080,
+  name: "proxy"
+})
+if merged.name != "proxy" {
+  panic("expected object.merge to override field")
+}
+if merged.port != 8080 {
+  panic("expected object.merge to add field")
+}
+if source.name != "icoo" {
+  panic("expected object.merge to keep source immutable")
+}
+
+let keys = object.keys(merged)
+if len(keys) != 3 {
+  panic("expected object.keys size")
+}
+if keys[0] != "name" || keys[1] != "nested" || keys[2] != "port" {
+  panic("expected object.keys to be sorted")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.object import to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ImportsStdTimeModule(t *testing.T) {
 	src := `
 import std.time as time
@@ -1349,6 +1471,55 @@ if count != 2 {
 	}
 }
 
+func TestRuntimeRunSource_StdHTTPServerRequestHeaderHelpers(t *testing.T) {
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      json: {
+        auth: req.header("Authorization"),
+        hasTrace: req.hasHeader("X-Trace-Id"),
+        missing: req.header("X-Missing")
+      }
+    }
+  }
+})
+
+let resp = client.requestJSON({
+  url: upstream.url + "/headers",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo",
+    "X-Trace-Id": "trace-1"
+  },
+  json: {
+    ok: true
+  }
+})
+
+upstream.close()
+
+if resp.json.auth != "Bearer demo" {
+  panic("expected req.header to read Authorization")
+}
+if resp.json.hasTrace != true {
+  panic("expected req.hasHeader to detect header")
+}
+if resp.json.missing != null {
+  panic("expected missing req.header to return null")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server request header helpers to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_StdHTTPShortcutMethods(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -1999,7 +2170,6 @@ if postResp.json.count != 2 {
 	}
 }
 
-
 func TestRuntimeRunSource_StdExpressMiddleware(t *testing.T) {
 	src := `
 import std.express as express
@@ -2049,6 +2219,52 @@ if stopResp.body != "stopped" {
 	}
 }
 
+func TestRuntimeRunSource_StdExpressRequestHeaderHelpers(t *testing.T) {
+	src := `
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+app.post("/inspect", fn(req) {
+  return express.json({
+    auth: req.header("Authorization"),
+    hasTrace: req.hasHeader("X-Trace-Id"),
+    missing: req.header("X-Missing")
+  })
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let resp = client.requestJSON({
+  url: server.url + "/inspect",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer express",
+    "X-Trace-Id": "trace-2"
+  },
+  json: {
+    ok: true
+  }
+})
+
+server.close()
+
+if resp.json.auth != "Bearer express" {
+  panic("expected express req.header to read Authorization")
+}
+if resp.json.hasTrace != true {
+  panic("expected express req.hasHeader to detect header")
+}
+if resp.json.missing != null {
+  panic("expected express missing req.header to return null")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected express request header helpers to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_StdExpressRootRouteMatchesExactly(t *testing.T) {
 	src := `
 import std.express as express
@@ -2080,7 +2296,6 @@ if adminResp.json.route != "/admin/routes" {
 		t.Fatalf("expected express root route match to succeed, got: %v", err)
 	}
 }
-
 
 func TestRuntimeRunSource_ImportsStdCryptoModule(t *testing.T) {
 	src := `

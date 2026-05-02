@@ -2,9 +2,6 @@ import std.db as db
 import std.time as time
 
 const storeApi = fn() {
-  let dbModule = db
-  let timeModule = time
-
   fn trimToLimitImpl(store) {
     let rows = store.conn.query("select id from requests order by id desc")
     let i = store.limit
@@ -16,7 +13,7 @@ const storeApi = fn() {
   }
 
   fn createStoreImpl(limit) {
-    let conn = dbModule.sqlite(":memory:")
+    let conn = db.sqlite(":memory:")
     conn.exec("create table requests (id integer primary key, ts integer, method text, path text, route_name text, requested_model text, resolved_model text, auth_via text, status integer, upstream_url text, note text)")
     return {
       conn: conn,
@@ -26,9 +23,9 @@ const storeApi = fn() {
 
   fn recordRequestImpl(store, item) {
     store.conn.exec(
-      "insert into requests (ts, method, path, route_name, requested_model, resolved_model, auth_via, status, upstream_url, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "insert into requests (ts, method, path, route_name, requested_model, resolved_model, auth_via, status, upstream_url, note) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
-        timeModule.now(),
+        time.now(),
         item.method,
         item.path,
         item.route_name,

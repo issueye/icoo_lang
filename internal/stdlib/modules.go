@@ -19,6 +19,8 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stdcore.LoadStdTimeModule(), true
 	case "std.math":
 		return stdcore.LoadStdMathModule(), true
+	case "std.object":
+		return stdcore.LoadStdObjectModule(), true
 	case "std.db":
 		return stddb.LoadStdDBModule(), true
 	case "std.json":

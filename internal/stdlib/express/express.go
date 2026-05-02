@@ -332,7 +332,9 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 	req := &runtime.ObjectValue{Fields: map[string]runtime.Value{
 		"body":          runtime.StringValue{Value: string(body)},
 		"contentLength": runtime.IntValue{Value: r.ContentLength},
+		"header":        httpHeaderGetter(r.Header),
 		"headers":       httpHeadersToRuntime(r.Header),
+		"hasHeader":     httpHasHeaderGetter(r.Header),
 		"host":          runtime.StringValue{Value: r.Host},
 		"method":        runtime.StringValue{Value: r.Method},
 		"path":          runtime.StringValue{Value: r.URL.Path},
@@ -433,6 +435,38 @@ func httpHeadersToRuntime(headers http.Header) runtime.Value {
 		fields[key] = &runtime.ArrayValue{Elements: items}
 	}
 	return &runtime.ObjectValue{Fields: fields}
+}
+
+func httpHeaderGetter(headers http.Header) runtime.Value {
+	return &runtime.NativeFunction{
+		Name:  "express.request.header",
+		Arity: 1,
+		Fn: func(args []runtime.Value) (runtime.Value, error) {
+			name, err := requireStringArg("header", args[0])
+			if err != nil {
+				return nil, err
+			}
+			value := headers.Get(name)
+			if value == "" {
+				return runtime.NullValue{}, nil
+			}
+			return runtime.StringValue{Value: value}, nil
+		},
+	}
+}
+
+func httpHasHeaderGetter(headers http.Header) runtime.Value {
+	return &runtime.NativeFunction{
+		Name:  "express.request.hasHeader",
+		Arity: 1,
+		Fn: func(args []runtime.Value) (runtime.Value, error) {
+			name, err := requireStringArg("hasHeader", args[0])
+			if err != nil {
+				return nil, err
+			}
+			return runtime.BoolValue{Value: headers.Get(name) != ""}, nil
+		},
+	}
 }
 
 func isNextResponse(value runtime.Value) bool {

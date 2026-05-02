@@ -1,16 +1,6 @@
-const catalogApi = fn() {
-  fn lookup(obj, name) {
-    if obj == null {
-      return null
-    }
-    for key, value in obj {
-      if key == name {
-        return value
-      }
-    }
-    return null
-  }
+import std.object as object
 
+const catalogApi = fn() {
   fn buildCatalogImpl(config) {
     return {
       defaultRoutes: config.defaultRoutes,
@@ -21,7 +11,7 @@ const catalogApi = fn() {
   fn cloneRoute(route, selection, requestedModel) {
     return {
       name: route.name,
-      alias: lookup(route, "alias"),
+      alias: object.get(route, "alias"),
       endpoint: route.endpoint,
       upstreamPath: route.upstreamPath,
       upstreamModel: route.upstreamModel,
