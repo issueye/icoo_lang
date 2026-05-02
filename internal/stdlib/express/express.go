@@ -159,6 +159,11 @@ func (app *appBinding) serveHTTP(ctx *runtime.NativeContext, w http.ResponseWrit
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	reqObject := reqValue.(*runtime.ObjectValue)
+	requestID, _ := reqObject.Fields["requestId"].(runtime.StringValue)
+	if requestID.Value != "" {
+		w.Header().Set("X-Request-Id", requestID.Value)
+	}
 
 	app.mu.RLock()
 	routes := append([]routeBinding(nil), app.routes...)
@@ -526,6 +531,10 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	if requestID == "" {
+		requestID = utils.GenerateRequestID()
+	}
 	queryFields := make(map[string]runtime.Value, len(r.URL.Query()))
 	for key, values := range r.URL.Query() {
 		if len(values) == 1 {
@@ -550,6 +559,7 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 		"path":          runtime.StringValue{Value: r.URL.Path},
 		"query":         &runtime.ObjectValue{Fields: queryFields},
 		"remoteAddr":    runtime.StringValue{Value: r.RemoteAddr},
+		"requestId":     runtime.StringValue{Value: requestID},
 		"url":           runtime.StringValue{Value: r.URL.String()},
 	}}
 	if len(body) > 0 && strings.Contains(r.Header.Get("Content-Type"), "application/json") {

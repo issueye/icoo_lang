@@ -23,6 +23,8 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stdcore.LoadStdObjectModule(), true
 	case "std.db":
 		return stddb.LoadStdDBModule(), true
+	case "std.orm":
+		return stddb.LoadStdORMModule(), true
 	case "std.json":
 		return stdformat.LoadStdJSONModule(), true
 	case "std.yaml":

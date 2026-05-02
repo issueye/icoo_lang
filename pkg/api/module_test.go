@@ -618,6 +618,158 @@ conn.close()
 	}
 }
 
+func TestRuntimeRunSource_StdDBORM(t *testing.T) {
+	src := `
+import std.db as db
+
+let conn = db.sqlite(":memory:")
+conn.exec("create table users(id integer primary key, name text, score integer, note text)")
+
+let users = conn.table("users")
+let insertOne = users.insert({name: "ada", score: 10, note: null})
+let insertTwo = users.insert({name: "linus", score: 12, note: "vip"})
+
+if insertOne.rowsAffected != 1 || insertTwo.rowsAffected != 1 {
+  panic("unexpected orm insert rowsAffected")
+}
+
+let top = users.select(["name", "score"]).orderBy("score desc").first()
+if top.name != "linus" || top.score != 12 {
+  panic("unexpected orm first row")
+}
+
+let rows = users.whereRaw("score >= ?", [10]).orderBy("score desc").all()
+if len(rows) != 2 {
+  panic("unexpected orm row count")
+}
+if rows[0].name != "linus" || rows[1].name != "ada" {
+  panic("unexpected orm row ordering")
+}
+
+let nullable = users.where({note: null}).count()
+if nullable != 1 {
+  panic("unexpected orm null count")
+}
+
+let updateResult = users.where({name: "ada"}).update({score: 15})
+if updateResult.rowsAffected != 1 {
+  panic("unexpected orm update rowsAffected")
+}
+
+let updated = users.where({name: "ada"}).first()
+if updated.score != 15 {
+  panic("unexpected orm updated score")
+}
+
+let deleteResult = users.where({name: "linus"}).delete()
+if deleteResult.rowsAffected != 1 {
+  panic("unexpected orm delete rowsAffected")
+}
+
+if users.count() != 1 {
+  panic("unexpected orm remaining count")
+}
+
+conn.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.db orm to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdORMModule(t *testing.T) {
+	src := `
+import std.orm as orm
+
+let keys = ""
+let count = 0
+for key, value in orm {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.orm export kind")
+  }
+}
+
+if keys != "model" {
+  panic("unexpected std.orm iteration order")
+}
+if count != 1 {
+  panic("unexpected std.orm export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.orm iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdORMModel(t *testing.T) {
+	src := `
+import std.db as db
+import std.orm as orm
+
+let conn = db.sqlite(":memory:")
+let users = orm.model(conn, {
+  name: "users",
+  columns: {
+    id: "integer primary key",
+    name: "text",
+    score: "integer",
+    note: "text"
+  }
+})
+
+users.create()
+users.insert({name: "ada", score: 10, note: null})
+users.insert({name: "linus", score: 12, note: "vip"})
+
+let top = users.select(["name", "score"]).orderBy("score desc").first()
+if top.name != "linus" || top.score != 12 {
+  panic("unexpected std.orm first row")
+}
+
+let nullable = users.where({note: null}).count()
+if nullable != 1 {
+  panic("unexpected std.orm null count")
+}
+
+let row = users.where({name: "ada"}).get()
+if row.score != 10 {
+  panic("unexpected std.orm get row")
+}
+
+let updateResult = users.where({name: "ada"}).update({score: 15})
+if updateResult.rowsAffected != 1 {
+  panic("unexpected std.orm update rowsAffected")
+}
+
+let changed = users.where({name: ["ada", "grace"]}).first()
+if changed.score != 15 {
+  panic("unexpected std.orm changed row")
+}
+
+let deleteResult = users.where({name: "linus"}).delete()
+if deleteResult.rowsAffected != 1 {
+  panic("unexpected std.orm delete rowsAffected")
+}
+
+if users.count() != 1 {
+  panic("unexpected std.orm remaining count")
+}
+
+conn.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.orm model to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ImportsStdJSONModule(t *testing.T) {
 	src := `
 import std.json as json
@@ -1580,6 +1732,56 @@ if resp.json.count != 2 {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.http.server request json to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPServerRequestID(t *testing.T) {
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      json: {
+        requestId: req.requestId
+      }
+    }
+  }
+})
+
+let explicit = client.requestJSON({
+  url: upstream.url + "/id",
+  method: "POST",
+  headers: {
+    "X-Request-Id": "req-explicit"
+  },
+  json: {
+    ok: true
+  }
+})
+
+let generated = client.getJSON(upstream.url + "/generated")
+upstream.close()
+
+if explicit.json.requestId != "req-explicit" {
+  panic("expected explicit request id")
+}
+if explicit.header("X-Request-Id") != "req-explicit" {
+  panic("expected explicit response request id header")
+}
+if generated.json.requestId == null || generated.json.requestId == "" {
+  panic("expected generated request id")
+}
+if generated.header("X-Request-Id") != generated.json.requestId {
+  panic("expected generated response request id header")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server request id to succeed, got: %v", err)
 	}
 }
 
@@ -2587,6 +2789,49 @@ if resp.json.missing != null {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected express request header helpers to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExpressRequestID(t *testing.T) {
+	src := `
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+app.get("/id", fn(req) {
+  return express.json({
+    requestId: req.requestId
+  })
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let explicit = client.requestJSON({
+  url: server.url + "/id",
+  method: "GET",
+  headers: {
+    "X-Request-Id": "req-express"
+  }
+})
+let generated = client.getJSON(server.url + "/id")
+server.close()
+
+if explicit.json.requestId != "req-express" {
+  panic("expected express explicit request id")
+}
+if explicit.header("X-Request-Id") != "req-express" {
+  panic("expected express explicit response request id header")
+}
+if generated.json.requestId == null || generated.json.requestId == "" {
+  panic("expected express generated request id")
+}
+if generated.header("X-Request-Id") != generated.json.requestId {
+  panic("expected express generated response request id header")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected express request id to succeed, got: %v", err)
 	}
 }
 

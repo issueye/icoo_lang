@@ -658,11 +658,51 @@ println(result.stdout)
 - `exec(sql, ...args)`
 - `query(sql, ...args)`
 - `queryOne(sql, ...args)`
+- `table(name)`
+
+`table(name)` 返回一个轻量 ORM / 查询对象，常用方法：
+
+- `select(columns)`
+- `where(filters)`
+- `whereRaw(sql, args?)`
+- `orderBy(sql)`
+- `limit(n)`
+- `offset(n)`
+- `all()` / `get()`
+- `first()`
+- `count()`
+- `insert(data)`
+- `update(data)`
+- `delete()`
+
+其中：
+
+- `where({field: value})` 默认生成等值条件
+- `where({field: null})` 会生成 `IS NULL`
+- `where({field: [1, 2, 3]})` 会生成 `IN (...)`
+- `update()` / `delete()` 默认要求先调用 `where(...)` 或 `whereRaw(...)`，避免整表误修改
 
 ```icoo
 import std.db as db
 let conn = db.sqlite("demo.db")
 let rows = conn.query("select 1 as n")
+conn.close()
+```
+
+```icoo
+import std.db as db
+
+let conn = db.sqlite(":memory:")
+conn.exec("create table users (id integer primary key, name text, score integer)")
+
+let users = conn.table("users")
+users.insert({name: "Ada", score: 10})
+users.insert({name: "Linus", score: 12})
+
+let top = users.orderBy("score desc").first()
+let rows = users.whereRaw("score >= ?", [10]).all()
+users.where({name: "Ada"}).update({score: 15})
+
 conn.close()
 ```
 

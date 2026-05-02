@@ -1,0 +1,30 @@
+import std.io as io
+import std.db as db
+
+let conn = db.sqlite(":memory:")
+conn.exec("create table users (id integer primary key, name text, score integer, note text)")
+
+let users = conn.table("users")
+users.insert({name: "Ada", score: 10, note: null})
+users.insert({name: "Linus", score: 12, note: "vip"})
+users.insert({name: "Grace", score: 9, note: "new"})
+
+let top = users.select(["name", "score"]).orderBy("score desc").first()
+let nullable = users.where({note: null}).count()
+let ranked = users.whereRaw("score >= ?", [10]).orderBy("score desc").all()
+
+users.where({name: "Ada"}).update({score: 15})
+let ada = users.where({name: "Ada"}).first()
+
+users.where({name: "Grace"}).delete()
+let total = users.count()
+
+io.println("== db orm ==")
+io.println("top name:", top.name)
+io.println("top score:", top.score)
+io.println("null note count:", nullable)
+io.println("ranked rows:", len(ranked))
+io.println("ada score:", ada.score)
+io.println("remaining rows:", total)
+
+conn.close()

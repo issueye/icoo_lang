@@ -18,7 +18,9 @@ let upstream = server.listen({
         path: req.path,
         method: req.method,
         model: model,
+        requestId: req.requestId,
         route: req.header("X-Proxy-Route"),
+        forwardedRequestId: req.header("X-Request-Id"),
         auth: req.header("X-Proxy-Auth")
       }
     }
@@ -60,6 +62,15 @@ if okResp.json.model != "gpt-4o-mini" {
 }
 if okResp.json.route != "chat-gpt-4o" {
   panic("expected alias route selection")
+}
+if okResp.header("X-Request-Id") == null || okResp.header("X-Request-Id") == "" {
+  panic("expected proxy response request id header")
+}
+if okResp.json.forwardedRequestId != okResp.header("X-Request-Id") {
+  panic("expected forwarded request id")
+}
+if okResp.json.requestId != okResp.header("X-Request-Id") {
+  panic("expected upstream request id to match response header")
 }
 
 let responsesResp = client.requestJSON({
@@ -119,6 +130,7 @@ if requests.json.total != 3 {
 
 let foundResolved = false
 let foundResponses = false
+let foundRequestID = false
 for request in requests.json.requests {
   if request.route_name == "chat-gpt-4o" && request.resolved_model == "gpt-4o-mini" {
     foundResolved = true
@@ -126,12 +138,18 @@ for request in requests.json.requests {
   if request.route_name == "responses-gpt-4.1" && request.resolved_model == "gpt-4.1-mini" {
     foundResponses = true
   }
+  if request.request_id == okResp.header("X-Request-Id") {
+    foundRequestID = true
+  }
 }
 if foundResolved != true {
   panic("expected recent request resolved model")
 }
 if foundResponses != true {
   panic("expected responses request record")
+}
+if foundRequestID != true {
+  panic("expected request id in recent request record")
 }
 
 proxy.stop(runtimeApp)

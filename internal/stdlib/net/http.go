@@ -374,6 +374,11 @@ func httpListen(ctx *runtime.NativeContext, args []runtime.Value) (runtime.Value
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			reqObject := reqValue.(*runtime.ObjectValue)
+			requestID, _ := reqObject.Fields["requestId"].(runtime.StringValue)
+			if requestID.Value != "" {
+				w.Header().Set("X-Request-Id", requestID.Value)
+			}
 
 			respBinding := newHTTPResponseHandle(w)
 			callArgs := []runtime.Value{reqValue}
@@ -594,6 +599,10 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	if requestID == "" {
+		requestID = utils.GenerateRequestID()
+	}
 	queryFields := make(map[string]runtime.Value, len(r.URL.Query()))
 	for key, values := range r.URL.Query() {
 		if len(values) == 1 {
@@ -619,6 +628,7 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 		"contentLength": runtime.IntValue{Value: r.ContentLength},
 		"host":          runtime.StringValue{Value: r.Host},
 		"remoteAddr":    runtime.StringValue{Value: r.RemoteAddr},
+		"requestId":     runtime.StringValue{Value: requestID},
 	}}
 	if len(body) > 0 && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		var decoded any

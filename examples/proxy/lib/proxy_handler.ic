@@ -8,6 +8,7 @@ import "./store.ic" as store
 const proxyHandlerApi = fn() {
   fn buildForwardHeaders(req, authResult, route) {
     let headers = {}
+    headers["X-Request-Id"] = req.requestId
     headers["X-Proxy-Route"] = route.name
     headers["X-Resolved-Model"] = route.upstreamModel
     headers["X-Proxy-Auth"] = authResult.via
@@ -26,6 +27,7 @@ const proxyHandlerApi = fn() {
 
   fn recordOutcome(state, req, routeName, requestedModel, resolvedModel, authVia, status, upstreamUrl, note) {
     store.recordRequest(state.store, {
+      request_id: req.requestId,
       method: req.method,
       path: req.path,
       route_name: routeName,
