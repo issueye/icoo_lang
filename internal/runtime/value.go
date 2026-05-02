@@ -228,6 +228,8 @@ type NativeContext struct {
 	CallDetachedWithArgs func(callee Value, args []Value) (Value, []Value, error)
 	CallInline           func(callee Value, args []Value) (Value, error)
 	CallInlineWithArgs   func(callee Value, args []Value) (Value, []Value, error)
+	RuntimeStats         func() Value
+	CollectGarbage       func() Value
 }
 
 type NativeFunction struct {

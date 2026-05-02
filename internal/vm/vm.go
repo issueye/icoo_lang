@@ -1,10 +1,12 @@
 package vm
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os"
 	"sync"
+	"time"
 
 	"icoo_lang/internal/concurrency"
 	"icoo_lang/internal/runtime"
@@ -42,8 +44,10 @@ type VM struct {
 	loadModule ModuleLoader
 	lastModule *runtime.Module
 
-	pool     *concurrency.GoroutinePool
-	poolOnce sync.Once
+	pool          *concurrency.GoroutinePool
+	poolOnce      sync.Once
+	poolWorkers   int
+	poolQueueSize int
 }
 
 func New() *VM {
@@ -55,15 +59,62 @@ func New() *VM {
 		builtins:     make(map[string]runtime.Value),
 		modules:      make(map[string]*runtime.Module),
 		openUpvalues: make(map[int]*runtime.Upvalue),
+		poolWorkers:  8,
 	}
+	vm.poolQueueSize = vm.poolWorkers * 16
 	return vm
 }
 
 func (vm *VM) Pool() *concurrency.GoroutinePool {
 	vm.poolOnce.Do(func() {
-		vm.pool = concurrency.NewPool(8, vm.goExecutor)
+		vm.pool = concurrency.NewPool(vm.poolWorkers, vm.poolQueueSize, vm.goExecutor)
 	})
 	return vm.pool
+}
+
+func (vm *VM) ConfigureGoPool(workers, queueSize int) error {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+
+	if vm.pool != nil {
+		stats := vm.pool.Stats()
+		if stats.Active > 0 || stats.Queued > 0 {
+			return fmt.Errorf("cannot reconfigure goroutine pool while %d active and %d queued tasks remain", stats.Active, stats.Queued)
+		}
+		if err := vm.pool.Shutdown(context.Background()); err != nil {
+			return fmt.Errorf("shutdown goroutine pool: %w", err)
+		}
+		vm.pool = nil
+		vm.poolOnce = sync.Once{}
+	}
+
+	if workers <= 0 {
+		workers = 4
+	}
+	if queueSize <= 0 {
+		queueSize = workers * 16
+	}
+	vm.poolWorkers = workers
+	vm.poolQueueSize = queueSize
+	return nil
+}
+
+func (vm *VM) Shutdown(ctx context.Context) error {
+	vm.mu.Lock()
+	pool := vm.pool
+	vm.pool = nil
+	vm.poolOnce = sync.Once{}
+	vm.mu.Unlock()
+	if pool == nil {
+		return nil
+	}
+	return pool.Shutdown(ctx)
+}
+
+func (vm *VM) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return vm.Shutdown(ctx)
 }
 
 func (vm *VM) goExecutor(task *concurrency.GoTask) {

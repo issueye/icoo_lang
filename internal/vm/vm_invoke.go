@@ -10,6 +10,8 @@ func (vm *VM) nativeContext() *runtime.NativeContext {
 		CallDetachedWithArgs: vm.CallDetachedWithArgs,
 		CallInline:           vm.CallInline,
 		CallInlineWithArgs:   vm.CallInlineWithArgs,
+		RuntimeStats:         vm.runtimeStatsValue,
+		CollectGarbage:       vm.collectGarbageValue,
 	}
 }
 

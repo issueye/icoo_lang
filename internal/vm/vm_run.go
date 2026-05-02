@@ -391,9 +391,23 @@ func (vm *VM) runLoopUntil(stopDepth int) (runtime.Value, error) {
 			vm.stack = vm.stack[:start-1]
 			switch fn := callee.(type) {
 			case *runtime.Closure:
-				vm.Pool().Submit(fn, args)
+				if err := vm.Pool().Submit(fn, args); err != nil {
+					if raised := vm.raise(runtimeError("go submit failed: %v", err)); raised != nil {
+						return nil, raised
+					}
+				}
 			case *runtime.NativeFunction:
-				vm.Pool().Submit(fn, args)
+				if err := vm.Pool().Submit(fn, args); err != nil {
+					if raised := vm.raise(runtimeError("go submit failed: %v", err)); raised != nil {
+						return nil, raised
+					}
+				}
+			case *runtime.BoundMethod:
+				if err := vm.Pool().Submit(fn, args); err != nil {
+					if raised := vm.raise(runtimeError("go submit failed: %v", err)); raised != nil {
+						return nil, raised
+					}
+				}
 			default:
 				if raised := vm.raise(runtimeError("go requires a callable value, got %s", runtime.KindName(callee))); raised != nil {
 					return nil, raised
