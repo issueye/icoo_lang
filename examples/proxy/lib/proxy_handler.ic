@@ -1,5 +1,6 @@
 import std.http.server as server
 import std.object as object
+import std.time as time
 import "./auth.ic" as auth
 import "./catalog.ic" as catalog
 import "./json_helpers.ic" as jsonHelpers
@@ -24,7 +25,15 @@ const proxyHandlerApi = fn() {
     return headers
   }
 
-  fn recordOutcome(state, req, routeName, requestedModel, resolvedModel, authVia, status, upstreamUrl, note) {
+  fn elapsedMs(startedAt) {
+    let duration = time.now() - startedAt
+    if duration < 0 {
+      return 0
+    }
+    return duration
+  }
+
+  fn recordOutcome(state, req, routeName, requestedModel, resolvedModel, authVia, status, upstreamUrl, note, durationMs) {
     state.monitor.recordRequest({
       request_id: req.requestId,
       method: req.method,
@@ -34,6 +43,7 @@ const proxyHandlerApi = fn() {
       resolved_model: resolvedModel,
       auth_via: authVia,
       status: status,
+      duration_ms: durationMs,
       upstream_url: upstreamUrl,
       note: note
     })
@@ -41,16 +51,19 @@ const proxyHandlerApi = fn() {
   }
 
   fn handleProxyImpl(req, state) {
+    let startedAt = time.now()
     let requestedModel = jsonHelpers.requestedModel(req)
     let authResult = auth.authenticate(state.config, req)
     if authResult.ok != true {
-      recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized")
+      state.monitor.increment("auth.unauthorized")
+      recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized", elapsedMs(startedAt))
       return authResult.response
     }
 
     let route = catalog.resolveRoute(state.catalog, req.path, requestedModel)
     if route == null {
-      recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found")
+      state.monitor.increment("proxy.route_not_found")
+      recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found", elapsedMs(startedAt))
       return {
         status: 404,
         json: {
@@ -83,10 +96,13 @@ const proxyHandlerApi = fn() {
         authResult.via,
         resp.status,
         upstreamUrl,
-        route.selection
+        route.selection,
+        elapsedMs(startedAt)
       )
+      state.monitor.increment("proxy.forwarded")
       return resp
     } catch err {
+      state.monitor.increment("proxy.upstream_error")
       recordOutcome(
         state,
         req,
@@ -96,7 +112,8 @@ const proxyHandlerApi = fn() {
         authResult.via,
         502,
         upstreamUrl,
-        err.message
+        err.message,
+        elapsedMs(startedAt)
       )
       return {
         status: 502,
@@ -110,16 +127,19 @@ const proxyHandlerApi = fn() {
   }
 
   fn handleProxyDirectImpl(req, res, state) {
+    let startedAt = time.now()
     let requestedModel = jsonHelpers.requestedModel(req)
     let authResult = auth.authenticate(state.config, req)
     if authResult.ok != true {
-      recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized")
+      state.monitor.increment("auth.unauthorized")
+      recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized", elapsedMs(startedAt))
       return authResult.response
     }
 
     let route = catalog.resolveRoute(state.catalog, req.path, requestedModel)
     if route == null {
-      recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found")
+      state.monitor.increment("proxy.route_not_found")
+      recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found", elapsedMs(startedAt))
       return {
         status: 404,
         json: {
@@ -152,10 +172,13 @@ const proxyHandlerApi = fn() {
         authResult.via,
         res.statusCode(),
         upstreamUrl,
-        route.selection
+        route.selection,
+        elapsedMs(startedAt)
       )
+      state.monitor.increment("proxy.forwarded")
       return proxied
     } catch err {
+      state.monitor.increment("proxy.upstream_error")
       recordOutcome(
         state,
         req,
@@ -165,7 +188,8 @@ const proxyHandlerApi = fn() {
         authResult.via,
         502,
         upstreamUrl,
-        err.message
+        err.message,
+        elapsedMs(startedAt)
       )
       return {
         status: 502,

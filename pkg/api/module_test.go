@@ -488,9 +488,19 @@ if ready.ok != true || ready.reason != null {
   panic("unexpected service ready")
 }
 
-monitor.recordRequest({id: "a", status: 200})
-monitor.recordRequest({id: "b", status: 201})
-monitor.recordRequest({id: "c", status: 202})
+if monitor.increment("proxy.forwarded") != 1 {
+  panic("unexpected service increment result")
+}
+if monitor.increment("proxy.forwarded", 2) != 3 {
+  panic("unexpected service increment delta")
+}
+if monitor.counter("proxy.forwarded") != 3 {
+  panic("unexpected service counter lookup")
+}
+
+monitor.recordRequest({id: "a", status: 200, duration_ms: 10})
+monitor.recordRequest({id: "b", status: 201, duration_ms: 25})
+monitor.recordRequest({id: "c", status: 202, duration_ms: 5})
 
 if monitor.requestCount() != 3 {
   panic("unexpected service request count")
@@ -502,6 +512,28 @@ if len(recent) != 2 {
 }
 if recent[0].id != "c" || recent[1].id != "b" {
   panic("unexpected service recent request order")
+}
+if recent[0].ts == null || recent[1].ts == null {
+  panic("expected service record timestamps")
+}
+
+let counters = monitor.counters()
+if counters["requests.total"] != 3 {
+  panic("unexpected service total counter")
+}
+if counters["requests.status.200"] != 1 || counters["requests.status.201"] != 1 || counters["requests.status.202"] != 1 {
+  panic("unexpected service status counters")
+}
+if counters["requests.status.2xx"] != 3 {
+  panic("unexpected service status class counter")
+}
+if counters["proxy.forwarded"] != 3 {
+  panic("unexpected service named counter snapshot")
+}
+
+let latency = monitor.latency()
+if latency.count != 3 || latency.totalMs != 40 || latency.maxMs != 25 || latency.avgMs != 13 {
+  panic("unexpected service latency snapshot")
 }
 
 monitor.markNotReady("upstream")
@@ -519,6 +551,12 @@ if snapshot.ready.ok != false {
 }
 if len(snapshot.recentRequests) != 2 {
   panic("unexpected service snapshot recent requests")
+}
+if snapshot.counters["requests.total"] != 3 {
+  panic("unexpected service snapshot counters")
+}
+if snapshot.latency.maxMs != 25 {
+  panic("unexpected service snapshot latency")
 }
 
 monitor.markReady()

@@ -33,7 +33,9 @@ const adminApi = fn() {
       return express.json(object.merge({
         ok: true,
         total: state.monitor.requestCount(),
-        requests: state.monitor.recentRequests()
+        requests: state.monitor.recentRequests(),
+        counters: state.monitor.counters(),
+        latency: state.monitor.latency()
       }, {
         service: state.monitor.name,
         startedAt: state.monitor.startedAt

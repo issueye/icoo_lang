@@ -145,6 +145,8 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 - `markReady()` / `markNotReady(reason)`
 - `requestCount()`
 - `recentRequests()`
+- `increment(name[, delta])` / `counter(name)` / `counters()`
+- `latency()`
 - `snapshot()`
 
 它的职责不是记录所有业务指标，而是把每个服务几乎都会重复实现的“基础服务监控面”先统一掉。
@@ -185,8 +187,9 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 7. 继续补上 `req.requestId` 和默认 `X-Request-Id` 响应头，让脚本服务第一次具备统一的请求链路标识，并把它直接回流到 proxy 示例的上游透传和 recent requests 记录中。
 8. 新增 `std.observe.recent(limit)`，把 proxy 示例里的 recent requests 和 total count 从临时存储层抽回到更贴近服务观测语义的标准库里。
 9. 在 `std.observe` 之上继续补出 `std.service.create(...)`，把 `healthz` / `readyz` / request total / recent requests / service snapshot 统一成服务级监控骨架。
-10. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码、模块缓存样板、成功代理路径上的响应回写方式，以及请求记录/最近请求/服务监控样板。
-11. 增加对应运行时测试，确保模块可用。
+10. 继续把 `std.service` 补到可直接承接服务监控的程度：请求记录自动时间戳、按状态码和状态码段聚合计数、命名计数器，以及轻量 latency summary。
+11. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码、模块缓存样板、成功代理路径上的响应回写方式，以及请求记录/最近请求/服务监控样板。
+12. 增加对应运行时测试，确保模块可用。
 
 这一步不能替代更大的 HTTP/服务化能力建设，但它验证了一件事：
 
@@ -196,4 +199,5 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 
 1. 继续把 `examples/proxy` 当作语言回归样例，专门观察服务端样板代码密度。
 2. 继续沿 `std.http.server` / `std.express` 补代理友好的低层 HTTP 能力，尤其是请求流和真正的流式上游桥接，而不是直接追求更多语法。
-3. 等服务端样例稳定后，再判断是否需要对象展开、可空访问等语法级增强。
+3. 观察 `std.service` 是否还需要再向上补“事件/日志/脱敏辅助”，但尽量避免把它做成重量级 metrics 框架。
+4. 等服务端样例稳定后，再判断是否需要对象展开、可空访问等语法级增强。
