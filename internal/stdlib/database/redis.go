@@ -22,6 +22,19 @@ type redisHandleValue struct {
 	handle *redisHandle
 }
 
+type redisPipelineBinding struct {
+	handle   *redisHandle
+	commands []redisPipelineCommand
+}
+
+type redisPipelineCommand struct {
+	run func(pipe redis.Pipeliner) redis.Cmder
+}
+
+type redisSubscriptionBinding struct {
+	pubsub *redis.PubSub
+}
+
 func (v *redisHandleValue) Kind() runtime.ValueKind { return runtime.ObjectKind }
 
 func (v *redisHandleValue) String() string {
@@ -250,6 +263,75 @@ func newRedisObject(client *redis.Client) *runtime.ObjectValue {
 			}
 			return runtime.IntValue{Value: value}, nil
 		}},
+		"lPop": &runtime.NativeFunction{Name: "redis.lPop", Arity: 1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("lPop")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("lPop", args[0])
+			if err != nil {
+				return nil, err
+			}
+			value, err := client.LPop(context.Background(), key).Result()
+			if err == redis.Nil {
+				return runtime.NullValue{}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return runtime.StringValue{Value: value}, nil
+		}},
+		"lPush": &runtime.NativeFunction{Name: "redis.lPush", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("lPush")
+			if err != nil {
+				return nil, err
+			}
+			if len(args) < 2 {
+				return nil, fmt.Errorf("lPush expects key and at least one value")
+			}
+			key, err := utils.RequireStringArg("lPush", args[0])
+			if err != nil {
+				return nil, err
+			}
+			values, err := redisArgsToAny("lPush", args[1:])
+			if err != nil {
+				return nil, err
+			}
+			count, err := client.LPush(context.Background(), key, values...).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.IntValue{Value: count}, nil
+		}},
+		"lRange": &runtime.NativeFunction{Name: "redis.lRange", Arity: 3, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("lRange")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("lRange", args[0])
+			if err != nil {
+				return nil, err
+			}
+			start, err := redisIntArg("lRange", args[1])
+			if err != nil {
+				return nil, err
+			}
+			stop, err := redisIntArg("lRange", args[2])
+			if err != nil {
+				return nil, err
+			}
+			values, err := client.LRange(context.Background(), key, start, stop).Result()
+			if err != nil {
+				return nil, err
+			}
+			return redisStringsToRuntimeArray(values), nil
+		}},
+		"pipeline": &runtime.NativeFunction{Name: "redis.pipeline", Arity: 0, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			if _, err := handle.requireClient("pipeline"); err != nil {
+				return nil, err
+			}
+			return newRedisPipelineObject(handle), nil
+		}},
 		"ping": &runtime.NativeFunction{Name: "redis.ping", Arity: 0, Fn: func(args []runtime.Value) (runtime.Value, error) {
 			client, err := handle.requireClient("ping")
 			if err != nil {
@@ -259,6 +341,179 @@ func newRedisObject(client *redis.Client) *runtime.ObjectValue {
 				return nil, err
 			}
 			return runtime.BoolValue{Value: true}, nil
+		}},
+		"publish": &runtime.NativeFunction{Name: "redis.publish", Arity: 2, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("publish")
+			if err != nil {
+				return nil, err
+			}
+			channel, err := utils.RequireStringArg("publish", args[0])
+			if err != nil {
+				return nil, err
+			}
+			message, err := redisValueString("publish", args[1])
+			if err != nil {
+				return nil, err
+			}
+			count, err := client.Publish(context.Background(), channel, message).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.IntValue{Value: count}, nil
+		}},
+		"rPop": &runtime.NativeFunction{Name: "redis.rPop", Arity: 1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("rPop")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("rPop", args[0])
+			if err != nil {
+				return nil, err
+			}
+			value, err := client.RPop(context.Background(), key).Result()
+			if err == redis.Nil {
+				return runtime.NullValue{}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return runtime.StringValue{Value: value}, nil
+		}},
+		"rPush": &runtime.NativeFunction{Name: "redis.rPush", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("rPush")
+			if err != nil {
+				return nil, err
+			}
+			if len(args) < 2 {
+				return nil, fmt.Errorf("rPush expects key and at least one value")
+			}
+			key, err := utils.RequireStringArg("rPush", args[0])
+			if err != nil {
+				return nil, err
+			}
+			values, err := redisArgsToAny("rPush", args[1:])
+			if err != nil {
+				return nil, err
+			}
+			count, err := client.RPush(context.Background(), key, values...).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.IntValue{Value: count}, nil
+		}},
+		"sAdd": &runtime.NativeFunction{Name: "redis.sAdd", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("sAdd")
+			if err != nil {
+				return nil, err
+			}
+			if len(args) < 2 {
+				return nil, fmt.Errorf("sAdd expects key and at least one value")
+			}
+			key, err := utils.RequireStringArg("sAdd", args[0])
+			if err != nil {
+				return nil, err
+			}
+			values, err := redisArgsToAny("sAdd", args[1:])
+			if err != nil {
+				return nil, err
+			}
+			count, err := client.SAdd(context.Background(), key, values...).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.IntValue{Value: count}, nil
+		}},
+		"sIsMember": &runtime.NativeFunction{Name: "redis.sIsMember", Arity: 2, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("sIsMember")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("sIsMember", args[0])
+			if err != nil {
+				return nil, err
+			}
+			value, err := redisValueString("sIsMember", args[1])
+			if err != nil {
+				return nil, err
+			}
+			ok, err := client.SIsMember(context.Background(), key, value).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.BoolValue{Value: ok}, nil
+		}},
+		"sMembers": &runtime.NativeFunction{Name: "redis.sMembers", Arity: 1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("sMembers")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("sMembers", args[0])
+			if err != nil {
+				return nil, err
+			}
+			values, err := client.SMembers(context.Background(), key).Result()
+			if err != nil {
+				return nil, err
+			}
+			sort.Strings(values)
+			return redisStringsToRuntimeArray(values), nil
+		}},
+		"sRem": &runtime.NativeFunction{Name: "redis.sRem", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("sRem")
+			if err != nil {
+				return nil, err
+			}
+			if len(args) < 2 {
+				return nil, fmt.Errorf("sRem expects key and at least one value")
+			}
+			key, err := utils.RequireStringArg("sRem", args[0])
+			if err != nil {
+				return nil, err
+			}
+			values, err := redisArgsToAny("sRem", args[1:])
+			if err != nil {
+				return nil, err
+			}
+			count, err := client.SRem(context.Background(), key, values...).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.IntValue{Value: count}, nil
+		}},
+		"scan": &runtime.NativeFunction{Name: "redis.scan", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("scan")
+			if err != nil {
+				return nil, err
+			}
+			if len(args) < 1 || len(args) > 3 {
+				return nil, fmt.Errorf("scan expects cursor and optional pattern/count")
+			}
+			cursor, err := redisIntArg("scan", args[0])
+			if err != nil {
+				return nil, err
+			}
+			pattern := "*"
+			if len(args) >= 2 {
+				pattern, err = utils.RequireStringArg("scan", args[1])
+				if err != nil {
+					return nil, err
+				}
+			}
+			count := int64(10)
+			if len(args) == 3 {
+				count, err = redisIntArg("scan", args[2])
+				if err != nil {
+					return nil, err
+				}
+			}
+			keys, nextCursor, err := client.Scan(context.Background(), uint64(cursor), pattern, count).Result()
+			if err != nil {
+				return nil, err
+			}
+			return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+				"cursor": runtime.IntValue{Value: int64(nextCursor)},
+				"keys":   redisStringsToRuntimeArray(keys),
+			}}, nil
 		}},
 		"set": &runtime.NativeFunction{Name: "redis.set", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
 			client, err := handle.requireClient("set")
@@ -289,6 +544,29 @@ func newRedisObject(client *redis.Client) *runtime.ObjectValue {
 			}
 			return runtime.BoolValue{Value: strings.EqualFold(result, "OK")}, nil
 		}},
+		"subscribe": &runtime.NativeFunction{Name: "redis.subscribe", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("subscribe")
+			if err != nil {
+				return nil, err
+			}
+			if len(args) == 0 {
+				return nil, fmt.Errorf("subscribe expects at least one channel")
+			}
+			channels := make([]string, 0, len(args))
+			for _, arg := range args {
+				channel, err := utils.RequireStringArg("subscribe", arg)
+				if err != nil {
+					return nil, err
+				}
+				channels = append(channels, channel)
+			}
+			pubsub := client.Subscribe(context.Background(), channels...)
+			if _, err := pubsub.Receive(context.Background()); err != nil {
+				_ = pubsub.Close()
+				return nil, err
+			}
+			return newRedisSubscriptionObject(pubsub), nil
+		}},
 		"ttl": &runtime.NativeFunction{Name: "redis.ttl", Arity: 1, Fn: func(args []runtime.Value) (runtime.Value, error) {
 			client, err := handle.requireClient("ttl")
 			if err != nil {
@@ -307,7 +585,237 @@ func newRedisObject(client *redis.Client) *runtime.ObjectValue {
 			}
 			return runtime.IntValue{Value: value.Milliseconds()}, nil
 		}},
+		"zAdd": &runtime.NativeFunction{Name: "redis.zAdd", Arity: 3, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("zAdd")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("zAdd", args[0])
+			if err != nil {
+				return nil, err
+			}
+			member, err := redisValueString("zAdd", args[1])
+			if err != nil {
+				return nil, err
+			}
+			score, err := redisFloatArg("zAdd", args[2])
+			if err != nil {
+				return nil, err
+			}
+			count, err := client.ZAdd(context.Background(), key, redis.Z{Member: member, Score: score}).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.IntValue{Value: count}, nil
+		}},
+		"zRange": &runtime.NativeFunction{Name: "redis.zRange", Arity: 3, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("zRange")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("zRange", args[0])
+			if err != nil {
+				return nil, err
+			}
+			start, err := redisIntArg("zRange", args[1])
+			if err != nil {
+				return nil, err
+			}
+			stop, err := redisIntArg("zRange", args[2])
+			if err != nil {
+				return nil, err
+			}
+			values, err := client.ZRange(context.Background(), key, start, stop).Result()
+			if err != nil {
+				return nil, err
+			}
+			return redisStringsToRuntimeArray(values), nil
+		}},
+		"zRem": &runtime.NativeFunction{Name: "redis.zRem", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("zRem")
+			if err != nil {
+				return nil, err
+			}
+			if len(args) < 2 {
+				return nil, fmt.Errorf("zRem expects key and at least one member")
+			}
+			key, err := utils.RequireStringArg("zRem", args[0])
+			if err != nil {
+				return nil, err
+			}
+			values, err := redisArgsToAny("zRem", args[1:])
+			if err != nil {
+				return nil, err
+			}
+			count, err := client.ZRem(context.Background(), key, values...).Result()
+			if err != nil {
+				return nil, err
+			}
+			return runtime.IntValue{Value: count}, nil
+		}},
+		"zScore": &runtime.NativeFunction{Name: "redis.zScore", Arity: 2, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			client, err := handle.requireClient("zScore")
+			if err != nil {
+				return nil, err
+			}
+			key, err := utils.RequireStringArg("zScore", args[0])
+			if err != nil {
+				return nil, err
+			}
+			member, err := redisValueString("zScore", args[1])
+			if err != nil {
+				return nil, err
+			}
+			score, err := client.ZScore(context.Background(), key, member).Result()
+			if err == redis.Nil {
+				return runtime.NullValue{}, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return utils.PlainToRuntimeValue(score), nil
+		}},
 	}}
+}
+
+func newRedisPipelineObject(handle *redisHandle) *runtime.ObjectValue {
+	return redisPipelineBindingObject(&redisPipelineBinding{handle: handle})
+}
+
+func redisPipelineBindingObject(binding *redisPipelineBinding) *runtime.ObjectValue {
+	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+		"del": &runtime.NativeFunction{Name: "redis.pipeline.del", Arity: 1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			key, err := utils.RequireStringArg("pipeline.del", args[0])
+			if err != nil {
+				return nil, err
+			}
+			binding.commands = append(binding.commands, redisPipelineCommand{
+				run: func(pipe redis.Pipeliner) redis.Cmder {
+					return pipe.Del(context.Background(), key)
+				},
+			})
+			return redisPipelineBindingObject(binding), nil
+		}},
+		"exec": &runtime.NativeFunction{Name: "redis.pipeline.exec", Arity: 0, Fn: binding.exec},
+		"get": &runtime.NativeFunction{Name: "redis.pipeline.get", Arity: 1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			key, err := utils.RequireStringArg("pipeline.get", args[0])
+			if err != nil {
+				return nil, err
+			}
+			binding.commands = append(binding.commands, redisPipelineCommand{
+				run: func(pipe redis.Pipeliner) redis.Cmder {
+					return pipe.Get(context.Background(), key)
+				},
+			})
+			return redisPipelineBindingObject(binding), nil
+		}},
+		"incr": &runtime.NativeFunction{Name: "redis.pipeline.incr", Arity: 1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			key, err := utils.RequireStringArg("pipeline.incr", args[0])
+			if err != nil {
+				return nil, err
+			}
+			binding.commands = append(binding.commands, redisPipelineCommand{
+				run: func(pipe redis.Pipeliner) redis.Cmder {
+					return pipe.Incr(context.Background(), key)
+				},
+			})
+			return redisPipelineBindingObject(binding), nil
+		}},
+		"set": &runtime.NativeFunction{Name: "redis.pipeline.set", Arity: -1, Fn: func(args []runtime.Value) (runtime.Value, error) {
+			if len(args) < 2 || len(args) > 3 {
+				return nil, fmt.Errorf("pipeline.set expects key, value, and optional ttl")
+			}
+			key, err := utils.RequireStringArg("pipeline.set", args[0])
+			if err != nil {
+				return nil, err
+			}
+			value, err := redisValueString("pipeline.set", args[1])
+			if err != nil {
+				return nil, err
+			}
+			ttl := time.Duration(0)
+			if len(args) == 3 {
+				ttl, err = redisDurationArg("pipeline.set", args[2])
+				if err != nil {
+					return nil, err
+				}
+			}
+			binding.commands = append(binding.commands, redisPipelineCommand{
+				run: func(pipe redis.Pipeliner) redis.Cmder {
+					return pipe.Set(context.Background(), key, value, ttl)
+				},
+			})
+			return redisPipelineBindingObject(binding), nil
+		}},
+	}}
+}
+
+func (binding *redisPipelineBinding) exec(args []runtime.Value) (runtime.Value, error) {
+	client, err := binding.handle.requireClient("pipeline.exec")
+	if err != nil {
+		return nil, err
+	}
+	pipe := client.Pipeline()
+	cmds := make([]redis.Cmder, 0, len(binding.commands))
+	for _, command := range binding.commands {
+		cmds = append(cmds, command.run(pipe))
+	}
+	_, err = pipe.Exec(context.Background())
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
+	results := make([]runtime.Value, 0, len(cmds))
+	for _, cmd := range cmds {
+		value, err := redisCmdToRuntime(cmd)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, value)
+	}
+	binding.commands = nil
+	return &runtime.ArrayValue{Elements: results}, nil
+}
+
+func newRedisSubscriptionObject(pubsub *redis.PubSub) *runtime.ObjectValue {
+	binding := &redisSubscriptionBinding{pubsub: pubsub}
+	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+		"close":   &runtime.NativeFunction{Name: "redis.subscription.close", Arity: 0, Fn: binding.close},
+		"receive": &runtime.NativeFunction{Name: "redis.subscription.receive", Arity: -1, Fn: binding.receive},
+	}}
+}
+
+func (binding *redisSubscriptionBinding) receive(args []runtime.Value) (runtime.Value, error) {
+	timeout := 30 * time.Second
+	if len(args) > 1 {
+		return nil, fmt.Errorf("receive expects optional timeout")
+	}
+	if len(args) == 1 {
+		ms, err := redisDurationArg("receive", args[0])
+		if err != nil {
+			return nil, err
+		}
+		timeout = ms
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	message, err := binding.pubsub.ReceiveMessage(ctx)
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			return runtime.NullValue{}, nil
+		}
+		return nil, err
+	}
+	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+		"channel": runtime.StringValue{Value: message.Channel},
+		"payload": runtime.StringValue{Value: message.Payload},
+	}}, nil
+}
+
+func (binding *redisSubscriptionBinding) close(args []runtime.Value) (runtime.Value, error) {
+	if binding.pubsub == nil {
+		return runtime.NullValue{}, nil
+	}
+	return runtime.NullValue{}, binding.pubsub.Close()
 }
 
 func (h *redisHandle) requireClient(name string) (*redis.Client, error) {
@@ -423,6 +931,17 @@ func redisIntArg(name string, value runtime.Value) (int64, error) {
 	return intValue.Value, nil
 }
 
+func redisFloatArg(name string, value runtime.Value) (float64, error) {
+	switch typed := value.(type) {
+	case runtime.IntValue:
+		return float64(typed.Value), nil
+	case runtime.FloatValue:
+		return typed.Value, nil
+	default:
+		return 0, fmt.Errorf("%s expects numeric argument", name)
+	}
+}
+
 func redisDurationArg(name string, value runtime.Value) (time.Duration, error) {
 	ms, err := redisIntArg(name, value)
 	if err != nil {
@@ -454,5 +973,53 @@ func redisValueString(name string, value runtime.Value) (string, error) {
 		return string(data), nil
 	default:
 		return "", fmt.Errorf("%s does not support %s value", name, runtime.KindName(value))
+	}
+}
+
+func redisArgsToAny(name string, args []runtime.Value) ([]any, error) {
+	values := make([]any, 0, len(args))
+	for _, arg := range args {
+		value, err := redisValueString(name, arg)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, nil
+}
+
+func redisStringsToRuntimeArray(values []string) runtime.Value {
+	items := make([]runtime.Value, 0, len(values))
+	for _, value := range values {
+		items = append(items, runtime.StringValue{Value: value})
+	}
+	return &runtime.ArrayValue{Elements: items}
+}
+
+func redisCmdToRuntime(cmd redis.Cmder) (runtime.Value, error) {
+	switch typed := cmd.(type) {
+	case *redis.StatusCmd:
+		value, err := typed.Result()
+		if err != nil {
+			return nil, err
+		}
+		return runtime.StringValue{Value: value}, nil
+	case *redis.StringCmd:
+		value, err := typed.Result()
+		if err == redis.Nil {
+			return runtime.NullValue{}, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return runtime.StringValue{Value: value}, nil
+	case *redis.IntCmd:
+		value, err := typed.Result()
+		if err != nil {
+			return nil, err
+		}
+		return runtime.IntValue{Value: value}, nil
+	default:
+		return runtime.StringValue{Value: cmd.String()}, nil
 	}
 }

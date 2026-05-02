@@ -1,11 +1,15 @@
 package express
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,12 +61,15 @@ type responseBinding struct {
 }
 
 type requestOptions struct {
-	Method  string
-	URL     string
-	Headers map[string]string
-	Body    string
-	Timeout time.Duration
-	Host    string
+	Method          string
+	URL             string
+	Headers         map[string]string
+	Body            string
+	Timeout         time.Duration
+	Host            string
+	Cookies         map[string]string
+	FollowRedirects bool
+	MaxRedirects    int
 }
 
 func expressCreate(args []runtime.Value) (runtime.Value, error) {
@@ -253,14 +260,16 @@ func newResponseHandle(w http.ResponseWriter) *responseBinding {
 		statusCode: http.StatusOK,
 	}
 	binding.handle = &runtime.ObjectValue{Fields: map[string]runtime.Value{
-		"proxy":     &runtime.NativeFunction{Name: "express.response.proxy", Arity: 2, Fn: binding.proxy},
-		"statusCode": &runtime.NativeFunction{Name: "express.response.statusCode", Arity: 0, Fn: binding.statusCodeValue},
-		"status":    &runtime.NativeFunction{Name: "express.response.status", Arity: 1, Fn: binding.status},
-		"setHeader": &runtime.NativeFunction{Name: "express.response.setHeader", Arity: 2, Fn: binding.setHeader},
-		"write":     &runtime.NativeFunction{Name: "express.response.write", Arity: 1, Fn: binding.write},
-		"json":      &runtime.NativeFunction{Name: "express.response.json", Arity: 1, Fn: binding.writeJSON},
-		"flush":     &runtime.NativeFunction{Name: "express.response.flush", Arity: 0, Fn: binding.flush},
-		"end":       &runtime.NativeFunction{Name: "express.response.end", Arity: -1, Fn: binding.end},
+		"proxy":       &runtime.NativeFunction{Name: "express.response.proxy", Arity: 2, Fn: binding.proxy},
+		"statusCode":  &runtime.NativeFunction{Name: "express.response.statusCode", Arity: 0, Fn: binding.statusCodeValue},
+		"status":      &runtime.NativeFunction{Name: "express.response.status", Arity: 1, Fn: binding.status},
+		"setHeader":   &runtime.NativeFunction{Name: "express.response.setHeader", Arity: 2, Fn: binding.setHeader},
+		"setCookie":   &runtime.NativeFunction{Name: "express.response.setCookie", Arity: -1, Fn: binding.setCookie},
+		"clearCookie": &runtime.NativeFunction{Name: "express.response.clearCookie", Arity: -1, Fn: binding.clearCookie},
+		"write":       &runtime.NativeFunction{Name: "express.response.write", Arity: 1, Fn: binding.write},
+		"json":        &runtime.NativeFunction{Name: "express.response.json", Arity: 1, Fn: binding.writeJSON},
+		"flush":       &runtime.NativeFunction{Name: "express.response.flush", Arity: 0, Fn: binding.flush},
+		"end":         &runtime.NativeFunction{Name: "express.response.end", Arity: -1, Fn: binding.end},
 	}}
 	return binding
 }
@@ -284,6 +293,44 @@ func (binding *responseBinding) setHeader(args []runtime.Value) (runtime.Value, 
 		return nil, err
 	}
 	binding.writer.Header().Set(name, args[1].String())
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) setCookie(args []runtime.Value) (runtime.Value, error) {
+	if len(args) < 2 || len(args) > 3 {
+		return nil, fmt.Errorf("response.setCookie expects name, value, and optional options")
+	}
+	name, err := requireStringArg("response.setCookie", args[0])
+	if err != nil {
+		return nil, err
+	}
+	value, err := requireStringArg("response.setCookie", args[1])
+	if err != nil {
+		return nil, err
+	}
+	cookie, err := httpCookieFromRuntime(name, value, args[2:])
+	if err != nil {
+		return nil, err
+	}
+	http.SetCookie(binding.writer, cookie)
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) clearCookie(args []runtime.Value) (runtime.Value, error) {
+	if len(args) < 1 || len(args) > 2 {
+		return nil, fmt.Errorf("response.clearCookie expects name and optional options")
+	}
+	name, err := requireStringArg("response.clearCookie", args[0])
+	if err != nil {
+		return nil, err
+	}
+	cookie, err := httpCookieFromRuntime(name, "", args[1:])
+	if err != nil {
+		return nil, err
+	}
+	cookie.MaxAge = -1
+	cookie.Expires = time.Unix(0, 0)
+	http.SetCookie(binding.writer, cookie)
 	return binding.handle, nil
 }
 
@@ -349,7 +396,7 @@ func (binding *responseBinding) end(args []runtime.Value) (runtime.Value, error)
 }
 
 func (binding *responseBinding) proxy(args []runtime.Value) (runtime.Value, error) {
-	opts, err := buildForwardRequestOptions("response.proxy", args[0], args[1])
+	opts, responseHeaders, stripHeaders, err := buildForwardRequestOptions("response.proxy", args[0], args[1])
 	if err != nil {
 		return nil, err
 	}
@@ -364,10 +411,17 @@ func (binding *responseBinding) proxy(args []runtime.Value) (runtime.Value, erro
 		if isHopByHopHeader(key) {
 			continue
 		}
+		lower := strings.ToLower(key)
+		if _, ok := stripHeaders[lower]; ok {
+			continue
+		}
 		binding.writer.Header().Del(key)
 		for _, value := range values {
 			binding.writer.Header().Add(key, value)
 		}
+	}
+	for key, value := range responseHeaders {
+		binding.writer.Header().Set(key, value)
 	}
 
 	binding.statusCode = resp.StatusCode
@@ -537,20 +591,22 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 	}
 	queryFields := make(map[string]runtime.Value, len(r.URL.Query()))
 	for key, values := range r.URL.Query() {
-		if len(values) == 1 {
-			queryFields[key] = runtime.StringValue{Value: values[0]}
-			continue
-		}
-		items := make([]runtime.Value, 0, len(values))
-		for _, value := range values {
-			items = append(items, runtime.StringValue{Value: value})
-		}
-		queryFields[key] = &runtime.ArrayValue{Elements: items}
+		queryFields[key] = httpStringValuesToRuntime(values)
+	}
+
+	formValue, filesValue, err := httpRequestBodyToRuntime(r.Header.Get("Content-Type"), body)
+	if err != nil {
+		return nil, err
 	}
 
 	req := &runtime.ObjectValue{Fields: map[string]runtime.Value{
 		"body":          runtime.StringValue{Value: string(body)},
+		"cookie":        httpCookieGetter(r.Cookies()),
+		"cookies":       httpCookiesToRuntime(r.Cookies()),
 		"contentLength": runtime.IntValue{Value: r.ContentLength},
+		"file":          httpFileGetter(filesValue),
+		"files":         filesValue,
+		"form":          formValue,
 		"header":        httpHeaderGetter(r.Header),
 		"headers":       httpHeadersToRuntime(r.Header),
 		"hasHeader":     httpHasHeaderGetter(r.Header),
@@ -652,24 +708,24 @@ func writeResponse(w http.ResponseWriter, value runtime.Value, defaultStatus int
 	}
 }
 
-func buildForwardRequestOptions(name string, inboundValue runtime.Value, optionsValue runtime.Value) (*requestOptions, error) {
+func buildForwardRequestOptions(name string, inboundValue runtime.Value, optionsValue runtime.Value) (*requestOptions, map[string]string, map[string]struct{}, error) {
 	inbound, ok := inboundValue.(*runtime.ObjectValue)
 	if !ok {
-		return nil, fmt.Errorf("%s expects request object", name)
+		return nil, nil, nil, fmt.Errorf("%s expects request object", name)
 	}
 	options, ok := optionsValue.(*runtime.ObjectValue)
 	if !ok {
-		return nil, fmt.Errorf("%s expects options object", name)
+		return nil, nil, nil, fmt.Errorf("%s expects options object", name)
 	}
 
 	urlValue, ok := options.Fields["url"].(runtime.StringValue)
 	if !ok || strings.TrimSpace(urlValue.Value) == "" {
-		return nil, fmt.Errorf("%s options require non-empty url", name)
+		return nil, nil, nil, fmt.Errorf("%s options require non-empty url", name)
 	}
 
 	methodValue, ok := inbound.Fields["method"].(runtime.StringValue)
 	if !ok || methodValue.Value == "" {
-		return nil, fmt.Errorf("%s request requires method", name)
+		return nil, nil, nil, fmt.Errorf("%s request requires method", name)
 	}
 	method := methodValue.Value
 	if overrideValue, ok := options.Fields["method"].(runtime.StringValue); ok && overrideValue.Value != "" {
@@ -679,7 +735,7 @@ func buildForwardRequestOptions(name string, inboundValue runtime.Value, options
 
 	bodyValue, ok := inbound.Fields["body"].(runtime.StringValue)
 	if !ok {
-		return nil, fmt.Errorf("%s request requires body", name)
+		return nil, nil, nil, fmt.Errorf("%s request requires body", name)
 	}
 	body := bodyValue.Value
 	if overrideValue, ok := options.Fields["body"]; ok {
@@ -687,18 +743,28 @@ func buildForwardRequestOptions(name string, inboundValue runtime.Value, options
 	}
 
 	headers := make(map[string]string)
-	inboundHeaders, err := httpHeadersFromRuntime(name+" request", inbound.Fields["headers"])
-	if err != nil {
-		return nil, err
+	copyHeaders := true
+	if copyHeadersValue, ok := options.Fields["copyHeaders"]; ok {
+		boolValue, ok := copyHeadersValue.(runtime.BoolValue)
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("%s copyHeaders must be bool", name)
+		}
+		copyHeaders = boolValue.Value
 	}
-	for key, value := range inboundHeaders {
-		if !isHopByHopHeader(key) && !strings.EqualFold(key, "Host") {
-			headers[key] = value
+	if copyHeaders {
+		inboundHeaders, err := httpHeadersFromRuntime(name+" request", inbound.Fields["headers"])
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		for key, value := range inboundHeaders {
+			if !isHopByHopHeader(key) && !strings.EqualFold(key, "Host") {
+				headers[key] = value
+			}
 		}
 	}
 	overrideHeaders, err := httpHeadersFromRuntime(name, options.Fields["headers"])
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	host := ""
 	for key, value := range overrideHeaders {
@@ -711,20 +777,58 @@ func buildForwardRequestOptions(name string, inboundValue runtime.Value, options
 		}
 		headers[key] = value
 	}
+	stripHeaders, err := httpHeaderNameSet(name, options.Fields["stripHeaders"])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for key := range stripHeaders {
+		delete(headers, key)
+	}
+
+	cookies := map[string]string{}
+	if inboundCookies, ok := inbound.Fields["cookies"].(*runtime.ObjectValue); ok {
+		for key, value := range inboundCookies.Fields {
+			if text, ok := value.(runtime.StringValue); ok {
+				cookies[key] = text.Value
+			}
+		}
+	}
+	overrideCookies, err := httpCookiesFromRuntime(name, options.Fields["cookies"])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for key, value := range overrideCookies {
+		cookies[key] = value
+	}
 
 	timeout, err := httpTimeoutFromOptions(name, options)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
+	}
+	followRedirects, maxRedirects, err := httpRedirectOptions(name, options)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	targetURL, err := httpMergeQuery(urlValue.Value, options.Fields["query"])
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	responseHeaders, err := httpHeadersFromRuntime(name, options.Fields["responseHeaders"])
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	return &requestOptions{
-		Method:  method,
-		URL:     urlValue.Value,
-		Headers: headers,
-		Body:    body,
-		Timeout: timeout,
-		Host:    host,
-	}, nil
+		Method:          method,
+		URL:             targetURL,
+		Headers:         headers,
+		Body:            body,
+		Timeout:         timeout,
+		Host:            host,
+		Cookies:         cookies,
+		FollowRedirects: followRedirects,
+		MaxRedirects:    maxRedirects,
+	}, responseHeaders, stripHeaders, nil
 }
 
 func doHTTPRoundTrip(opts *requestOptions) (*http.Response, error) {
@@ -735,25 +839,32 @@ func doHTTPRoundTrip(opts *requestOptions) (*http.Response, error) {
 	for key, value := range opts.Headers {
 		req.Header.Set(key, value)
 	}
+	for key, value := range opts.Cookies {
+		req.AddCookie(&http.Cookie{Name: key, Value: value})
+	}
 	if opts.Host != "" {
 		req.Host = opts.Host
 	}
 	client := &http.Client{Timeout: opts.Timeout}
+	if !opts.FollowRedirects {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	} else if opts.MaxRedirects > 0 {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			if len(via) >= opts.MaxRedirects {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		}
+	}
 	return client.Do(req)
 }
 
 func httpHeadersToRuntime(headers http.Header) runtime.Value {
 	fields := make(map[string]runtime.Value, len(headers))
 	for key, values := range headers {
-		if len(values) == 1 {
-			fields[key] = runtime.StringValue{Value: values[0]}
-			continue
-		}
-		items := make([]runtime.Value, 0, len(values))
-		for _, value := range values {
-			items = append(items, runtime.StringValue{Value: value})
-		}
-		fields[key] = &runtime.ArrayValue{Elements: items}
+		fields[key] = httpStringValuesToRuntime(values)
 	}
 	return &runtime.ObjectValue{Fields: fields}
 }
@@ -805,6 +916,55 @@ func httpHasHeaderGetter(headers http.Header) runtime.Value {
 	}
 }
 
+func httpCookieGetter(cookies []*http.Cookie) runtime.Value {
+	index := map[string]string{}
+	for _, cookie := range cookies {
+		index[cookie.Name] = cookie.Value
+	}
+	return &runtime.NativeFunction{
+		Name:  "express.request.cookie",
+		Arity: 1,
+		Fn: func(args []runtime.Value) (runtime.Value, error) {
+			name, err := requireStringArg("cookie", args[0])
+			if err != nil {
+				return nil, err
+			}
+			value, ok := index[name]
+			if !ok {
+				return runtime.NullValue{}, nil
+			}
+			return runtime.StringValue{Value: value}, nil
+		},
+	}
+}
+
+func httpCookiesToRuntime(cookies []*http.Cookie) runtime.Value {
+	fields := make(map[string]runtime.Value, len(cookies))
+	for _, cookie := range cookies {
+		fields[cookie.Name] = runtime.StringValue{Value: cookie.Value}
+	}
+	return &runtime.ObjectValue{Fields: fields}
+}
+
+func httpCookiesFromRuntime(name string, value runtime.Value) (map[string]string, error) {
+	cookies := make(map[string]string)
+	if value == nil {
+		return cookies, nil
+	}
+	objectValue, ok := value.(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("%s cookies must be object", name)
+	}
+	for key, item := range objectValue.Fields {
+		text, ok := item.(runtime.StringValue)
+		if !ok {
+			return nil, fmt.Errorf("%s cookies must be string values", name)
+		}
+		cookies[key] = text.Value
+	}
+	return cookies, nil
+}
+
 func isNextResponse(value runtime.Value) bool {
 	obj, ok := value.(*runtime.ObjectValue)
 	if !ok {
@@ -843,6 +1003,26 @@ func httpTimeoutFromOptions(name string, obj *runtime.ObjectValue) (time.Duratio
 	return timeout, nil
 }
 
+func httpRedirectOptions(name string, obj *runtime.ObjectValue) (bool, int, error) {
+	followRedirects := true
+	maxRedirects := 0
+	if followValue, ok := obj.Fields["followRedirects"]; ok {
+		boolValue, ok := followValue.(runtime.BoolValue)
+		if !ok {
+			return false, 0, fmt.Errorf("%s followRedirects must be bool", name)
+		}
+		followRedirects = boolValue.Value
+	}
+	if maxValue, ok := obj.Fields["maxRedirects"]; ok {
+		intValue, ok := maxValue.(runtime.IntValue)
+		if !ok || intValue.Value < 0 {
+			return false, 0, fmt.Errorf("%s maxRedirects must be non-negative int", name)
+		}
+		maxRedirects = int(intValue.Value)
+	}
+	return followRedirects, maxRedirects, nil
+}
+
 func isHopByHopHeader(header string) bool {
 	switch strings.ToLower(header) {
 	case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade":
@@ -859,6 +1039,203 @@ func isCallableValue(value runtime.Value) bool {
 	default:
 		return false
 	}
+}
+
+func httpRequestBodyToRuntime(contentType string, body []byte) (runtime.Value, runtime.Value, error) {
+	formFields := map[string]runtime.Value{}
+	fileFields := map[string]runtime.Value{}
+	mediaType, params, _ := mime.ParseMediaType(contentType)
+	switch {
+	case mediaType == "application/x-www-form-urlencoded":
+		values, err := url.ParseQuery(string(body))
+		if err != nil {
+			return &runtime.ObjectValue{Fields: formFields}, &runtime.ObjectValue{Fields: fileFields}, err
+		}
+		for key, items := range values {
+			formFields[key] = httpStringValuesToRuntime(items)
+		}
+	case strings.HasPrefix(mediaType, "multipart/"):
+		boundary := params["boundary"]
+		reader := multipart.NewReader(bytes.NewReader(body), boundary)
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return &runtime.ObjectValue{Fields: formFields}, &runtime.ObjectValue{Fields: fileFields}, err
+			}
+			data, err := io.ReadAll(part)
+			if err != nil {
+				return &runtime.ObjectValue{Fields: formFields}, &runtime.ObjectValue{Fields: fileFields}, err
+			}
+			if part.FileName() == "" {
+				httpAppendRuntimeField(formFields, part.FormName(), runtime.StringValue{Value: string(data)})
+				continue
+			}
+			contentTypeValue := part.Header.Get("Content-Type")
+			if contentTypeValue == "" {
+				contentTypeValue = http.DetectContentType(data)
+			}
+			fileObject := &runtime.ObjectValue{Fields: map[string]runtime.Value{
+				"field":       runtime.StringValue{Value: part.FormName()},
+				"filename":    runtime.StringValue{Value: part.FileName()},
+				"contentType": runtime.StringValue{Value: contentTypeValue},
+				"size":        runtime.IntValue{Value: int64(len(data))},
+				"text":        runtime.StringValue{Value: string(data)},
+			}}
+			existing, ok := fileFields[part.FormName()].(*runtime.ArrayValue)
+			if !ok {
+				fileFields[part.FormName()] = &runtime.ArrayValue{Elements: []runtime.Value{fileObject}}
+				continue
+			}
+			existing.Elements = append(existing.Elements, fileObject)
+		}
+	}
+	return &runtime.ObjectValue{Fields: formFields}, &runtime.ObjectValue{Fields: fileFields}, nil
+}
+
+func httpAppendRuntimeField(fields map[string]runtime.Value, key string, value runtime.Value) {
+	if existing, ok := fields[key]; ok {
+		if arrayValue, ok := existing.(*runtime.ArrayValue); ok {
+			arrayValue.Elements = append(arrayValue.Elements, value)
+			return
+		}
+		fields[key] = &runtime.ArrayValue{Elements: []runtime.Value{existing, value}}
+		return
+	}
+	fields[key] = value
+}
+
+func httpFileGetter(filesValue runtime.Value) runtime.Value {
+	return &runtime.NativeFunction{
+		Name:  "express.request.file",
+		Arity: 1,
+		Fn: func(args []runtime.Value) (runtime.Value, error) {
+			name, err := requireStringArg("file", args[0])
+			if err != nil {
+				return nil, err
+			}
+			filesObject, ok := filesValue.(*runtime.ObjectValue)
+			if !ok {
+				return runtime.NullValue{}, nil
+			}
+			entry, ok := filesObject.Fields[name]
+			if !ok {
+				return runtime.NullValue{}, nil
+			}
+			arrayValue, ok := entry.(*runtime.ArrayValue)
+			if !ok || len(arrayValue.Elements) == 0 {
+				return runtime.NullValue{}, nil
+			}
+			return arrayValue.Elements[0], nil
+		},
+	}
+}
+
+func httpCookieFromRuntime(name string, value string, extra []runtime.Value) (*http.Cookie, error) {
+	cookie := &http.Cookie{Name: name, Value: value, Path: "/"}
+	if len(extra) == 0 {
+		return cookie, nil
+	}
+	options, ok := extra[0].(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("cookie options must be object")
+	}
+	if pathValue, ok := options.Fields["path"]; ok {
+		path, err := requireStringArg("cookie", pathValue)
+		if err != nil {
+			return nil, err
+		}
+		cookie.Path = path
+	}
+	if domainValue, ok := options.Fields["domain"]; ok {
+		domain, err := requireStringArg("cookie", domainValue)
+		if err != nil {
+			return nil, err
+		}
+		cookie.Domain = domain
+	}
+	if secureValue, ok := options.Fields["secure"]; ok {
+		boolValue, ok := secureValue.(runtime.BoolValue)
+		if !ok {
+			return nil, fmt.Errorf("cookie secure must be bool")
+		}
+		cookie.Secure = boolValue.Value
+	}
+	if httpOnlyValue, ok := options.Fields["httpOnly"]; ok {
+		boolValue, ok := httpOnlyValue.(runtime.BoolValue)
+		if !ok {
+			return nil, fmt.Errorf("cookie httpOnly must be bool")
+		}
+		cookie.HttpOnly = boolValue.Value
+	}
+	if maxAgeValue, ok := options.Fields["maxAge"]; ok {
+		intValue, ok := maxAgeValue.(runtime.IntValue)
+		if !ok {
+			return nil, fmt.Errorf("cookie maxAge must be int")
+		}
+		cookie.MaxAge = int(intValue.Value)
+	}
+	return cookie, nil
+}
+
+func httpHeaderNameSet(name string, value runtime.Value) (map[string]struct{}, error) {
+	set := map[string]struct{}{}
+	if value == nil {
+		return set, nil
+	}
+	arrayValue, ok := value.(*runtime.ArrayValue)
+	if !ok {
+		return nil, fmt.Errorf("%s stripHeaders must be array", name)
+	}
+	for _, item := range arrayValue.Elements {
+		header, err := requireStringArg(name, item)
+		if err != nil {
+			return nil, err
+		}
+		set[strings.ToLower(header)] = struct{}{}
+	}
+	return set, nil
+}
+
+func httpMergeQuery(target string, value runtime.Value) (string, error) {
+	if value == nil {
+		return target, nil
+	}
+	queryObject, ok := value.(*runtime.ObjectValue)
+	if !ok {
+		return "", fmt.Errorf("query must be object")
+	}
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return "", err
+	}
+	query := parsed.Query()
+	for key, fieldValue := range queryObject.Fields {
+		query.Del(key)
+		switch typed := fieldValue.(type) {
+		case *runtime.ArrayValue:
+			for _, item := range typed.Elements {
+				query.Add(key, item.String())
+			}
+		default:
+			query.Set(key, fieldValue.String())
+		}
+	}
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func httpStringValuesToRuntime(values []string) runtime.Value {
+	if len(values) == 1 {
+		return runtime.StringValue{Value: values[0]}
+	}
+	items := make([]runtime.Value, 0, len(values))
+	for _, value := range values {
+		items = append(items, runtime.StringValue{Value: value})
+	}
+	return &runtime.ArrayValue{Elements: items}
 }
 
 func requireStringArg(name string, v runtime.Value) (string, error) {
