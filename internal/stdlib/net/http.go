@@ -419,6 +419,7 @@ func newHTTPResponseHandle(w http.ResponseWriter) *httpResponseBinding {
 	}
 	binding.handle = &runtime.ObjectValue{Fields: map[string]runtime.Value{
 		"proxy":     &runtime.NativeFunction{Name: "response.proxy", Arity: 2, Fn: binding.proxy},
+		"statusCode": &runtime.NativeFunction{Name: "response.statusCode", Arity: 0, Fn: binding.statusCodeValue},
 		"status":    &runtime.NativeFunction{Name: "response.status", Arity: 1, Fn: binding.status},
 		"setHeader": &runtime.NativeFunction{Name: "response.setHeader", Arity: 2, Fn: binding.setHeader},
 		"write":     &runtime.NativeFunction{Name: "response.write", Arity: 1, Fn: binding.write},
@@ -427,6 +428,10 @@ func newHTTPResponseHandle(w http.ResponseWriter) *httpResponseBinding {
 		"end":       &runtime.NativeFunction{Name: "response.end", Arity: -1, Fn: binding.end},
 	}}
 	return binding
+}
+
+func (binding *httpResponseBinding) statusCodeValue(args []runtime.Value) (runtime.Value, error) {
+	return runtime.IntValue{Value: int64(binding.statusCode)}, nil
 }
 
 func (binding *httpResponseBinding) status(args []runtime.Value) (runtime.Value, error) {

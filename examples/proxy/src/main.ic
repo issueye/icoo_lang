@@ -23,8 +23,8 @@ const runtimeApi = fn() {
     })
 
     for i, route in catalog.endpoints(runtimeState.catalog) {
-      app.post(route.endpoint, fn(req) {
-        return proxy.handleProxy(req, runtimeState)
+      app.post(route.endpoint, fn(req, res) {
+        return proxy.handleProxyDirect(req, res, runtimeState)
       })
     }
 

@@ -135,9 +135,9 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 1. 新增 `std.object` 标准库模块。
 2. 补齐顶层 `import` 在闭包/IIFE 中的可捕获性。
 3. 补齐字符串键对象字面量，以及服务端请求对象的 `req.header(name)` / `req.hasHeader(name)` / `req.json`。
-4. 为 `std.http.server` 增加双参 handler 形态 `fn(req, res)`，支持 `res.status(...)` / `res.setHeader(...)` / `res.write(...)` / `res.json(...)` / `res.end(...)`，让脚本层第一次具备“直接控制响应”的能力。
+4. 为 `std.http.server` 和 `std.express` 增加双参 handler 形态 `fn(req, res)`，支持 `res.status(...)` / `res.statusCode()` / `res.setHeader(...)` / `res.write(...)` / `res.json(...)` / `res.end(...)`，让脚本层第一次具备“直接控制响应”的能力。
 5. 继续补上 `res.proxy(req, options)`，让代理型服务可以把上游响应直接流式写回下游，而不是像 `forward()` 一样先整包读入内存再返回对象。
-6. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码与模块缓存样板。
+6. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码、模块缓存样板，以及成功代理路径上的响应回写方式。
 7. 增加对应运行时测试，确保模块可用。
 
 这一步不能替代更大的 HTTP/服务化能力建设，但它验证了一件事：

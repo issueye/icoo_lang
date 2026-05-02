@@ -108,9 +108,80 @@ const proxyHandlerApi = fn() {
     }
   }
 
+  fn handleProxyDirectImpl(req, res, state) {
+    let requestedModel = jsonHelpers.requestedModel(req)
+    let authResult = auth.authenticate(state.config, req)
+    if authResult.ok != true {
+      recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized")
+      return authResult.response
+    }
+
+    let route = catalog.resolveRoute(state.catalog, req.path, requestedModel)
+    if route == null {
+      recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found")
+      return {
+        status: 404,
+        json: {
+          ok: false,
+          error: "route_not_found",
+          path: req.path,
+          requestedModel: requestedModel
+        }
+      }
+    }
+
+    let bodyInfo = jsonHelpers.rewriteBody(req, route)
+    let upstreamUrl = state.config.upstreamBaseUrl + route.upstreamPath
+    let headers = buildForwardHeaders(req, authResult, route)
+
+    try {
+      let proxied = res.proxy(req, {
+        url: upstreamUrl,
+        headers: headers,
+        body: bodyInfo.body,
+        timeoutMs: state.config.timeoutMs
+      })
+
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        res.statusCode(),
+        upstreamUrl,
+        route.selection
+      )
+      return proxied
+    } catch err {
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        502,
+        upstreamUrl,
+        err.message
+      )
+      return {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+    }
+  }
+
   return {
-    handleProxy: handleProxyImpl
+    handleProxy: handleProxyImpl,
+    handleProxyDirect: handleProxyDirectImpl
   }
 }()
 
 export const handleProxy = proxyHandlerApi.handleProxy
+export const handleProxyDirect = proxyHandlerApi.handleProxyDirect

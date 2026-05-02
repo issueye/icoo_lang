@@ -2590,6 +2590,112 @@ if resp.json.missing != null {
 	}
 }
 
+func TestRuntimeRunSource_StdExpressResponseHandleWrite(t *testing.T) {
+	src := `
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+app.get("/direct", fn(req, res) {
+  res.setHeader("X-Mode", "direct")
+  res.status(202)
+  res.write(req.method + ":" + req.path)
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let resp = client.get(server.url + "/direct")
+server.close()
+
+if resp.status != 202 {
+  panic("unexpected express direct status")
+}
+if resp.body != "GET:/direct" {
+  panic("unexpected express direct body")
+}
+if resp.header("X-Mode") != "direct" {
+  panic("unexpected express direct header")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected express response handle write to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExpressResponseHandleProxy(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.URL.Path != "/proxy" || r.URL.Query().Get("name") != "icoo" {
+			http.Error(w, "bad url", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Accept") != "text/plain" {
+			http.Error(w, "bad header", http.StatusBadRequest)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != "payload" {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("X-Upstream", "seen")
+		w.Header().Set("Connection", "close")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte("express-proxied"))
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+app.post("/proxy", fn(req, res) {
+  res.setHeader("X-Gateway", "icoo")
+  res.proxy(req, {
+    url: "` + upstream.URL + `" + req.path + "?name=" + req.query.name,
+    timeoutMs: 5000
+  })
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let resp = client.request({
+  url: server.url + "/proxy?name=icoo",
+  method: "POST",
+  headers: {
+    Accept: "text/plain"
+  },
+  body: "payload"
+})
+server.close()
+
+if resp.status != 202 {
+  panic("unexpected express proxied status")
+}
+if resp.body != "express-proxied" {
+  panic("unexpected express proxied body")
+}
+if resp.header("X-Upstream") != "seen" {
+  panic("unexpected express proxied upstream header")
+}
+if resp.header("X-Gateway") != "icoo" {
+  panic("unexpected express proxied local header")
+}
+if resp.header("Connection") != null {
+  panic("expected express hop-by-hop header filtered")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected express response handle proxy to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_StdExpressRootRouteMatchesExactly(t *testing.T) {
 	src := `
 import std.express as express

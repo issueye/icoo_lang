@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"icoo_lang/internal/runtime"
 	"icoo_lang/internal/stdlib/utils"
@@ -36,13 +37,32 @@ type appBinding struct {
 }
 
 type routeBinding struct {
-	method  string
-	path    string
-	handler runtime.Value
+	method     string
+	path       string
+	handler    runtime.Value
+	middleware bool
 }
 
 type serverBinding struct {
 	server *http.Server
+}
+
+type responseBinding struct {
+	writer      http.ResponseWriter
+	flusher     http.Flusher
+	statusCode  int
+	wroteHeader bool
+	handled     bool
+	handle      *runtime.ObjectValue
+}
+
+type requestOptions struct {
+	Method  string
+	URL     string
+	Headers map[string]string
+	Body    string
+	Timeout time.Duration
+	Host    string
 }
 
 func expressCreate(args []runtime.Value) (runtime.Value, error) {
@@ -95,7 +115,12 @@ func (app *appBinding) addRoute(name, method string, args []runtime.Value) (runt
 	}
 
 	app.mu.Lock()
-	app.routes = append(app.routes, routeBinding{method: method, path: path, handler: handler})
+	app.routes = append(app.routes, routeBinding{
+		method:     method,
+		path:       path,
+		handler:    handler,
+		middleware: name == "use",
+	})
 	app.mu.Unlock()
 	return app.object(), nil
 }
@@ -138,21 +163,25 @@ func (app *appBinding) serveHTTP(ctx *runtime.NativeContext, w http.ResponseWrit
 	app.mu.RLock()
 	routes := append([]routeBinding(nil), app.routes...)
 	app.mu.RUnlock()
+	respBinding := newResponseHandle(w)
 
 	for _, route := range routes {
 		if !route.matches(r.Method, r.URL.Path) {
 			continue
 		}
-		respValue, nextReqValue, err := callRouteHandler(ctx, route.handler, reqValue)
+		respValue, nextReqValue, err := callRouteHandler(ctx, route, reqValue, respBinding)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if respBinding.handled {
 			return
 		}
 		if isNextResponse(respValue) {
 			reqValue = nextReqValue
 			continue
 		}
-		if err := writeResponse(w, respValue); err != nil {
+		if err := writeResponse(w, respValue, respBinding.statusCode); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -184,12 +213,21 @@ func (binding *serverBinding) close(args []runtime.Value) (runtime.Value, error)
 	return runtime.NullValue{}, binding.server.Close()
 }
 
-func callRouteHandler(ctx *runtime.NativeContext, handler runtime.Value, reqValue runtime.Value) (runtime.Value, runtime.Value, error) {
+func callRouteHandler(ctx *runtime.NativeContext, route routeBinding, reqValue runtime.Value, respBinding *responseBinding) (runtime.Value, runtime.Value, error) {
+	handler := route.handler
 	args := []runtime.Value{reqValue}
 	if closure, ok := handler.(*runtime.Closure); ok && closure.Proto != nil && closure.Proto.Arity == 2 {
-		args = []runtime.Value{reqValue, nextFunction()}
+		if route.middleware {
+			args = []runtime.Value{reqValue, nextFunction()}
+		} else {
+			args = []runtime.Value{reqValue, respBinding.handle}
+		}
 	} else if native, ok := handler.(*runtime.NativeFunction); ok && native.Arity == 2 {
-		args = []runtime.Value{reqValue, nextFunction()}
+		if route.middleware {
+			args = []runtime.Value{reqValue, nextFunction()}
+		} else {
+			args = []runtime.Value{reqValue, respBinding.handle}
+		}
 	}
 	if ctx.CallDetachedWithArgs != nil {
 		result, calledArgs, err := ctx.CallDetachedWithArgs(handler, args)
@@ -200,6 +238,178 @@ func callRouteHandler(ctx *runtime.NativeContext, handler runtime.Value, reqValu
 	}
 	result, err := ctx.CallDetached(handler, args)
 	return result, reqValue, err
+}
+
+func newResponseHandle(w http.ResponseWriter) *responseBinding {
+	flusher, _ := w.(http.Flusher)
+	binding := &responseBinding{
+		writer:     w,
+		flusher:    flusher,
+		statusCode: http.StatusOK,
+	}
+	binding.handle = &runtime.ObjectValue{Fields: map[string]runtime.Value{
+		"proxy":     &runtime.NativeFunction{Name: "express.response.proxy", Arity: 2, Fn: binding.proxy},
+		"statusCode": &runtime.NativeFunction{Name: "express.response.statusCode", Arity: 0, Fn: binding.statusCodeValue},
+		"status":    &runtime.NativeFunction{Name: "express.response.status", Arity: 1, Fn: binding.status},
+		"setHeader": &runtime.NativeFunction{Name: "express.response.setHeader", Arity: 2, Fn: binding.setHeader},
+		"write":     &runtime.NativeFunction{Name: "express.response.write", Arity: 1, Fn: binding.write},
+		"json":      &runtime.NativeFunction{Name: "express.response.json", Arity: 1, Fn: binding.writeJSON},
+		"flush":     &runtime.NativeFunction{Name: "express.response.flush", Arity: 0, Fn: binding.flush},
+		"end":       &runtime.NativeFunction{Name: "express.response.end", Arity: -1, Fn: binding.end},
+	}}
+	return binding
+}
+
+func (binding *responseBinding) statusCodeValue(args []runtime.Value) (runtime.Value, error) {
+	return runtime.IntValue{Value: int64(binding.statusCode)}, nil
+}
+
+func (binding *responseBinding) status(args []runtime.Value) (runtime.Value, error) {
+	code, ok := args[0].(runtime.IntValue)
+	if !ok {
+		return nil, fmt.Errorf("response.status expects int argument")
+	}
+	binding.statusCode = int(code.Value)
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) setHeader(args []runtime.Value) (runtime.Value, error) {
+	name, err := requireStringArg("response.setHeader", args[0])
+	if err != nil {
+		return nil, err
+	}
+	binding.writer.Header().Set(name, args[1].String())
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) write(args []runtime.Value) (runtime.Value, error) {
+	if err := binding.ensureHeader(); err != nil {
+		return nil, err
+	}
+	binding.handled = true
+	_, err := io.WriteString(binding.writer, args[0].String())
+	if err != nil {
+		return nil, err
+	}
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) writeJSON(args []runtime.Value) (runtime.Value, error) {
+	plain, err := utils.RuntimeToPlainValue(args[0])
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(plain)
+	if err != nil {
+		return nil, err
+	}
+	if binding.writer.Header().Get("Content-Type") == "" {
+		binding.writer.Header().Set("Content-Type", "application/json")
+	}
+	if err := binding.ensureHeader(); err != nil {
+		return nil, err
+	}
+	binding.handled = true
+	_, err = binding.writer.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) flush(args []runtime.Value) (runtime.Value, error) {
+	if binding.flusher == nil {
+		return runtime.NullValue{}, nil
+	}
+	if err := binding.ensureHeader(); err != nil {
+		return nil, err
+	}
+	binding.handled = true
+	binding.flusher.Flush()
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) end(args []runtime.Value) (runtime.Value, error) {
+	if len(args) > 1 {
+		return nil, fmt.Errorf("response.end expects 0 or 1 arguments")
+	}
+	if len(args) == 1 {
+		return binding.write(args)
+	}
+	if err := binding.ensureHeader(); err != nil {
+		return nil, err
+	}
+	binding.handled = true
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) proxy(args []runtime.Value) (runtime.Value, error) {
+	opts, err := buildForwardRequestOptions("response.proxy", args[0], args[1])
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := doHTTPRoundTrip(opts)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	for key, values := range resp.Header {
+		if isHopByHopHeader(key) {
+			continue
+		}
+		binding.writer.Header().Del(key)
+		for _, value := range values {
+			binding.writer.Header().Add(key, value)
+		}
+	}
+
+	binding.statusCode = resp.StatusCode
+	if err := binding.ensureHeader(); err != nil {
+		return nil, err
+	}
+	binding.handled = true
+
+	target := io.Writer(binding.writer)
+	if binding.flusher != nil {
+		target = &flushingWriter{
+			writer:  binding.writer,
+			flusher: binding.flusher,
+		}
+	}
+	if _, err := io.Copy(target, resp.Body); err != nil {
+		return nil, err
+	}
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) ensureHeader() error {
+	if binding == nil || binding.writer == nil {
+		return fmt.Errorf("response writer is unavailable")
+	}
+	if binding.wroteHeader {
+		return nil
+	}
+	if binding.statusCode == 0 {
+		binding.statusCode = http.StatusOK
+	}
+	binding.writer.WriteHeader(binding.statusCode)
+	binding.wroteHeader = true
+	return nil
+}
+
+type flushingWriter struct {
+	writer  http.ResponseWriter
+	flusher http.Flusher
+}
+
+func (w *flushingWriter) Write(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	if err == nil && n > 0 && w.flusher != nil {
+		w.flusher.Flush()
+	}
+	return n, err
 }
 
 func nextFunction() *runtime.NativeFunction {
@@ -352,19 +562,30 @@ func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
 	return req, nil
 }
 
-func writeResponse(w http.ResponseWriter, value runtime.Value) error {
+func writeResponse(w http.ResponseWriter, value runtime.Value, defaultStatus int) error {
+	if defaultStatus == 0 {
+		defaultStatus = http.StatusOK
+	}
 	switch resp := value.(type) {
 	case nil, runtime.NullValue:
-		w.WriteHeader(http.StatusNoContent)
+		status := defaultStatus
+		if status == http.StatusOK {
+			status = http.StatusNoContent
+		}
+		w.WriteHeader(status)
 		return nil
 	case runtime.StringValue:
+		w.Header().Set("Content-Length", strconv.Itoa(len(resp.Value)))
+		if defaultStatus != http.StatusOK {
+			w.WriteHeader(defaultStatus)
+		}
 		_, err := io.WriteString(w, resp.Value)
 		return err
 	case *runtime.ErrorValue:
 		http.Error(w, resp.Message, http.StatusInternalServerError)
 		return nil
 	case *runtime.ObjectValue:
-		status := http.StatusOK
+		status := defaultStatus
 		if statusValue, ok := resp.Fields["status"]; ok {
 			intValue, ok := statusValue.(runtime.IntValue)
 			if !ok {
@@ -421,6 +642,96 @@ func writeResponse(w http.ResponseWriter, value runtime.Value) error {
 	}
 }
 
+func buildForwardRequestOptions(name string, inboundValue runtime.Value, optionsValue runtime.Value) (*requestOptions, error) {
+	inbound, ok := inboundValue.(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("%s expects request object", name)
+	}
+	options, ok := optionsValue.(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("%s expects options object", name)
+	}
+
+	urlValue, ok := options.Fields["url"].(runtime.StringValue)
+	if !ok || strings.TrimSpace(urlValue.Value) == "" {
+		return nil, fmt.Errorf("%s options require non-empty url", name)
+	}
+
+	methodValue, ok := inbound.Fields["method"].(runtime.StringValue)
+	if !ok || methodValue.Value == "" {
+		return nil, fmt.Errorf("%s request requires method", name)
+	}
+	method := methodValue.Value
+	if overrideValue, ok := options.Fields["method"].(runtime.StringValue); ok && overrideValue.Value != "" {
+		method = overrideValue.Value
+	}
+	method = strings.ToUpper(method)
+
+	bodyValue, ok := inbound.Fields["body"].(runtime.StringValue)
+	if !ok {
+		return nil, fmt.Errorf("%s request requires body", name)
+	}
+	body := bodyValue.Value
+	if overrideValue, ok := options.Fields["body"]; ok {
+		body = overrideValue.String()
+	}
+
+	headers := make(map[string]string)
+	inboundHeaders, err := httpHeadersFromRuntime(name+" request", inbound.Fields["headers"])
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range inboundHeaders {
+		if !isHopByHopHeader(key) && !strings.EqualFold(key, "Host") {
+			headers[key] = value
+		}
+	}
+	overrideHeaders, err := httpHeadersFromRuntime(name, options.Fields["headers"])
+	if err != nil {
+		return nil, err
+	}
+	host := ""
+	for key, value := range overrideHeaders {
+		if isHopByHopHeader(key) {
+			continue
+		}
+		if strings.EqualFold(key, "Host") {
+			host = value
+			continue
+		}
+		headers[key] = value
+	}
+
+	timeout, err := httpTimeoutFromOptions(name, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return &requestOptions{
+		Method:  method,
+		URL:     urlValue.Value,
+		Headers: headers,
+		Body:    body,
+		Timeout: timeout,
+		Host:    host,
+	}, nil
+}
+
+func doHTTPRoundTrip(opts *requestOptions) (*http.Response, error) {
+	req, err := http.NewRequest(opts.Method, opts.URL, strings.NewReader(opts.Body))
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range opts.Headers {
+		req.Header.Set(key, value)
+	}
+	if opts.Host != "" {
+		req.Host = opts.Host
+	}
+	client := &http.Client{Timeout: opts.Timeout}
+	return client.Do(req)
+}
+
 func httpHeadersToRuntime(headers http.Header) runtime.Value {
 	fields := make(map[string]runtime.Value, len(headers))
 	for key, values := range headers {
@@ -435,6 +746,21 @@ func httpHeadersToRuntime(headers http.Header) runtime.Value {
 		fields[key] = &runtime.ArrayValue{Elements: items}
 	}
 	return &runtime.ObjectValue{Fields: fields}
+}
+
+func httpHeadersFromRuntime(name string, value runtime.Value) (map[string]string, error) {
+	headers := make(map[string]string)
+	if value == nil {
+		return headers, nil
+	}
+	headerObj, ok := value.(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("%s headers must be object", name)
+	}
+	for key, value := range headerObj.Fields {
+		headers[key] = value.String()
+	}
+	return headers, nil
 }
 
 func httpHeaderGetter(headers http.Header) runtime.Value {
@@ -490,6 +816,30 @@ func cleanRoutePath(path string) string {
 		return "/" + path
 	}
 	return path
+}
+
+func httpTimeoutFromOptions(name string, obj *runtime.ObjectValue) (time.Duration, error) {
+	timeout := 30 * time.Second
+	if timeoutValue, ok := obj.Fields["timeoutMs"]; ok {
+		intValue, ok := timeoutValue.(runtime.IntValue)
+		if !ok {
+			return 0, fmt.Errorf("%s timeoutMs must be int", name)
+		}
+		if intValue.Value < 0 {
+			return 0, fmt.Errorf("%s timeoutMs must be non-negative", name)
+		}
+		timeout = time.Duration(intValue.Value) * time.Millisecond
+	}
+	return timeout, nil
+}
+
+func isHopByHopHeader(header string) bool {
+	switch strings.ToLower(header) {
+	case "connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade":
+		return true
+	default:
+		return false
+	}
 }
 
 func isCallableValue(value runtime.Value) bool {
