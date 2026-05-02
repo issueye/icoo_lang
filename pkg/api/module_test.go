@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/alicebob/miniredis/v2"
 )
 
 func TestRuntimeRunFile_ImportsExportedModule(t *testing.T) {
@@ -629,7 +631,7 @@ for key, value in time {
   }
 }
 
-if keys != "nowsleep" {
+if keys != "adddiffformatfromUnixnowparsepartssleepunix" {
   panic("unexpected std.time iteration order")
 }
 `
@@ -650,6 +652,48 @@ time.sleep("1")
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err == nil {
 		t.Fatal("expected std.time.sleep to reject non-int argument")
+	}
+}
+
+func TestRuntimeRunSource_StdTimeExtendedHelpers(t *testing.T) {
+	src := `
+import std.time as time
+
+let ts = time.parse("2025-01-02 03:04:05", "YYYY-MM-DD HH:mm:ss", "UTC")
+if ts != 1735787045000 {
+  panic("unexpected parsed timestamp")
+}
+if time.format(ts, "YYYY/MM/DD HH:mm:ss", "UTC") != "2025/01/02 03:04:05" {
+  panic("unexpected formatted timestamp")
+}
+let parts = time.parts(ts, "Asia/Shanghai")
+if parts.year != 2025 || parts.month != 1 || parts.day != 2 {
+  panic("unexpected date parts")
+}
+if parts.hour != 11 || parts.minute != 4 || parts.second != 5 {
+  panic("unexpected time parts")
+}
+if parts.offsetSeconds != 28800 || parts.timezone != "Asia/Shanghai" {
+  panic("unexpected timezone parts")
+}
+if time.unix(ts) != 1735787045 {
+  panic("unexpected unix seconds")
+}
+if time.fromUnix(time.unix(ts)) != 1735787045000 {
+  panic("unexpected fromUnix result")
+}
+let shifted = time.add(ts, 1500)
+if shifted != 1735787046500 {
+  panic("unexpected add result")
+}
+if time.diff(shifted, ts) != 1500 {
+  panic("unexpected diff result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected extended std.time helpers to succeed, got: %v", err)
 	}
 }
 
@@ -738,6 +782,118 @@ conn.close()
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.db import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdRedisModule(t *testing.T) {
+	server := miniredis.RunT(t)
+
+	src := `
+import std.redis as redis
+
+let client = redis.connect({
+  addr: "` + server.Addr() + `"
+})
+if !client.ping() {
+  panic("expected redis ping success")
+}
+client.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.redis import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdRedisModule(t *testing.T) {
+	src := `
+import std.redis as redis
+
+let keys = ""
+let count = 0
+for key, value in redis {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.redis export kind")
+  }
+}
+
+if keys != "connectopen" {
+  panic("unexpected std.redis iteration order")
+}
+if count != 2 {
+  panic("unexpected std.redis export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.redis iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdRedisOperations(t *testing.T) {
+	server := miniredis.RunT(t)
+
+	src := `
+import std.redis as redis
+
+let client = redis.open("redis://` + server.Addr() + `/0")
+if !client.set("name", "icoo") {
+  panic("expected redis set ok")
+}
+if client.get("name") != "icoo" {
+  panic("unexpected redis get")
+}
+if !client.set("temp", "1", 5000) {
+  panic("expected redis set with ttl ok")
+}
+let ttl = client.ttl("temp")
+if ttl == null || ttl <= 0 {
+  panic("expected redis ttl")
+}
+if !client.expire("name", 2000) {
+  panic("expected redis expire ok")
+}
+if !client.exists("name") {
+  panic("expected redis exists")
+}
+if client.incr("counter") != 1 {
+  panic("unexpected redis incr result")
+}
+if client.incrBy("counter", 4) != 5 {
+  panic("unexpected redis incrBy result")
+}
+if client.hSet("user:1", {name: "ada", score: 10}) != 2 {
+  panic("unexpected redis hSet result")
+}
+if client.hGet("user:1", "name") != "ada" {
+  panic("unexpected redis hGet result")
+}
+let user = client.hGetAll("user:1")
+if user.name != "ada" || user.score != "10" {
+  panic("unexpected redis hGetAll result")
+}
+if client.get("missing") != null {
+  panic("missing redis get should return null")
+}
+if client.hGet("user:1", "missing") != null {
+  panic("missing redis hGet should return null")
+}
+if client.del("name") != 1 {
+  panic("unexpected redis del result")
+}
+if client.exists("name") {
+  panic("expected redis key deletion")
+}
+client.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.redis operations to succeed, got: %v", err)
 	}
 }
 

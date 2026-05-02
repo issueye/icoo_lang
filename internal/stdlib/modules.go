@@ -29,6 +29,8 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stddb.LoadStdDBModule(), true
 	case "std.orm":
 		return stddb.LoadStdORMModule(), true
+	case "std.redis":
+		return stddb.LoadStdRedisModule(), true
 	case "std.json":
 		return stdformat.LoadStdJSONModule(), true
 	case "std.yaml":
