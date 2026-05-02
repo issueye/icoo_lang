@@ -441,6 +441,98 @@ if recent.total() != 3 {
 	}
 }
 
+func TestRuntimeRunSource_IteratesStdServiceModule(t *testing.T) {
+	src := `
+import std.service as service
+
+let keys = ""
+let count = 0
+for key, value in service {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.service export kind")
+  }
+}
+
+if keys != "create" {
+  panic("unexpected std.service iteration order")
+}
+if count != 1 {
+  panic("unexpected std.service export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.service iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdServiceMonitoring(t *testing.T) {
+	src := `
+import std.service as service
+
+let monitor = service.create({
+  name: "icoo-proxy",
+  recentLimit: 2
+})
+
+let health = monitor.health()
+if health.ok != true || health.service != "icoo-proxy" {
+  panic("unexpected service health")
+}
+
+let ready = monitor.ready()
+if ready.ok != true || ready.reason != null {
+  panic("unexpected service ready")
+}
+
+monitor.recordRequest({id: "a", status: 200})
+monitor.recordRequest({id: "b", status: 201})
+monitor.recordRequest({id: "c", status: 202})
+
+if monitor.requestCount() != 3 {
+  panic("unexpected service request count")
+}
+
+let recent = monitor.recentRequests()
+if len(recent) != 2 {
+  panic("unexpected service recent request count")
+}
+if recent[0].id != "c" || recent[1].id != "b" {
+  panic("unexpected service recent request order")
+}
+
+monitor.markNotReady("upstream")
+let notReady = monitor.ready()
+if notReady.ok != false || notReady.reason != "upstream" {
+  panic("unexpected service not-ready state")
+}
+
+let snapshot = monitor.snapshot()
+if snapshot.requestCount != 3 {
+  panic("unexpected service snapshot request count")
+}
+if snapshot.ready.ok != false {
+  panic("unexpected service snapshot ready state")
+}
+if len(snapshot.recentRequests) != 2 {
+  panic("unexpected service snapshot recent requests")
+}
+
+monitor.markReady()
+if monitor.ready().ok != true {
+  panic("unexpected service ready after markReady")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.service monitoring to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ObjectLiteralSupportsStringKeys(t *testing.T) {
 	src := `
 let headers = {

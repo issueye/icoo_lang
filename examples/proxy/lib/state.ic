@@ -1,19 +1,20 @@
-import std.time as time
+import std.service as service
 import "./catalog.ic" as catalog
-import "./store.ic" as store
 
 const stateApi = fn() {
   fn newStateImpl(config) {
     return {
       config: config,
       catalog: catalog.buildCatalog(config),
-      store: store.createStore(config.recentLimit),
-      startedAt: time.now()
+      monitor: service.create({
+        name: "icoo-proxy",
+        recentLimit: config.recentLimit
+      })
     }
   }
 
   fn closeImpl(state) {
-    store.close(state.store)
+    state.monitor.markNotReady("stopped")
     return null
   }
 

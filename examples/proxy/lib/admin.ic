@@ -1,22 +1,18 @@
 import std.express as express
+import std.object as object
 import "./catalog.ic" as catalog
-import "./store.ic" as store
 
 const adminApi = fn() {
   fn registerRoutesImpl(app, state) {
     app.get("/healthz", fn(req) {
-      return express.json({
-        ok: true,
-        service: "icoo-proxy"
-      })
+      return express.json(state.monitor.health())
     })
 
     app.get("/readyz", fn(req) {
-      return express.json({
-        ok: true,
+      return express.json(object.merge(state.monitor.ready(), {
         upstreamBaseUrl: state.config.upstreamBaseUrl,
-        requestCount: store.count(state.store)
-      })
+        requestCount: state.monitor.requestCount()
+      }))
     })
 
     app.get("/admin/routes", fn(req) {
@@ -34,11 +30,18 @@ const adminApi = fn() {
     })
 
     app.get("/admin/requests", fn(req) {
-      return express.json({
+      return express.json(object.merge({
         ok: true,
-        total: store.count(state.store),
-        requests: store.listRecent(state.store)
-      })
+        total: state.monitor.requestCount(),
+        requests: state.monitor.recentRequests()
+      }, {
+        service: state.monitor.name,
+        startedAt: state.monitor.startedAt
+      }))
+    })
+
+    app.get("/admin/monitor", fn(req) {
+      return express.json(state.monitor.snapshot())
     })
 
     return app

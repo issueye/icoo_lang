@@ -114,12 +114,22 @@ let health = client.getJSON(runtimeApp.server.url + "/healthz")
 let ready = client.getJSON(runtimeApp.server.url + "/readyz")
 let routes = client.getJSON(runtimeApp.server.url + "/admin/routes")
 let requests = client.getJSON(runtimeApp.server.url + "/admin/requests")
+let monitor = client.getJSON(runtimeApp.server.url + "/admin/monitor")
 
 if health.json.ok != true {
   panic("expected healthz ok")
 }
 if ready.json.ok != true {
   panic("expected readyz ok")
+}
+if monitor.json.ready.ok != true {
+  panic("expected monitor ready ok")
+}
+if monitor.json.requestCount != 3 {
+  panic("expected monitor request count")
+}
+if len(monitor.json.recentRequests) != 3 {
+  panic("expected monitor recent requests")
 }
 if len(routes.json.routes.defaults) != 3 {
   panic("expected default routes in admin response")

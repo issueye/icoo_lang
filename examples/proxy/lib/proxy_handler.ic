@@ -3,7 +3,6 @@ import std.object as object
 import "./auth.ic" as auth
 import "./catalog.ic" as catalog
 import "./json_helpers.ic" as jsonHelpers
-import "./store.ic" as store
 
 const proxyHandlerApi = fn() {
   fn buildForwardHeaders(req, authResult, route) {
@@ -26,7 +25,7 @@ const proxyHandlerApi = fn() {
   }
 
   fn recordOutcome(state, req, routeName, requestedModel, resolvedModel, authVia, status, upstreamUrl, note) {
-    store.recordRequest(state.store, {
+    state.monitor.recordRequest({
       request_id: req.requestId,
       method: req.method,
       path: req.path,

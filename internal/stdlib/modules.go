@@ -23,6 +23,8 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stdcore.LoadStdObjectModule(), true
 	case "std.observe":
 		return stdcore.LoadStdObserveModule(), true
+	case "std.service":
+		return stdcore.LoadStdServiceModule(), true
 	case "std.db":
 		return stddb.LoadStdDBModule(), true
 	case "std.orm":

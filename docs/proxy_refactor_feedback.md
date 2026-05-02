@@ -138,6 +138,17 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 
 这类能力本质上更接近“运行态观测”，不应该逼业务脚本自己再搭一层临时存储。
 
+再往上一层，则适合落成 `std.service` 这样的服务监控骨架：
+
+- `health()`
+- `ready()`
+- `markReady()` / `markNotReady(reason)`
+- `requestCount()`
+- `recentRequests()`
+- `snapshot()`
+
+它的职责不是记录所有业务指标，而是把每个服务几乎都会重复实现的“基础服务监控面”先统一掉。
+
 ### P1：在 `std.db` 之上补轻量 ORM
 
 建议目标不是完整 ORM 框架，而是一个贴近脚本服务的薄层：
@@ -173,8 +184,9 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 6. 把已有 `std.db` 链式查询能力收口成 `std.orm.model(...)`，并补齐 `create()` 与更直观的模型入口。
 7. 继续补上 `req.requestId` 和默认 `X-Request-Id` 响应头，让脚本服务第一次具备统一的请求链路标识，并把它直接回流到 proxy 示例的上游透传和 recent requests 记录中。
 8. 新增 `std.observe.recent(limit)`，把 proxy 示例里的 recent requests 和 total count 从临时存储层抽回到更贴近服务观测语义的标准库里。
-9. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码、模块缓存样板、成功代理路径上的响应回写方式，以及请求记录/最近请求观测样板。
-10. 增加对应运行时测试，确保模块可用。
+9. 在 `std.observe` 之上继续补出 `std.service.create(...)`，把 `healthz` / `readyz` / request total / recent requests / service snapshot 统一成服务级监控骨架。
+10. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码、模块缓存样板、成功代理路径上的响应回写方式，以及请求记录/最近请求/服务监控样板。
+11. 增加对应运行时测试，确保模块可用。
 
 这一步不能替代更大的 HTTP/服务化能力建设，但它验证了一件事：
 
