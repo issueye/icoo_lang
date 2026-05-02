@@ -63,11 +63,16 @@ const catalogApi = fn() {
     }
   }
 
+  fn endpointsImpl(catalog) {
+    return catalog.defaultRoutes
+  }
+
   return {
     buildCatalog: buildCatalogImpl,
     resolveRoute: resolveRouteImpl,
     snapshot: snapshotImpl,
-    modelsSnapshot: modelsSnapshotImpl
+    modelsSnapshot: modelsSnapshotImpl,
+    endpoints: endpointsImpl
   }
 }()
 
@@ -75,3 +80,4 @@ export const buildCatalog = catalogApi.buildCatalog
 export const resolveRoute = catalogApi.resolveRoute
 export const snapshot = catalogApi.snapshot
 export const modelsSnapshot = catalogApi.modelsSnapshot
+export const endpoints = catalogApi.endpoints

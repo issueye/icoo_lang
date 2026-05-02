@@ -223,6 +223,30 @@ if sum != 10 {
 	}
 }
 
+func TestRuntimeRunSource_ForInFunctionLocalSurvivesLoopExit(t *testing.T) {
+	src := `
+fn sumItems() {
+  let arr = [1, 2, 3, 4]
+  let sum = 0
+
+  for item in arr {
+    sum = sum + item
+  }
+
+  return sum
+}
+
+if sumItems() != 10 {
+  panic("function local should survive for-in exit cleanup")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected for-in function-local cleanup to succeed, got error: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ForInArrayWithContinue(t *testing.T) {
 	src := `
 let arr = [1, 2, 3, 4]

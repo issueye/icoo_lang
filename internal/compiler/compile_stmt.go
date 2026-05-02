@@ -142,16 +142,13 @@ func (c *Compiler) compileForInStmt(stmt *ast.ForInStmt) {
 		c.addLocal(stmt.Name, false)
 	}
 
-	exitCleanupCount := c.localsAboveDepth(c.current.loopStack[len(c.current.loopStack)-1].ScopeDepth)
 	c.compileBlockStmt(stmt.Body, false)
 	c.endScope()
 
 	loop := c.endLoop()
 	c.emitLoop(loop.ContinueTarget)
 	c.patchJump(exitJump)
-	for i := 0; i < exitCleanupCount; i++ {
-		c.emit(bytecode.OpPop)
-	}
+	c.emit(bytecode.OpPop)
 	c.emit(bytecode.OpPop)
 	c.patchBreakJumps(loop)
 }

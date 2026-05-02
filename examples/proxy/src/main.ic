@@ -3,6 +3,7 @@ import std.time as time
 import std.express as express
 import "../lib/config.ic" as config
 import "../lib/state.ic" as state
+import "../lib/catalog.ic" as catalog
 import "../lib/admin.ic" as admin
 import "../lib/proxy_handler.ic" as proxy
 
@@ -12,6 +13,7 @@ const runtimeApi = fn() {
   let expressModule = express
   let configModule = config
   let stateModule = state
+  let catalogModule = catalog
   let adminModule = admin
   let proxyModule = proxy
 
@@ -29,13 +31,11 @@ const runtimeApi = fn() {
       })
     })
 
-    app.post("/v1/chat/completions", fn(req) {
-      return proxyModule.handleProxy(req, runtimeState)
-    })
-
-    app.post("/v1/messages", fn(req) {
-      return proxyModule.handleProxy(req, runtimeState)
-    })
+    for i, route in catalogModule.endpoints(runtimeState.catalog) {
+      app.post(route.endpoint, fn(req) {
+        return proxyModule.handleProxy(req, runtimeState)
+      })
+    }
 
     adminModule.registerRoutes(app, runtimeState)
 

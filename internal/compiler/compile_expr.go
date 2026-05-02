@@ -262,13 +262,11 @@ func (c *Compiler) compileLogicalExpr(e *ast.BinaryExpr) {
 	c.compileExpr(e.Left)
 
 	if e.Op == token.AndAnd {
-		c.emit(bytecode.OpDup)
 		endJump := c.emitJump(bytecode.OpJumpIfFalse)
 		c.emit(bytecode.OpPop)
 		c.compileExpr(e.Right)
 		c.patchJump(endJump)
 	} else {
-		c.emit(bytecode.OpDup)
 		endJump := c.emitJump(bytecode.OpJumpIfTrue)
 		c.emit(bytecode.OpPop)
 		c.compileExpr(e.Right)

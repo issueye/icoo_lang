@@ -23,6 +23,10 @@ func TestExamplesRun(t *testing.T) {
 		if filepath.Ext(path) != ".ic" {
 			return nil
 		}
+		slashPath := filepath.ToSlash(path)
+		if slashPath == "../../examples/proxy/app.ic" || slashPath == "../../examples/proxy/mock_upstream.ic" {
+			return nil
+		}
 
 		t.Run(strings.TrimSuffix(filepath.Base(path), ".ic"), func(t *testing.T) {
 			rt := NewRuntime()

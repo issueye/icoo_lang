@@ -27,6 +27,13 @@ const configApi = fn() {
           upstreamPath: "/anthropic/messages",
           upstreamModel: "claude-3-5-sonnet",
           protocol: "anthropic"
+        },
+        {
+          name: "responses-default",
+          endpoint: "/v1/responses",
+          upstreamPath: "/openai/responses",
+          upstreamModel: "gpt-4.1-mini",
+          protocol: "openai-responses"
         }
       ],
       aliases: [
@@ -45,6 +52,14 @@ const configApi = fn() {
           upstreamPath: "/openai/chat/completions",
           upstreamModel: "gpt-4o-mini",
           protocol: "openai"
+        },
+        {
+          alias: "gpt-4.1",
+          endpoint: "/v1/responses",
+          name: "responses-gpt-4.1",
+          upstreamPath: "/openai/responses",
+          upstreamModel: "gpt-4.1-mini",
+          protocol: "openai-responses"
         },
         {
           alias: "claude-sonnet",

@@ -226,3 +226,30 @@ if v.check(11) {
 		t.Fatalf("logical with class failed: %v", err)
 	}
 }
+
+func TestLogicalShortCircuitDoesNotLeakStackValue(t *testing.T) {
+	src := `
+let rows = [
+  {name: "", value: null},
+  {name: "target", value: "ok"}
+]
+
+let found = false
+let i = 0
+for i < len(rows) {
+  let row = rows[i]
+  if row.name == "target" && row.value == "ok" {
+    found = true
+  }
+  i = i + 1
+}
+
+if found != true {
+  panic("short-circuit result should not leak past block cleanup")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("logical short-circuit stack cleanup failed: %v", err)
+	}
+}

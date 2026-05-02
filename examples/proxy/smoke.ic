@@ -70,6 +70,31 @@ if okResp.json.route != "chat-gpt-4o" {
   panic("expected alias route selection")
 }
 
+let responsesResp = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/responses",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key"
+  },
+  json: {
+    model: "gpt-4.1",
+    input: "hello responses"
+  }
+})
+
+if responsesResp.status != 200 {
+  panic("expected responses request to succeed")
+}
+if responsesResp.json.path != "/openai/responses" {
+  panic("expected responses upstream path rewrite")
+}
+if responsesResp.json.model != "gpt-4.1-mini" {
+  panic("expected responses alias model rewrite")
+}
+if responsesResp.json.route != "responses-gpt-4.1" {
+  panic("expected responses alias route selection")
+}
+
 let unauthorized = client.requestJSON({
   url: runtimeApp.server.url + "/v1/chat/completions",
   method: "POST",
@@ -93,24 +118,28 @@ if health.json.ok != true {
 if ready.json.ok != true {
   panic("expected readyz ok")
 }
-if len(routes.json.routes.defaults) != 2 {
+if len(routes.json.routes.defaults) != 3 {
   panic("expected default routes in admin response")
 }
-if requests.json.total != 2 {
+if requests.json.total != 3 {
   panic("expected recorded requests")
 }
 
-let firstRequest = requests.json.requests[0]
-let secondRequest = requests.json.requests[1]
 let foundResolved = false
-if firstRequest.route_name == "chat-gpt-4o" && firstRequest.resolved_model == "gpt-4o-mini" {
-  foundResolved = true
-}
-if secondRequest.route_name == "chat-gpt-4o" && secondRequest.resolved_model == "gpt-4o-mini" {
-  foundResolved = true
+let foundResponses = false
+for request in requests.json.requests {
+  if request.route_name == "chat-gpt-4o" && request.resolved_model == "gpt-4o-mini" {
+    foundResolved = true
+  }
+  if request.route_name == "responses-gpt-4.1" && request.resolved_model == "gpt-4.1-mini" {
+    foundResponses = true
+  }
 }
 if foundResolved != true {
   panic("expected recent request resolved model")
+}
+if foundResponses != true {
+  panic("expected responses request record")
 }
 
 proxy.stop(runtimeApp)
@@ -120,4 +149,5 @@ io.println("== proxy smoke ==")
 io.println("proxy status:", okResp.status)
 io.println("proxy path:", okResp.json.path)
 io.println("rewritten model:", okResp.json.model)
+io.println("responses path:", responsesResp.json.path)
 io.println("admin request total:", requests.json.total)
