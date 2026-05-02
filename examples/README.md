@@ -40,3 +40,10 @@ go run ./cmd/icoo run examples/01_data_types.ic
 28. `28_db_orm.ic` - `std.db.table(...)` 的轻量 ORM / 查询构造器
 
 示例使用到的辅助模块位于 `examples/lib`。
+
+除了这些单文件示例，仓库里还有一个项目级服务样例：
+
+- `examples/proxy`
+  - 一个可运行的代理服务示例
+  - 也是当前 `v0.1` 阶段最重要的服务端回归样例
+  - 运行说明见 `examples/proxy/README.md`
