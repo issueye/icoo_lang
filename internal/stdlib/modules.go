@@ -25,10 +25,16 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stdcore.LoadStdObserveModule(), true
 	case "std.service":
 		return stdcore.LoadStdServiceModule(), true
+	case "std.cache":
+		return stdcore.LoadStdCacheModule(), true
+	case "std.template":
+		return stdcore.LoadStdTemplateModule(), true
 	case "std.db":
 		return stddb.LoadStdDBModule(), true
 	case "std.orm":
 		return stddb.LoadStdORMModule(), true
+	case "std.redis":
+		return stddb.LoadStdRedisModule(), true
 	case "std.json":
 		return stdformat.LoadStdJSONModule(), true
 	case "std.yaml":
@@ -37,6 +43,8 @@ func LoadModule(spec string) (*runtime.Module, bool) {
 		return stdformat.LoadStdTOMLModule(), true
 	case "std.xml":
 		return stdformat.LoadStdXMLModule(), true
+	case "std.csv":
+		return stdformat.LoadStdCSVModule(), true
 	case "std.fs":
 		return stdsystem.LoadStdFSModule(), true
 	case "std.exec":

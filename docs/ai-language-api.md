@@ -497,11 +497,19 @@ io.println("hello")
 
 - `now()`
 - `sleep(ms)`
+- `format(ts[, layout[, timezone]])`
+- `parse(text[, layout[, timezone]])`
+- `parts(ts[, timezone])`
+- `add(ts, deltaMs)`
+- `diff(left, right)`
+- `unix(ts)`
+- `fromUnix(seconds)`
 
 ```icoo
 import std.time as time
 let start = time.now()
 time.sleep(100)
+let text = time.format(start, "YYYY-MM-DD HH:mm:ss", "UTC")
 ```
 
 ### `std.math`
@@ -704,6 +712,45 @@ let rows = users.whereRaw("score >= ?", [10]).all()
 users.where({name: "Ada"}).update({score: 15})
 
 conn.close()
+```
+
+### `std.redis`
+
+常用导出：
+
+- `open(url)`
+- `connect(options)`
+
+返回 redis 对象方法：
+
+- `close()`
+- `ping()`
+- `get(key)`
+- `set(key, value[, ttlMs])`
+- `del(key)`
+- `exists(key)`
+- `expire(key, ttlMs)`
+- `ttl(key)`
+- `incr(key)`
+- `incrBy(key, delta)`
+- `hSet(key, object)`
+- `hGet(key, field)`
+- `hGetAll(key)`
+
+说明：
+
+- `set` 对字符串按原样写入；数组/对象会先编码为 JSON 字符串
+- `ttl` 返回剩余毫秒数；无过期时间或 key 不存在时返回 `null`
+- `hGetAll` 返回字段值均为字符串的对象
+
+```icoo
+import std.redis as redis
+
+let client = redis.open("redis://127.0.0.1:6379/0")
+client.set("session:1", {user: "icoo"}, 60000)
+let raw = client.get("session:1")
+let count = client.incr("counter")
+client.close()
 ```
 
 ## 5.5 data

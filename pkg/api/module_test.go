@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/alicebob/miniredis/v2"
 )
 
 func TestRuntimeRunFile_ImportsExportedModule(t *testing.T) {
@@ -369,6 +371,157 @@ if keys[0] != "name" || keys[1] != "nested" || keys[2] != "port" {
 	}
 }
 
+func TestRuntimeRunSource_ImportsStdTemplateModule(t *testing.T) {
+	src := `
+import std.template as template
+
+let text = template.render("Hello {{name}}", {name: "icoo"})
+if text != "Hello icoo" {
+  panic("unexpected template render result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.template import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdTemplateModule(t *testing.T) {
+	src := `
+import std.template as template
+
+let keys = ""
+let count = 0
+for key, value in template {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.template export kind")
+  }
+}
+
+if keys != "compilerender" {
+  panic("unexpected std.template iteration order")
+}
+if count != 2 {
+  panic("unexpected std.template export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.template iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdTemplateHelpers(t *testing.T) {
+	src := `
+import std.template as template
+
+let tpl = template.compile("{{#if user.active}}{{user.name}}:{{#each items}}{{this}};{{/each}}{{/if}}")
+let text = tpl.render({
+  user: {name: "ada", active: true},
+  items: ["a", "b", "c"]
+})
+if text != "ada:a;b;c;" {
+  panic("unexpected compiled template output")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.template helpers to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdCacheModule(t *testing.T) {
+	src := `
+import std.cache as cache
+
+let store = cache.create({
+  defaultTTL: 1000,
+  maxEntries: 4
+})
+store.set("name", "icoo")
+if store.get("name") != "icoo" {
+  panic("unexpected cache get")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.cache import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdCacheModule(t *testing.T) {
+	src := `
+import std.cache as cache
+
+let keys = ""
+let count = 0
+for key, value in cache {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.cache export kind")
+  }
+}
+
+if keys != "create" {
+  panic("unexpected std.cache iteration order")
+}
+if count != 1 {
+  panic("unexpected std.cache export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.cache iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdCacheHelpers(t *testing.T) {
+	src := `
+import std.cache as cache
+import std.time as time
+
+let store = cache.create({
+  defaultTTL: 10,
+  maxEntries: 2
+})
+
+store.set("a", {name: "ada"})
+store.set("b", 2)
+if store.size() != 2 {
+  panic("unexpected cache size")
+}
+let value = store.get("a")
+if value.name != "ada" {
+  panic("unexpected cache object snapshot")
+}
+store.set("c", 3)
+if store.has("a") != false {
+  panic("expected cache eviction")
+}
+time.sleep(15)
+if store.get("b", "missing") != "missing" {
+  panic("expected cache ttl expiration")
+}
+let stats = store.stats()
+if stats.evictions != 1 {
+  panic("unexpected cache eviction stats")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.cache helpers to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_IteratesStdObserveModule(t *testing.T) {
 	src := `
 import std.observe as observe
@@ -438,6 +591,95 @@ if recent.total() != 3 {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.observe recent to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdCSVModule(t *testing.T) {
+	src := `
+import std.csv as csv
+
+let text = csv.encode([{name: "ada", score: 10}])
+let rows = csv.decode(text)
+if rows[0].name != "ada" || rows[0].score != "10" {
+  panic("unexpected csv round trip")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.csv import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdCSVModule(t *testing.T) {
+	src := `
+import std.csv as csv
+
+let keys = ""
+let count = 0
+for key, value in csv {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.csv export kind")
+  }
+}
+
+if keys != "decodeencodefromFilesaveToFile" {
+  panic("unexpected std.csv iteration order")
+}
+if count != 4 {
+  panic("unexpected std.csv export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.csv iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdCSVHelpers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "report.csv")
+
+	src := `
+import std.csv as csv
+
+let text = csv.encode([
+  {name: "ada", score: 10},
+  {name: "linus", score: 12}
+])
+let rows = csv.decode(text)
+if len(rows) != 2 || rows[1].name != "linus" {
+  panic("unexpected csv decode objects")
+}
+
+let plainText = csv.encode([
+  ["a", "b"],
+  ["1", "2"]
+], {
+  header: false,
+  delimiter: ";"
+})
+let plain = csv.decode(plainText, {
+  header: false,
+  delimiter: ";"
+})
+if plain[1][0] != "1" || plain[1][1] != "2" {
+  panic("unexpected csv decode arrays")
+}
+
+csv.saveToFile("` + path + `", [{name: "ada", score: 10}])
+let fromFile = csv.fromFile("` + path + `")
+if fromFile[0].score != "10" {
+  panic("unexpected csv fromFile result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.csv helpers to succeed, got: %v", err)
 	}
 }
 
@@ -571,6 +813,61 @@ if monitor.ready().ok != true {
 	}
 }
 
+func TestRuntimeRunSource_StdServiceAdvancedHelpers(t *testing.T) {
+	src := `
+import std.service as service
+
+let sink = {text: ""}
+let monitor = service.create({
+  name: "icoo-proxy",
+  recentLimit: 2,
+  eventLimit: 2
+})
+
+monitor.setLogger(fn(event) {
+  sink.text = sink.text + event.level + ":" + event.message
+})
+monitor.log("info", "boot", {ok: true})
+monitor.recordEvent({kind: "custom", name: "sync"})
+monitor.setSupplierHealth("cache", true)
+monitor.setReload(fn() {
+  monitor.setSupplierHealth("upstream", false, "down")
+  return {reloaded: true}
+})
+
+let reload = monitor.reload()
+if reload.reloaded != true {
+  panic("unexpected service reload result")
+}
+if sink.text != "info:boot" {
+  panic("unexpected service log bridge")
+}
+if monitor.eventCount() != 3 {
+  panic("unexpected service event count")
+}
+let events = monitor.recentEvents()
+if len(events) != 2 || events[0].kind != "reload" || events[1].kind != "custom" {
+  panic("unexpected service recent events")
+}
+if monitor.supplierHealth("cache").ok != true {
+  panic("unexpected service supplier health")
+}
+let suppliers = monitor.suppliersHealth()
+if suppliers.upstream.reason != "down" {
+  panic("unexpected service supplier detail")
+}
+let snapshot = monitor.snapshot()
+if snapshot.eventCount != 3 || snapshot.suppliers.cache.ok != true {
+  panic("unexpected service snapshot events")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected advanced std.service helpers to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ObjectLiteralSupportsStringKeys(t *testing.T) {
 	src := `
 let headers = {
@@ -629,7 +926,7 @@ for key, value in time {
   }
 }
 
-if keys != "nowsleep" {
+if keys != "adddiffdurationformatfromUnixintervalnextnowparsepartssleeptickerunix" {
   panic("unexpected std.time iteration order")
 }
 `
@@ -650,6 +947,82 @@ time.sleep("1")
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err == nil {
 		t.Fatal("expected std.time.sleep to reject non-int argument")
+	}
+}
+
+func TestRuntimeRunSource_StdTimeExtendedHelpers(t *testing.T) {
+	src := `
+import std.time as time
+
+let ts = time.parse("2025-01-02 03:04:05", "YYYY-MM-DD HH:mm:ss", "UTC")
+if ts != 1735787045000 {
+  panic("unexpected parsed timestamp")
+}
+if time.format(ts, "YYYY/MM/DD HH:mm:ss", "UTC") != "2025/01/02 03:04:05" {
+  panic("unexpected formatted timestamp")
+}
+let parts = time.parts(ts, "Asia/Shanghai")
+if parts.year != 2025 || parts.month != 1 || parts.day != 2 {
+  panic("unexpected date parts")
+}
+if parts.hour != 11 || parts.minute != 4 || parts.second != 5 {
+  panic("unexpected time parts")
+}
+if parts.offsetSeconds != 28800 || parts.timezone != "Asia/Shanghai" {
+  panic("unexpected timezone parts")
+}
+if time.unix(ts) != 1735787045 {
+  panic("unexpected unix seconds")
+}
+if time.fromUnix(time.unix(ts)) != 1735787045000 {
+  panic("unexpected fromUnix result")
+}
+let shifted = time.add(ts, 1500)
+if shifted != 1735787046500 {
+  panic("unexpected add result")
+}
+if time.diff(shifted, ts) != 1500 {
+  panic("unexpected diff result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected extended std.time helpers to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdTimeSchedulingHelpers(t *testing.T) {
+	src := `
+import std.time as time
+
+if time.duration("1h30m") != 5400000 {
+  panic("unexpected parsed duration")
+}
+if time.duration("2d") != 172800000 {
+  panic("unexpected parsed day duration")
+}
+
+let ticker = time.ticker(5)
+let first = ticker.next()
+ticker.stop()
+if typeOf(first) != "int" {
+  panic("unexpected ticker next value")
+}
+
+let nextRun = time.next("*/15 9-17 * * 1-5", time.parse("2025-01-03 09:07:00", "YYYY-MM-DD HH:mm:ss", "UTC"), "UTC")
+if time.format(nextRun, "YYYY-MM-DD HH:mm:ss", "UTC") != "2025-01-03 09:15:00" {
+  panic("unexpected next cron result")
+}
+let mondayRun = time.next("0 9 * * 1", time.parse("2025-01-03 10:00:00", "YYYY-MM-DD HH:mm:ss", "UTC"), "UTC")
+if time.format(mondayRun, "YYYY-MM-DD HH:mm:ss", "UTC") != "2025-01-06 09:00:00" {
+  panic("unexpected next weekday cron result")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.time scheduling helpers to succeed, got: %v", err)
 	}
 }
 
@@ -738,6 +1111,192 @@ conn.close()
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.db import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdRedisModule(t *testing.T) {
+	server := miniredis.RunT(t)
+
+	src := `
+import std.redis as redis
+
+let client = redis.connect({
+  addr: "` + server.Addr() + `"
+})
+if !client.ping() {
+  panic("expected redis ping success")
+}
+client.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.redis import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_IteratesStdRedisModule(t *testing.T) {
+	src := `
+import std.redis as redis
+
+let keys = ""
+let count = 0
+for key, value in redis {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.redis export kind")
+  }
+}
+
+if keys != "connectopen" {
+  panic("unexpected std.redis iteration order")
+}
+if count != 2 {
+  panic("unexpected std.redis export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.redis iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdRedisOperations(t *testing.T) {
+	server := miniredis.RunT(t)
+
+	src := `
+import std.redis as redis
+
+let client = redis.open("redis://` + server.Addr() + `/0")
+if !client.set("name", "icoo") {
+  panic("expected redis set ok")
+}
+if client.get("name") != "icoo" {
+  panic("unexpected redis get")
+}
+if !client.set("temp", "1", 5000) {
+  panic("expected redis set with ttl ok")
+}
+let ttl = client.ttl("temp")
+if ttl == null || ttl <= 0 {
+  panic("expected redis ttl")
+}
+if !client.expire("name", 2000) {
+  panic("expected redis expire ok")
+}
+if !client.exists("name") {
+  panic("expected redis exists")
+}
+if client.incr("counter") != 1 {
+  panic("unexpected redis incr result")
+}
+if client.incrBy("counter", 4) != 5 {
+  panic("unexpected redis incrBy result")
+}
+if client.hSet("user:1", {name: "ada", score: 10}) != 2 {
+  panic("unexpected redis hSet result")
+}
+if client.hGet("user:1", "name") != "ada" {
+  panic("unexpected redis hGet result")
+}
+let user = client.hGetAll("user:1")
+if user.name != "ada" || user.score != "10" {
+  panic("unexpected redis hGetAll result")
+}
+if client.get("missing") != null {
+  panic("missing redis get should return null")
+}
+if client.hGet("user:1", "missing") != null {
+  panic("missing redis hGet should return null")
+}
+if client.del("name") != 1 {
+  panic("unexpected redis del result")
+}
+if client.exists("name") {
+  panic("expected redis key deletion")
+}
+client.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.redis operations to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdRedisAdvancedOperations(t *testing.T) {
+	server := miniredis.RunT(t)
+
+	src := `
+import std.redis as redis
+
+let client = redis.connect({addr: "` + server.Addr() + `"})
+
+if client.rPush("jobs", "a", "b", "c") != 3 {
+  panic("unexpected redis rPush result")
+}
+let jobs = client.lRange("jobs", 0, -1)
+if len(jobs) != 3 || jobs[0] != "a" || jobs[2] != "c" {
+  panic("unexpected redis lRange result")
+}
+if client.lPop("jobs") != "a" || client.rPop("jobs") != "c" {
+  panic("unexpected redis pop results")
+}
+
+if client.sAdd("roles", "admin", "reader") != 2 {
+  panic("unexpected redis sAdd result")
+}
+if !client.sIsMember("roles", "admin") {
+  panic("unexpected redis set membership")
+}
+let roles = client.sMembers("roles")
+if len(roles) != 2 || roles[0] != "admin" || roles[1] != "reader" {
+  panic("unexpected redis sMembers result")
+}
+if client.sRem("roles", "reader") != 1 {
+  panic("unexpected redis sRem result")
+}
+
+if client.zAdd("rank", "ada", 1) != 1 || client.zAdd("rank", "linus", 2) != 1 {
+  panic("unexpected redis zAdd result")
+}
+let rank = client.zRange("rank", 0, -1)
+if len(rank) != 2 || rank[0] != "ada" || rank[1] != "linus" {
+  panic("unexpected redis zRange result")
+}
+if client.zScore("rank", "linus") != 2 {
+  panic("unexpected redis zScore result")
+}
+
+client.set("user:1", "ada")
+client.set("user:2", "linus")
+let scan = client.scan(0, "user:*", 10)
+if len(scan.keys) != 2 {
+  panic("unexpected redis scan result")
+}
+
+let pipe = client.pipeline()
+let results = pipe.set("pipe:name", "icoo").incr("pipe:counter").get("pipe:name").exec()
+if results[1] != 1 || results[2] != "icoo" {
+  panic("unexpected redis pipeline result")
+}
+
+let sub = client.subscribe("events")
+let listeners = client.publish("events", "hello")
+let msg = sub.receive(1000)
+sub.close()
+if listeners < 1 || msg.payload != "hello" || msg.channel != "events" {
+  panic("unexpected redis pubsub result")
+}
+
+client.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected advanced std.redis operations to succeed, got: %v", err)
 	}
 }
 
@@ -1854,10 +2413,10 @@ for key, value in http {
   }
 }
 
-if keys != "deletedownloadgetgetJSONpostputrequestrequestJSON" {
+if keys != "deletedownloadgetgetJSONpostputrequestrequestJSONrequestStream" {
   panic("unexpected std.http.client iteration order")
 }
-if count != 8 {
+if count != 9 {
   panic("unexpected std.http.client export count")
 }
 `
@@ -2635,6 +3194,280 @@ if resp.body != "filtered" {
 	}
 }
 
+func TestRuntimeRunSource_StdHTTPStreamCookiesAndRedirectControls(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/stream":
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("hello"))
+			_, _ = w.Write([]byte("-world"))
+		case "/cookie":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"sid":"` + r.Header.Get("Cookie") + `"}`))
+		case "/redirect":
+			http.Redirect(w, r, "/final", http.StatusFound)
+		case "/final":
+			_, _ = w.Write([]byte("done"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	src := `
+import std.http.client as http
+
+let stream = http.requestStream({
+  url: "` + server.URL + `/stream"
+})
+let first = stream.read(5)
+let rest = stream.readAll()
+stream.close()
+
+let cookieResp = http.requestJSON({
+  url: "` + server.URL + `/cookie",
+  cookies: {
+    sid: "abc"
+  }
+})
+
+let rawRedirect = http.request({
+  url: "` + server.URL + `/redirect",
+  followRedirects: false
+})
+let followed = http.request({
+  url: "` + server.URL + `/redirect",
+  followRedirects: true,
+  maxRedirects: 3
+})
+
+if first != "hello" {
+  panic("unexpected stream first chunk")
+}
+if rest != "-world" {
+  panic("unexpected stream remainder")
+}
+if cookieResp.json.sid != "sid=abc" {
+  panic("expected request cookies to be forwarded")
+}
+if rawRedirect.status != 302 {
+  panic("expected raw redirect status")
+}
+if rawRedirect.header("Location") != "/final" {
+  panic("expected raw redirect location")
+}
+if followed.body != "done" {
+  panic("expected followed redirect body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http stream/cookies/redirects to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPFormMultipartAndCookies(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.ToSlash(filepath.Join(dir, "upload.txt"))
+	if err := os.WriteFile(filepath.FromSlash(filePath), []byte("hello upload"), 0o644); err != nil {
+		t.Fatalf("write upload fixture: %v", err)
+	}
+
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let handle = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req, res) {
+    if req.path == "/form" {
+      return {
+        json: {
+          name: req.form.name,
+          firstTag: req.form.tag[0],
+          secondTag: req.form.tag[1],
+          sid: req.cookie("sid")
+        }
+      }
+    }
+
+    res.setCookie("session", "fresh", {httpOnly: true, maxAge: 60})
+    res.clearCookie("legacy")
+    let upload = req.file("upload")
+    return {
+      json: {
+        title: req.form.title,
+        note: req.form.note,
+        filename: upload.filename,
+        text: upload.text,
+        size: upload.size
+      }
+    }
+  }
+})
+
+let formResp = client.requestJSON({
+  url: handle.url + "/form",
+  method: "POST",
+  form: {
+    name: "icoo",
+    tag: ["a", "b"]
+  },
+  cookies: {
+    sid: "cookie-1"
+  }
+})
+
+let uploadResp = client.requestJSON({
+  url: handle.url + "/upload",
+  method: "POST",
+  multipart: {
+    title: "demo",
+    note: "hello"
+  },
+  files: [
+    {
+      field: "upload",
+      path: "` + filePath + `"
+    }
+  ]
+})
+
+handle.close()
+
+if formResp.json.name != "icoo" {
+  panic("unexpected form field")
+}
+if formResp.json.firstTag != "a" || formResp.json.secondTag != "b" {
+  panic("unexpected repeated form field values")
+}
+if formResp.json.sid != "cookie-1" {
+  panic("unexpected request cookie")
+}
+if uploadResp.json.title != "demo" || uploadResp.json.note != "hello" {
+  panic("unexpected multipart text fields")
+}
+if uploadResp.json.filename != "upload.txt" {
+  panic("unexpected multipart filename")
+}
+if uploadResp.json.text != "hello upload" {
+  panic("unexpected multipart file contents")
+}
+if uploadResp.json.size != 12 {
+  panic("unexpected multipart file size")
+}
+if uploadResp.cookie("session") != "fresh" {
+  panic("expected response setCookie helper")
+}
+if uploadResp.cookie("legacy") != "" {
+  panic("expected response clearCookie helper")
+}
+if len(uploadResp.headers["Set-Cookie"]) != 2 {
+  panic("expected both set-cookie headers")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http form/multipart/cookies to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPForwardAdvancedControls(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/echo":
+			if r.Header.Get("Accept") != "" {
+				http.Error(w, "copyHeaders should have been disabled", http.StatusBadRequest)
+				return
+			}
+			if r.Header.Get("X-Added") != "yes" {
+				http.Error(w, "missing override header", http.StatusBadRequest)
+				return
+			}
+			if r.URL.Query().Get("base") != "1" || r.URL.Query().Get("name") != "icoo" {
+				http.Error(w, "unexpected merged query", http.StatusBadRequest)
+				return
+			}
+			if got := r.URL.Query()["tag"]; len(got) != 2 || got[0] != "a" || got[1] != "b" {
+				http.Error(w, "unexpected query array", http.StatusBadRequest)
+				return
+			}
+			if cookie, err := r.Cookie("sid"); err != nil || cookie.Value != "override" {
+				http.Error(w, "unexpected forwarded cookie", http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		case "/redirect":
+			http.Redirect(w, r, "/final", http.StatusFound)
+		case "/final":
+			_, _ = w.Write([]byte("final"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let handle = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    if req.path == "/echo" {
+      return server.forward(req, {
+        url: "` + upstream.URL + `/echo?base=1",
+        copyHeaders: false,
+        headers: {
+          "X-Added": "yes"
+        },
+        query: {
+          name: "icoo",
+          tag: ["a", "b"]
+        },
+        cookies: {
+          sid: "override"
+        },
+        timeoutMs: 5000
+      })
+    }
+
+    return server.forward(req, {
+      url: "` + upstream.URL + `/redirect",
+      followRedirects: false,
+      timeoutMs: 5000
+    })
+  }
+})
+
+let echoResp = client.getJSON(handle.url + "/echo")
+let redirectResp = client.request({
+  url: handle.url + "/redirect",
+  followRedirects: false
+})
+
+handle.close()
+
+if echoResp.json.ok != true {
+  panic("expected forwarded json response")
+}
+if redirectResp.status != 302 {
+  panic("expected forward redirect status")
+}
+if redirectResp.header("Location") != "/final" {
+  panic("expected forward redirect location")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http forward advanced controls to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_RejectsOldStdNetHTTPPaths(t *testing.T) {
 	src := `
 import std.net.http.client as http
@@ -3190,6 +4023,197 @@ if resp.header("Connection") != null {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected express response handle proxy to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExpressFormMultipartAndCookies(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.ToSlash(filepath.Join(dir, "express-upload.txt"))
+	if err := os.WriteFile(filepath.FromSlash(filePath), []byte("express file"), 0o644); err != nil {
+		t.Fatalf("write express upload fixture: %v", err)
+	}
+
+	src := `
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+app.post("/form", fn(req) {
+  return express.json({
+    name: req.form.name,
+    firstTag: req.form.tag[0],
+    secondTag: req.form.tag[1],
+    sid: req.cookie("sid")
+  })
+})
+app.post("/upload", fn(req, res) {
+  res.setCookie("session", "express", {httpOnly: true})
+  res.clearCookie("legacy")
+  let upload = req.file("upload")
+  return express.json({
+    title: req.form.title,
+    filename: upload.filename,
+    text: upload.text
+  })
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let formResp = client.requestJSON({
+  url: server.url + "/form",
+  method: "POST",
+  form: {
+    name: "icoo",
+    tag: ["x", "y"]
+  },
+  cookies: {
+    sid: "cookie-2"
+  }
+})
+
+let uploadResp = client.requestJSON({
+  url: server.url + "/upload",
+  method: "POST",
+  multipart: {
+    title: "demo"
+  },
+  files: [
+    {
+      field: "upload",
+      path: "` + filePath + `"
+    }
+  ]
+})
+server.close()
+
+if formResp.json.name != "icoo" {
+  panic("unexpected express form field")
+}
+if formResp.json.firstTag != "x" || formResp.json.secondTag != "y" {
+  panic("unexpected express repeated form values")
+}
+if formResp.json.sid != "cookie-2" {
+  panic("unexpected express request cookie")
+}
+if uploadResp.json.title != "demo" {
+  panic("unexpected express multipart field")
+}
+if uploadResp.json.filename != "express-upload.txt" {
+  panic("unexpected express multipart filename")
+}
+if uploadResp.json.text != "express file" {
+  panic("unexpected express multipart text")
+}
+if uploadResp.cookie("session") != "express" {
+  panic("expected express response setCookie helper")
+}
+if uploadResp.cookie("legacy") != "" {
+  panic("expected express response clearCookie helper")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected express form/multipart/cookies to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExpressProxyAdvancedControls(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/echo":
+			if r.Header.Get("Accept") != "" {
+				http.Error(w, "copyHeaders should have been disabled", http.StatusBadRequest)
+				return
+			}
+			if r.Header.Get("X-Added") != "yes" {
+				http.Error(w, "missing express override header", http.StatusBadRequest)
+				return
+			}
+			if r.URL.Query().Get("base") != "1" || r.URL.Query().Get("name") != "icoo" {
+				http.Error(w, "unexpected express merged query", http.StatusBadRequest)
+				return
+			}
+			if cookie, err := r.Cookie("sid"); err != nil || cookie.Value != "override" {
+				http.Error(w, "unexpected express forwarded cookie", http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("X-Upstream", "seen")
+			w.Header().Set("X-Secret", "drop")
+			_, _ = w.Write([]byte("proxied"))
+		case "/redirect":
+			http.Redirect(w, r, "/final", http.StatusFound)
+		case "/final":
+			_, _ = w.Write([]byte("final"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.express as express
+import std.http.client as client
+
+let app = express.create()
+app.get("/echo", fn(req, res) {
+  res.proxy(req, {
+    url: "` + upstream.URL + `/echo?base=1",
+    copyHeaders: false,
+    headers: {
+      "X-Added": "yes"
+    },
+    query: {
+      name: "icoo"
+    },
+    cookies: {
+      sid: "override"
+    },
+    stripHeaders: ["X-Secret"],
+    responseHeaders: {
+      "X-Gateway": "icoo"
+    },
+    timeoutMs: 5000
+  })
+})
+app.get("/redirect", fn(req, res) {
+  res.proxy(req, {
+    url: "` + upstream.URL + `/redirect",
+    followRedirects: false,
+    timeoutMs: 5000
+  })
+})
+
+let server = app.listen({addr: "127.0.0.1:0"})
+let echoResp = client.get(server.url + "/echo")
+let redirectResp = client.request({
+  url: server.url + "/redirect",
+  followRedirects: false
+})
+server.close()
+
+if echoResp.body != "proxied" {
+  panic("unexpected express proxied body")
+}
+if echoResp.header("X-Upstream") != "seen" {
+  panic("expected express upstream header")
+}
+if echoResp.header("X-Secret") != null {
+  panic("expected express stripped response header")
+}
+if echoResp.header("X-Gateway") != "icoo" {
+  panic("expected express injected response header")
+}
+if redirectResp.status != 302 {
+  panic("expected express redirect proxy status")
+}
+if redirectResp.header("Location") != "/final" {
+  panic("expected express redirect proxy location")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected express proxy advanced controls to succeed, got: %v", err)
 	}
 }
 

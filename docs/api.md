@@ -512,6 +512,35 @@ func (r *Runtime) RunBundleArchive(path string, archive *BundleArchive) (runtime
 - 运行失败会删除缓存项
 - 支持 project root alias
 
+当前标准库导入除了早期的 `std.io` / `std.time` / `std.json` 之外，也已经覆盖：
+
+- `std.math`
+- `std.object`
+- `std.observe`
+- `std.service`
+- `std.db`
+- `std.orm`
+- `std.redis`
+- `std.fs`
+- `std.exec`
+- `std.os`
+- `std.host`
+- `std.http.client`
+- `std.http.server`
+- `std.net.websocket.client`
+- `std.net.websocket.server`
+- `std.net.sse.client`
+- `std.net.sse.server`
+- `std.net.socket.client`
+- `std.net.socket.server`
+- `std.express`
+- `std.crypto`
+- `std.uuid`
+- `std.compress`
+- `std.yaml`
+- `std.toml`
+- `std.xml`
+
 ## 返回值与错误约定
 
 ### 返回值
