@@ -10,6 +10,12 @@ let now2 = time.now()
 if now2 < now1 {
   panic("time should not go backwards")
 }
+let stamp = time.parse("2025-01-02 03:04:05", "YYYY-MM-DD HH:mm:ss", "UTC")
+println(time.format(stamp, "YYYY/MM/DD HH:mm:ss", "UTC"))
+println(time.diff(time.add(stamp, 250), stamp))
+let pieces = time.parts(stamp, "UTC")
+println(pieces.year)
+println(time.unix(stamp))
 
 println(math.abs(-3))
 println(math.max(4, 7))
