@@ -69,6 +69,16 @@ const configApi = fn() {
           upstreamProtocol: "openai-responses"
         },
         {
+          alias: "gpt-4o-responses-stream",
+          endpoint: "/v1/chat/completions",
+          name: "chat-gpt-4o-responses-stream",
+          upstreamPath: "/openai/responses",
+          upstreamModel: "gpt-4.1-mini",
+          protocol: "openai",
+          upstreamProtocol: "openai-responses",
+          forceUpstreamStream: true
+        },
+        {
           alias: "gpt-4.1-chat",
           endpoint: "/v1/responses",
           name: "responses-gpt-4.1-chat",

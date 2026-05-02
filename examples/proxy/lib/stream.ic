@@ -1,0 +1,125 @@
+import std.json as json
+import std.object as object
+import std.net.sse.client as sseClient
+
+const streamApi = fn() {
+  fn aggregateResponsesJSONImpl(options) {
+    let headers = {}
+    let rawHeaders = object.get(options, "headers")
+    if typeOf(rawHeaders) == "object" {
+      headers = object.merge(headers, rawHeaders)
+    }
+    headers.Accept = "text/event-stream"
+    if object.get(headers, "Content-Type") == null {
+      headers["Content-Type"] = "application/json"
+    }
+
+    let body = ""
+    let rawBody = object.get(options, "body")
+    if rawBody != null {
+      if typeOf(rawBody) == "string" {
+        body = rawBody
+      } else {
+        body = json.encode(rawBody)
+      }
+    }
+
+    let requestOptions = {
+      url: object.get(options, "url"),
+      method: object.get(options, "method", "POST"),
+      headers: headers,
+      body: body
+    }
+    let timeoutMs = object.get(options, "timeoutMs")
+    if timeoutMs != null {
+      requestOptions.timeoutMs = timeoutMs
+    }
+
+    let streamResponse = sseClient.request(requestOptions)
+    let status = streamResponse.status
+    let response = null
+    let outputText = ""
+    let sawTextDelta = false
+
+    for event in streamResponse.events {
+        let data = object.get(event, "data", "")
+        if data == "" {
+          continue
+        }
+        if data == "[DONE]" {
+          break
+        }
+
+        let payload = json.decode(data)
+        let eventType = object.get(event, "event", object.get(payload, "type", "message"))
+
+        if eventType == "response.created" || eventType == "response.in_progress" || eventType == "response.completed" || eventType == "response.failed" {
+          let nextResponse = object.get(payload, "response")
+          if typeOf(nextResponse) == "object" {
+            response = nextResponse
+          }
+          continue
+        }
+
+        if eventType == "response.output_text.delta" {
+          let delta = object.get(payload, "delta", "")
+          if delta != "" {
+            outputText = outputText + delta
+            sawTextDelta = true
+          }
+          continue
+        }
+
+        if eventType == "response.output_text.done" {
+          let text = object.get(payload, "text", "")
+          if text != "" && sawTextDelta != true {
+            outputText = outputText + text
+          }
+          continue
+        }
+
+        if eventType == "error" {
+          let errObj = object.get(payload, "error")
+          panic(object.get(errObj, "message", "upstream stream returned error"))
+        }
+    }
+
+    if response == null {
+      response = {
+        id: "resp_proxy_stream",
+        object: "response",
+        status: "completed"
+      }
+    }
+
+    if outputText != "" {
+      if object.get(response, "output") == null {
+        response.output = [
+          {
+            id: "msg_proxy_stream_1",
+            type: "message",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: outputText
+              }
+            ]
+          }
+        ]
+      }
+      response.output_text = outputText
+    }
+
+    return {
+      status: status,
+      json: response
+    }
+  }
+
+  return {
+    aggregateResponsesJSON: aggregateResponsesJSONImpl
+  }
+}()
+
+export const aggregateResponsesJSON = streamApi.aggregateResponsesJSON

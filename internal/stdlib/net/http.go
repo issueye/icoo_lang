@@ -427,6 +427,7 @@ func newHTTPResponseHandle(w http.ResponseWriter) *httpResponseBinding {
 		"statusCode": &runtime.NativeFunction{Name: "response.statusCode", Arity: 0, Fn: binding.statusCodeValue},
 		"status":    &runtime.NativeFunction{Name: "response.status", Arity: 1, Fn: binding.status},
 		"setHeader": &runtime.NativeFunction{Name: "response.setHeader", Arity: 2, Fn: binding.setHeader},
+		"sse":       &runtime.NativeFunction{Name: "response.sse", Arity: 1, Fn: binding.writeSSE},
 		"write":     &runtime.NativeFunction{Name: "response.write", Arity: 1, Fn: binding.write},
 		"json":      &runtime.NativeFunction{Name: "response.json", Arity: 1, Fn: binding.writeJSON},
 		"flush":     &runtime.NativeFunction{Name: "response.flush", Arity: 0, Fn: binding.flush},
@@ -465,6 +466,27 @@ func (binding *httpResponseBinding) write(args []runtime.Value) (runtime.Value, 
 	_, err := io.WriteString(binding.writer, args[0].String())
 	if err != nil {
 		return nil, err
+	}
+	return binding.handle, nil
+}
+
+func (binding *httpResponseBinding) writeSSE(args []runtime.Value) (runtime.Value, error) {
+	if binding.writer.Header().Get("Content-Type") == "" {
+		binding.writer.Header().Set("Content-Type", "text/event-stream")
+	}
+	if err := binding.ensureHeader(); err != nil {
+		return nil, err
+	}
+	binding.handled = true
+	text, err := formatSSEEvent(args[0])
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.WriteString(binding.writer, text); err != nil {
+		return nil, err
+	}
+	if binding.flusher != nil {
+		binding.flusher.Flush()
 	}
 	return binding.handle, nil
 }

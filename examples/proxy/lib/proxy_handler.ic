@@ -1,8 +1,10 @@
+import std.json as json
 import std.http.server as server
 import std.object as object
 import std.time as time
 import "./auth.ic" as auth
 import "./catalog.ic" as catalog
+import "./stream.ic" as stream
 import "./translate.ic" as translate
 
 const proxyHandlerApi = fn() {
@@ -106,6 +108,71 @@ const proxyHandlerApi = fn() {
     }
   }
 
+  fn forwardTranslatedStreamImpl(req, state, route, authResult, bodyInfo, startedAt) {
+    let upstreamUrl = state.config.upstreamBaseUrl + route.upstreamPath
+    let headers = buildForwardHeaders(req, authResult, route)
+    headers.Accept = "text/event-stream"
+
+    try {
+      let aggregated = stream.aggregateResponsesJSON({
+        url: upstreamUrl,
+        method: req.method,
+        headers: headers,
+        body: bodyInfo.body,
+        timeoutMs: state.config.timeoutMs
+      })
+      let translated = translate.translateResponse({
+        status: aggregated.status,
+        body: json.encode(aggregated.json),
+        header: fn(name) {
+          if name == "Content-Type" {
+            return "application/json"
+          }
+          return null
+        }
+      }, route)
+
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        aggregated.status,
+        upstreamUrl,
+        route.selection + ":stream-aggregated",
+        elapsedMs(startedAt)
+      )
+      state.monitor.increment("proxy.forwarded")
+      state.monitor.increment("proxy.translated")
+      state.monitor.increment("proxy.stream_aggregated")
+      return translated
+    } catch err {
+      state.monitor.increment("proxy.upstream_error")
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        502,
+        upstreamUrl,
+        err.message,
+        elapsedMs(startedAt)
+      )
+      return {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+    }
+  }
+
   fn handleProxyImpl(req, state) {
     let startedAt = time.now()
     let requestedModel = object.get(req, "json")
@@ -136,6 +203,32 @@ const proxyHandlerApi = fn() {
 
     let bodyInfo = translate.prepareRequest(req, route)
     if translate.needsTranslation(route) {
+      if bodyInfo.wantsStream == true {
+        state.monitor.increment("proxy.stream_not_supported")
+        recordOutcome(
+          state,
+          req,
+          route.name,
+          bodyInfo.requestedModel,
+          route.upstreamModel,
+          authResult.via,
+          501,
+          "",
+          "downstream streaming translation not implemented",
+          elapsedMs(startedAt)
+        )
+        return {
+          status: 501,
+          json: {
+            ok: false,
+            error: "stream_not_supported",
+            message: "downstream streaming translation not implemented"
+          }
+        }
+      }
+      if bodyInfo.forceUpstreamStream == true && translate.upstreamProtocol(route) == "openai-responses" {
+        return forwardTranslatedStreamImpl(req, state, route, authResult, bodyInfo, startedAt)
+      }
       return forwardTranslatedImpl(req, state, route, authResult, bodyInfo, startedAt)
     }
 
@@ -219,6 +312,32 @@ const proxyHandlerApi = fn() {
 
     let bodyInfo = translate.prepareRequest(req, route)
     if translate.needsTranslation(route) {
+      if bodyInfo.wantsStream == true {
+        state.monitor.increment("proxy.stream_not_supported")
+        recordOutcome(
+          state,
+          req,
+          route.name,
+          bodyInfo.requestedModel,
+          route.upstreamModel,
+          authResult.via,
+          501,
+          "",
+          "downstream streaming translation not implemented",
+          elapsedMs(startedAt)
+        )
+        return {
+          status: 501,
+          json: {
+            ok: false,
+            error: "stream_not_supported",
+            message: "downstream streaming translation not implemented"
+          }
+        }
+      }
+      if bodyInfo.forceUpstreamStream == true && translate.upstreamProtocol(route) == "openai-responses" {
+        return forwardTranslatedStreamImpl(req, state, route, authResult, bodyInfo, startedAt)
+      }
       return forwardTranslatedImpl(req, state, route, authResult, bodyInfo, startedAt)
     }
 

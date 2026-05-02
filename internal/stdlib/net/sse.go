@@ -32,6 +32,7 @@ func LoadStdNetSSEClientModule() *runtime.Module {
 		Path: "std.net.sse.client",
 		Exports: map[string]runtime.Value{
 			"connect": &runtime.NativeFunction{Name: "connect", Arity: 1, Fn: sseConnect},
+			"request": &runtime.NativeFunction{Name: "request", Arity: 1, Fn: sseRequest},
 		},
 		Done: true,
 	}
@@ -53,8 +54,20 @@ func sseConnect(args []runtime.Value) (runtime.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	client := &http.Client{Timeout: opts.Timeout}
-	resp, err := client.Get(opts.URL)
+	headers := map[string]string{}
+	for key, value := range opts.Headers {
+		headers[key] = value
+	}
+	if headers["Accept"] == "" {
+		headers["Accept"] = "text/event-stream"
+	}
+	resp, err := doHTTPRoundTrip(&httpRequestOptions{
+		Method:  opts.Method,
+		URL:     opts.URL,
+		Headers: headers,
+		Body:    opts.Body,
+		Timeout: opts.Timeout,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -64,10 +77,67 @@ func sseConnect(args []runtime.Value) (runtime.Value, error) {
 	}
 	binding := &sseClientBinding{resp: resp, reader: bufio.NewReader(resp.Body)}
 	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
-		"url":    runtime.StringValue{Value: opts.URL},
-		"read":   &runtime.NativeFunction{Name: "read", Arity: 0, Fn: binding.read},
-		"close":  &runtime.NativeFunction{Name: "close", Arity: 0, Fn: binding.close},
-		"status": runtime.IntValue{Value: int64(resp.StatusCode)},
+		"url":           runtime.StringValue{Value: opts.URL},
+		"method":        runtime.StringValue{Value: opts.Method},
+		"read":          &runtime.NativeFunction{Name: "read", Arity: 0, Fn: binding.read},
+		"close":         &runtime.NativeFunction{Name: "close", Arity: 0, Fn: binding.close},
+		"status":        runtime.IntValue{Value: int64(resp.StatusCode)},
+		"header":        httpHeaderGetter(resp.Header),
+		"hasHeader":     httpHasHeaderGetter(resp.Header),
+		"headers":       httpHeadersToRuntime(resp.Header),
+		"contentLength": runtime.IntValue{Value: resp.ContentLength},
+	}}, nil
+}
+
+func sseRequest(args []runtime.Value) (runtime.Value, error) {
+	opts, err := parseNetURLTimeoutOptions("request", args[0])
+	if err != nil {
+		return nil, err
+	}
+	headers := map[string]string{}
+	for key, value := range opts.Headers {
+		headers[key] = value
+	}
+	if headers["Accept"] == "" {
+		headers["Accept"] = "text/event-stream"
+	}
+	resp, err := doHTTPRoundTrip(&httpRequestOptions{
+		Method:  opts.Method,
+		URL:     opts.URL,
+		Headers: headers,
+		Body:    opts.Body,
+		Timeout: opts.Timeout,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("request failed with status %d", resp.StatusCode)
+	}
+
+	binding := &sseClientBinding{resp: resp, reader: bufio.NewReader(resp.Body)}
+	events := make([]runtime.Value, 0, 16)
+	for {
+		event, err := binding.read(nil)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := event.(runtime.NullValue); ok {
+			break
+		}
+		events = append(events, event)
+	}
+
+	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
+		"url":           runtime.StringValue{Value: opts.URL},
+		"method":        runtime.StringValue{Value: opts.Method},
+		"status":        runtime.IntValue{Value: int64(resp.StatusCode)},
+		"header":        httpHeaderGetter(resp.Header),
+		"hasHeader":     httpHasHeaderGetter(resp.Header),
+		"headers":       httpHeadersToRuntime(resp.Header),
+		"contentLength": runtime.IntValue{Value: resp.ContentLength},
+		"events":        &runtime.ArrayValue{Elements: events},
 	}}, nil
 }
 

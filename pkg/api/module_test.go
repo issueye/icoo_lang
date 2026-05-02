@@ -2738,7 +2738,7 @@ for key, value in server {
     panic("unexpected sse server export kind")
   }
 }
-if clientKeys != "connect" || clientCount != 1 {
+if clientKeys != "connectrequest" || clientCount != 2 {
   panic("unexpected sse client exports")
 }
 if serverKeys != "listen" || serverCount != 1 {

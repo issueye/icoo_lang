@@ -59,8 +59,10 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 - `req.header(name)` / `req.hasHeader(name)` / `req.json`
 - 双参 handler `fn(req, res)`
 - `res.status(...)` / `res.setHeader(...)` / `res.write(...)` / `res.json(...)` / `res.end(...)`
+- `res.sse(...)`
 - `res.proxy(req, options)`
 - `req.requestId`
+- `std.net.sse.client.request(...)`
 - `std.observe.recent(limit)`
 - `std.service.create(...)`
 - `std.orm.model(...)`
@@ -105,8 +107,22 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 它还不是：
 
 - 完整产品化网关
-- 重量级流式协议桥接框架
+- 完整流式协议桥接框架
 - 完整持久化流量记录系统
 - 生产级运维平台
 
 这些复杂度仍然应优先由 Go 宿主层承接。
+
+## 当前新增边界
+
+截至 `2026-05-02`，这个 proxy 还额外具备了一条很重要但仍然刻意收敛的流式能力：
+
+- 可把上游 `OpenAI Responses` 的 SSE 响应聚合回 JSON
+
+当前仍然没有直接完成：
+
+- 下游流式跨协议翻译
+- `Responses -> Chat` 的逐事件 SSE 翻译
+- `Responses -> Anthropic` 的逐事件 SSE 翻译
+
+也就是说，当前已经有了“流式底座 + 聚合回退路径”，但还没有进入完整的“流式协议桥”阶段。

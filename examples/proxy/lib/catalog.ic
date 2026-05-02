@@ -21,6 +21,7 @@ const catalogApi = fn() {
       protocol: downstreamProtocol,
       downstreamProtocol: downstreamProtocol,
       upstreamProtocol: upstreamProtocol,
+      forceUpstreamStream: object.get(route, "forceUpstreamStream", false),
       selection: selection,
       requestedModel: requestedModel
     }

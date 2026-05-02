@@ -257,6 +257,7 @@ func newResponseHandle(w http.ResponseWriter) *responseBinding {
 		"statusCode": &runtime.NativeFunction{Name: "express.response.statusCode", Arity: 0, Fn: binding.statusCodeValue},
 		"status":    &runtime.NativeFunction{Name: "express.response.status", Arity: 1, Fn: binding.status},
 		"setHeader": &runtime.NativeFunction{Name: "express.response.setHeader", Arity: 2, Fn: binding.setHeader},
+		"sse":       &runtime.NativeFunction{Name: "express.response.sse", Arity: 1, Fn: binding.writeSSE},
 		"write":     &runtime.NativeFunction{Name: "express.response.write", Arity: 1, Fn: binding.write},
 		"json":      &runtime.NativeFunction{Name: "express.response.json", Arity: 1, Fn: binding.writeJSON},
 		"flush":     &runtime.NativeFunction{Name: "express.response.flush", Arity: 0, Fn: binding.flush},
@@ -295,6 +296,27 @@ func (binding *responseBinding) write(args []runtime.Value) (runtime.Value, erro
 	_, err := io.WriteString(binding.writer, args[0].String())
 	if err != nil {
 		return nil, err
+	}
+	return binding.handle, nil
+}
+
+func (binding *responseBinding) writeSSE(args []runtime.Value) (runtime.Value, error) {
+	if binding.writer.Header().Get("Content-Type") == "" {
+		binding.writer.Header().Set("Content-Type", "text/event-stream")
+	}
+	if err := binding.ensureHeader(); err != nil {
+		return nil, err
+	}
+	binding.handled = true
+	text, err := stdnetFormatSSEEvent(args[0])
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.WriteString(binding.writer, text); err != nil {
+		return nil, err
+	}
+	if binding.flusher != nil {
+		binding.flusher.Flush()
 	}
 	return binding.handle, nil
 }
@@ -402,6 +424,40 @@ func (binding *responseBinding) ensureHeader() error {
 	binding.writer.WriteHeader(binding.statusCode)
 	binding.wroteHeader = true
 	return nil
+}
+
+func stdnetFormatSSEEvent(v runtime.Value) (string, error) {
+	switch value := v.(type) {
+	case runtime.StringValue:
+		return "data: " + strings.ReplaceAll(value.Value, "\n", "\ndata: ") + "\n\n", nil
+	case *runtime.ObjectValue:
+		var b strings.Builder
+		if event, ok := value.Fields["event"].(runtime.StringValue); ok && event.Value != "" {
+			b.WriteString("event: ")
+			b.WriteString(event.Value)
+			b.WriteString("\n")
+		}
+		if id, ok := value.Fields["id"].(runtime.StringValue); ok {
+			b.WriteString("id: ")
+			b.WriteString(id.Value)
+			b.WriteString("\n")
+		}
+		if retry, ok := value.Fields["retry"].(runtime.IntValue); ok {
+			b.WriteString("retry: ")
+			b.WriteString(strconv.FormatInt(retry.Value, 10))
+			b.WriteString("\n")
+		}
+		data := ""
+		if dataValue, ok := value.Fields["data"]; ok {
+			data = dataValue.String()
+		}
+		b.WriteString("data: ")
+		b.WriteString(strings.ReplaceAll(data, "\n", "\ndata: "))
+		b.WriteString("\n\n")
+		return b.String(), nil
+	default:
+		return "", fmt.Errorf("sse expects string or object")
+	}
 }
 
 type flushingWriter struct {

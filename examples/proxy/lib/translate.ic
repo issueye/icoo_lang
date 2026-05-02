@@ -252,6 +252,9 @@ const translateApi = fn() {
     if route.upstreamModel != null {
       payload.model = route.upstreamModel
     }
+    if object.get(route, "forceUpstreamStream", false) == true {
+      payload.stream = true
+    }
     return payload
   }
 
@@ -289,6 +292,10 @@ const translateApi = fn() {
       request.max_output_tokens = maxOutputTokens
     }
 
+    if object.get(route, "forceUpstreamStream", false) == true {
+      request.stream = true
+    }
+
     return request
   }
 
@@ -317,6 +324,10 @@ const translateApi = fn() {
     let maxTokens = object.get(payload, "max_output_tokens")
     if maxTokens != null {
       request.max_tokens = maxTokens
+    }
+
+    if object.get(route, "forceUpstreamStream", false) == true {
+      request.stream = true
     }
 
     return request
@@ -388,21 +399,27 @@ const translateApi = fn() {
       return {
         body: req.body,
         requestedModel: null,
-        translated: false
+        translated: false,
+        wantsStream: false,
+        forceUpstreamStream: object.get(route, "forceUpstreamStream", false)
       }
     }
 
     let requestedModel = object.get(payload, "model")
+    let wantsStream = object.get(payload, "stream", false)
     let down = downstreamProtocolImpl(route)
     let up = upstreamProtocolImpl(route)
     let translated = needsTranslationImpl(route)
+    let forceUpstreamStream = object.get(route, "forceUpstreamStream", false)
 
     if translated != true {
       let rewritten = rewriteSameProtocolRequestImpl(payload, route)
       return {
         body: json.encode(rewritten),
         requestedModel: requestedModel,
-        translated: false
+        translated: false,
+        wantsStream: wantsStream,
+        forceUpstreamStream: forceUpstreamStream
       }
     }
 
@@ -418,7 +435,9 @@ const translateApi = fn() {
     return {
       body: json.encode(translatedPayload),
       requestedModel: requestedModel,
-      translated: true
+      translated: true,
+      wantsStream: wantsStream,
+      forceUpstreamStream: forceUpstreamStream
     }
   }
 

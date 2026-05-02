@@ -178,6 +178,9 @@ func webSocketRequestToRuntime(r *http.Request) (runtime.Value, error) {
 }
 
 type netURLTimeoutOptions struct {
+	Body    string
+	Headers map[string]string
+	Method  string
 	URL     string
 	Timeout time.Duration
 }
@@ -195,5 +198,23 @@ func parseNetURLTimeoutOptions(name string, v runtime.Value) (*netURLTimeoutOpti
 	if err != nil {
 		return nil, err
 	}
-	return &netURLTimeoutOptions{URL: urlValue.Value, Timeout: timeout}, nil
+	method := "GET"
+	if methodValue, ok := obj.Fields["method"].(runtime.StringValue); ok && strings.TrimSpace(methodValue.Value) != "" {
+		method = strings.ToUpper(methodValue.Value)
+	}
+	headers, err := httpHeadersFromRuntime(name, obj.Fields["headers"])
+	if err != nil {
+		return nil, err
+	}
+	body := ""
+	if bodyValue, ok := obj.Fields["body"]; ok {
+		body = bodyValue.String()
+	}
+	return &netURLTimeoutOptions{
+		Body:    body,
+		Headers: headers,
+		Method:  method,
+		URL:     urlValue.Value,
+		Timeout: timeout,
+	}, nil
 }

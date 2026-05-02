@@ -1,11 +1,13 @@
 import std.io as io
+import std.json as json
 import std.http.client as client
 import std.http.server as server
+import std.object as object
 import "./src/main.ic" as proxy
 
 let upstream = server.listen({
   addr: "127.0.0.1:0",
-  handler: fn(req) {
+  handler: fn(req, res) {
     let payload = req.json
     let model = null
     if payload != null {
@@ -44,6 +46,65 @@ let upstream = server.listen({
     }
 
     if req.path == "/openai/responses" {
+      if object.get(payload, "stream", false) == true {
+        let responseCreated = json.encode({
+          type: "response.created",
+          response: {
+            id: "resp-upstream-stream",
+            object: "response",
+            model: model,
+            status: "in_progress"
+          }
+        })
+        let responseDelta = json.encode({
+          type: "response.output_text.delta",
+          item_id: "msg-upstream-stream",
+          output_index: 0,
+          content_index: 0,
+          delta: "stream:" + model
+        })
+        let responseTextDone = json.encode({
+          type: "response.output_text.done",
+          item_id: "msg-upstream-stream",
+          output_index: 0,
+          content_index: 0,
+          text: "stream:" + model
+        })
+        let responseCompleted = json.encode({
+          type: "response.completed",
+          response: {
+            id: "resp-upstream-stream",
+            object: "response",
+            model: model,
+            status: "completed",
+            usage: {
+              input_tokens: 17,
+              output_tokens: 6,
+              total_tokens: 23
+            }
+          }
+        })
+
+        res.setHeader("Content-Type", "text/event-stream")
+        res.sse({
+          event: "response.created",
+          data: responseCreated
+        })
+        res.sse({
+          event: "response.output_text.delta",
+          data: responseDelta
+        })
+        res.sse({
+          event: "response.output_text.done",
+          data: responseTextDone
+        })
+        res.sse({
+          event: "response.completed",
+          data: responseCompleted
+        })
+        return res.sse("[DONE]")
+      }
+
       return {
         json: {
           id: "resp-upstream",
@@ -223,6 +284,36 @@ if translatedResponses.json.usage.input_tokens != 11 || translatedResponses.json
   panic("expected translated responses usage mapping")
 }
 
+let translatedStreamAggregated = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key"
+  },
+  json: {
+    model: "gpt-4o-responses-stream",
+    messages: [
+      {
+        role: "user",
+        content: "aggregate stream"
+      }
+    ]
+  }
+})
+
+if translatedStreamAggregated.status != 200 {
+  panic("expected translated stream aggregation request to succeed")
+}
+if translatedStreamAggregated.json.object != "chat.completion" {
+  panic("expected translated aggregated response shape")
+}
+if translatedStreamAggregated.json.choices[0].message.content != "stream:gpt-4.1-mini" {
+  panic("expected translated aggregated response content")
+}
+if translatedStreamAggregated.json.usage.prompt_tokens != 17 || translatedStreamAggregated.json.usage.completion_tokens != 6 {
+  panic("expected translated aggregated usage mapping")
+}
+
 let unauthorized = client.requestJSON({
   url: runtimeApp.server.url + "/v1/chat/completions",
   method: "POST",
@@ -250,16 +341,16 @@ if ready.json.ok != true {
 if monitor.json.ready.ok != true {
   panic("expected monitor ready ok")
 }
-if monitor.json.requestCount != 5 {
+if monitor.json.requestCount != 6 {
   panic("expected monitor request count")
 }
-if len(monitor.json.recentRequests) != 5 {
+if len(monitor.json.recentRequests) != 6 {
   panic("expected monitor recent requests")
 }
-if monitor.json.counters["requests.total"] != 5 {
+if monitor.json.counters["requests.total"] != 6 {
   panic("expected monitor total counter")
 }
-if monitor.json.counters["requests.status.2xx"] != 4 {
+if monitor.json.counters["requests.status.2xx"] != 5 {
   panic("expected monitor 2xx counter")
 }
 if monitor.json.counters["requests.status.4xx"] != 1 {
@@ -268,25 +359,28 @@ if monitor.json.counters["requests.status.4xx"] != 1 {
 if monitor.json.counters["auth.unauthorized"] != 1 {
   panic("expected auth unauthorized counter")
 }
-if monitor.json.counters["proxy.forwarded"] != 4 {
+if monitor.json.counters["proxy.forwarded"] != 5 {
   panic("expected proxy forwarded counter")
 }
-if monitor.json.counters["proxy.translated"] != 2 {
+if monitor.json.counters["proxy.translated"] != 3 {
   panic("expected translated proxy counter")
 }
-if monitor.json.latency.count != 5 {
+if monitor.json.counters["proxy.stream_aggregated"] != 1 {
+  panic("expected aggregated stream counter")
+}
+if monitor.json.latency.count != 6 {
   panic("expected latency sample count")
 }
 if len(routes.json.routes.defaults) != 3 {
   panic("expected default routes in admin response")
 }
-if requests.json.total != 5 {
+if requests.json.total != 6 {
   panic("expected recorded requests")
 }
-if requests.json.counters["requests.status.200"] != 4 {
+if requests.json.counters["requests.status.200"] != 5 {
   panic("expected request counters on admin requests")
 }
-if requests.json.latency.count != 5 {
+if requests.json.latency.count != 6 {
   panic("expected latency summary on admin requests")
 }
 
@@ -295,6 +389,7 @@ let foundResponses = false
 let foundRequestID = false
 let foundTranslatedChat = false
 let foundTranslatedResponses = false
+let foundTranslatedStream = false
 for request in requests.json.requests {
   if request.route_name == "chat-gpt-4o" && request.resolved_model == "gpt-4o-mini" {
     foundResolved = true
@@ -307,6 +402,9 @@ for request in requests.json.requests {
   }
   if request.route_name == "responses-gpt-4.1-chat" && request.note == "alias:translated" {
     foundTranslatedResponses = true
+  }
+  if request.route_name == "chat-gpt-4o-responses-stream" && request.note == "alias:stream-aggregated" {
+    foundTranslatedStream = true
   }
   if request.request_id == okResp.header("X-Request-Id") {
     foundRequestID = true
@@ -326,6 +424,9 @@ if foundTranslatedChat != true {
 }
 if foundTranslatedResponses != true {
   panic("expected translated responses request record")
+}
+if foundTranslatedStream != true {
+  panic("expected translated stream request record")
 }
 if foundRequestID != true {
   panic("expected request id in recent request record")
