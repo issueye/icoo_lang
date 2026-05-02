@@ -369,6 +369,78 @@ if keys[0] != "name" || keys[1] != "nested" || keys[2] != "port" {
 	}
 }
 
+func TestRuntimeRunSource_IteratesStdObserveModule(t *testing.T) {
+	src := `
+import std.observe as observe
+
+let keys = ""
+let count = 0
+for key, value in observe {
+  keys = keys + key
+  count = count + 1
+  if typeOf(value) != "native_function" {
+    panic("unexpected std.observe export kind")
+  }
+}
+
+if keys != "recent" {
+  panic("unexpected std.observe iteration order")
+}
+if count != 1 {
+  panic("unexpected std.observe export count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.observe iteration to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdObserveRecent(t *testing.T) {
+	src := `
+import std.observe as observe
+
+let recent = observe.recent(2)
+let first = {id: "a", score: 1}
+recent.add(first)
+first.score = 99
+recent.add({id: "b", score: 2})
+recent.add({id: "c", score: 3})
+
+if recent.total() != 3 {
+  panic("unexpected observe total")
+}
+if recent.count() != 2 {
+  panic("unexpected observe count")
+}
+
+let rows = recent.list()
+if len(rows) != 2 {
+  panic("unexpected observe row length")
+}
+if rows[0].id != "c" || rows[1].id != "b" {
+  panic("unexpected observe row order")
+}
+if rows[1].score != 2 {
+  panic("unexpected observe snapshot value")
+}
+
+recent.clear()
+if recent.count() != 0 {
+  panic("unexpected observe clear count")
+}
+if recent.total() != 3 {
+  panic("unexpected observe total after clear")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.observe recent to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ObjectLiteralSupportsStringKeys(t *testing.T) {
 	src := `
 let headers = {

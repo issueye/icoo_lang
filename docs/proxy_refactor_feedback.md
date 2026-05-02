@@ -130,6 +130,14 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 
 这些能力一旦沉到标准库，示例才能稳定长成“可维护的服务”，而不是“能跑的脚本”。
 
+其中有一类尤其适合先落到 `std.observe` 这样的薄层里：
+
+- bounded recent buffer
+- total request counter
+- request snapshot helper
+
+这类能力本质上更接近“运行态观测”，不应该逼业务脚本自己再搭一层临时存储。
+
 ### P1：在 `std.db` 之上补轻量 ORM
 
 建议目标不是完整 ORM 框架，而是一个贴近脚本服务的薄层：
@@ -164,8 +172,9 @@ Go 重构版里最膨胀的模块不是业务路由，而是：
 5. 继续补上 `res.proxy(req, options)`，让代理型服务可以把上游响应直接流式写回下游，而不是像 `forward()` 一样先整包读入内存再返回对象。
 6. 把已有 `std.db` 链式查询能力收口成 `std.orm.model(...)`，并补齐 `create()` 与更直观的模型入口。
 7. 继续补上 `req.requestId` 和默认 `X-Request-Id` 响应头，让脚本服务第一次具备统一的请求链路标识，并把它直接回流到 proxy 示例的上游透传和 recent requests 记录中。
-8. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码、模块缓存样板、成功代理路径上的响应回写方式，以及请求记录存储层的 CRUD 样板。
-9. 增加对应运行时测试，确保模块可用。
+8. 新增 `std.observe.recent(limit)`，把 proxy 示例里的 recent requests 和 total count 从临时存储层抽回到更贴近服务观测语义的标准库里。
+9. 用这些能力重写了 `examples/proxy` 中最典型的对象访问、header 读取、JSON 解码、模块缓存样板、成功代理路径上的响应回写方式，以及请求记录/最近请求观测样板。
+10. 增加对应运行时测试，确保模块可用。
 
 这一步不能替代更大的 HTTP/服务化能力建设，但它验证了一件事：
 

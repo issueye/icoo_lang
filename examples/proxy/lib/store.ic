@@ -1,64 +1,30 @@
-import std.db as db
-import std.orm as orm
+import std.observe as observe
 import std.object as object
 import std.time as time
 
 const storeApi = fn() {
-  fn trimToLimitImpl(store) {
-    let rows = store.requests.select(["id"]).orderBy("id desc").all()
-    let i = store.limit
-    for i < len(rows) {
-      store.requests.where({id: rows[i].id}).delete()
-      i = i + 1
-    }
-    return null
-  }
-
   fn createStoreImpl(limit) {
-    let conn = db.sqlite(":memory:")
-    let requests = orm.model(conn, {
-      name: "requests",
-      columns: {
-        id: "integer primary key",
-        request_id: "text",
-        ts: "integer",
-        method: "text",
-        path: "text",
-        route_name: "text",
-        requested_model: "text",
-        resolved_model: "text",
-        auth_via: "text",
-        status: "integer",
-        upstream_url: "text",
-        note: "text"
-      }
-    })
-    requests.create()
     return {
-      conn: conn,
-      requests: requests,
-      limit: limit
+      requests: observe.recent(limit)
     }
   }
 
   fn recordRequestImpl(store, item) {
-    store.requests.insert(object.merge(item, {
+    store.requests.add(object.merge(item, {
       ts: time.now()
     }))
-    trimToLimitImpl(store)
     return null
   }
 
   fn listRecentImpl(store) {
-    return store.requests.orderBy("id desc").all()
+    return store.requests.list()
   }
 
   fn countImpl(store) {
-    return store.requests.count()
+    return store.requests.total()
   }
 
   fn closeImpl(store) {
-    store.conn.close()
     return null
   }
 
