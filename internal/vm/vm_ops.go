@@ -259,6 +259,10 @@ func (vm *VM) execGetProperty(name string) error {
 			return nil
 		}
 	case *runtime.ArrayValue:
+		if method, ok := arrayMethod(value, name); ok {
+			vm.Push(method)
+			return nil
+		}
 		if name == "iter" {
 			vm.Push(&runtime.NativeFunction{
 				Name:  "array.iter",

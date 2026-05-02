@@ -30,6 +30,10 @@ func (vm *VM) RunModule(path string, closure *runtime.Closure) (runtime.Value, e
 }
 
 func (vm *VM) runLoop() (runtime.Value, error) {
+	return vm.runLoopUntil(0)
+}
+
+func (vm *VM) runLoopUntil(stopDepth int) (runtime.Value, error) {
 	for {
 		frame := &vm.frames[len(vm.frames)-1]
 		chunk := frame.Closure.Proto.Chunk.(*bytecode.Chunk)
@@ -295,7 +299,7 @@ func (vm *VM) runLoop() (runtime.Value, error) {
 				vm.handlers = vm.handlers[:len(vm.handlers)-1]
 			}
 			vm.stack = vm.stack[:frameBase]
-			if len(vm.frames) == 0 {
+			if len(vm.frames) == stopDepth {
 				return result, nil
 			}
 			vm.Push(result)

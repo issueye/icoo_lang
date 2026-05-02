@@ -1,20 +1,12 @@
 import std.io as io
-import std.json as json
 import std.http.client as client
 import std.http.server as server
 import "./src/main.ic" as proxy
 
-fn decodeBody(req) {
-  if req.body == "" {
-    return null
-  }
-  return json.decode(req.body)
-}
-
 let upstream = server.listen({
   addr: "127.0.0.1:0",
   handler: fn(req) {
-    let payload = decodeBody(req)
+    let payload = req.json
     let model = null
     if payload != null {
       model = payload.model

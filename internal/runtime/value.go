@@ -226,6 +226,8 @@ type NativeFuncWithContext func(ctx *NativeContext, args []Value) (Value, error)
 type NativeContext struct {
 	CallDetached         func(callee Value, args []Value) (Value, error)
 	CallDetachedWithArgs func(callee Value, args []Value) (Value, []Value, error)
+	CallInline           func(callee Value, args []Value) (Value, error)
+	CallInlineWithArgs   func(callee Value, args []Value) (Value, []Value, error)
 }
 
 type NativeFunction struct {

@@ -1,15 +1,7 @@
 import std.io as io
-import std.json as json
 import std.os as os
 import std.time as time
 import std.http.server as server
-
-fn decodeBody(req) {
-  if req.body == "" {
-    return null
-  }
-  return json.decode(req.body)
-}
 
 let addr = os.getEnv("ICOO_PROXY_UPSTREAM_ADDR")
 if addr == null {
@@ -28,7 +20,7 @@ let upstream = server.listen({
       }
     }
 
-    let payload = decodeBody(req)
+    let payload = req.json
     let model = null
     if payload != null {
       model = payload.model

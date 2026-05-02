@@ -1541,6 +1541,310 @@ if resp.json.missing != null {
 	}
 }
 
+func TestRuntimeRunSource_StdHTTPServerRequestJSON(t *testing.T) {
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      json: {
+        name: req.json.name,
+        count: req.json.count
+      }
+    }
+  }
+})
+
+let resp = client.requestJSON({
+  url: upstream.url + "/json",
+  method: "POST",
+  json: {
+    name: "icoo",
+    count: 2
+  }
+})
+
+upstream.close()
+
+if resp.json.name != "icoo" {
+  panic("expected req.json.name")
+}
+if resp.json.count != 2 {
+  panic("expected req.json.count")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server request json to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPServerResponseHandleWrite(t *testing.T) {
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req, res) {
+    res.setHeader("X-Reply", req.header("X-Trace-Id"))
+    res.status(202)
+    res.write(req.method + ":" + req.path)
+  }
+})
+
+let resp = client.request({
+  url: upstream.url + "/direct",
+  method: "POST",
+  headers: {
+    "X-Trace-Id": "trace-7"
+  },
+  body: "ignored"
+})
+
+upstream.close()
+
+if resp.status != 202 {
+  panic("expected direct response status")
+}
+if resp.body != "POST:/direct" {
+  panic("expected direct response body")
+}
+if resp.header("X-Reply") != "trace-7" {
+  panic("expected direct response header")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server response handle write to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPServerResponseHandleJSON(t *testing.T) {
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req, res) {
+    res.status(201)
+    res.json({
+      name: req.json.name,
+      ok: true
+    })
+  }
+})
+
+let resp = client.requestJSON({
+  url: upstream.url + "/json",
+  method: "POST",
+  json: {
+    name: "icoo"
+  }
+})
+
+upstream.close()
+
+if resp.status != 201 {
+  panic("expected direct json status")
+}
+if resp.json.name != "icoo" {
+  panic("expected direct json body name")
+}
+if resp.json.ok != true {
+  panic("expected direct json body flag")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server response handle json to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPServerResponseHandleStatusWithReturnedValue(t *testing.T) {
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let upstream = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req, res) {
+    res.setHeader("X-Mode", "hybrid")
+    res.status(203)
+    return {
+      json: {
+        path: req.path
+      }
+    }
+  }
+})
+
+let resp = client.getJSON(upstream.url + "/hybrid")
+upstream.close()
+
+if resp.status != 203 {
+  panic("expected hybrid response status")
+}
+if resp.header("X-Mode") != "hybrid" {
+  panic("expected hybrid response header")
+}
+if resp.json.path != "/hybrid" {
+  panic("expected hybrid response body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server response handle hybrid path to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPServerResponseHandleProxyPassThrough(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.URL.Path != "/proxy" || r.URL.Query().Get("name") != "icoo" {
+			http.Error(w, "bad url", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Accept") != "text/plain" {
+			http.Error(w, "bad header", http.StatusBadRequest)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != "payload" {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("X-Upstream", "seen")
+		w.Header().Set("Connection", "close")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte("proxied"))
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let gateway = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req, res) {
+    res.proxy(req, {
+      url: "` + upstream.URL + `" + req.path + "?name=" + req.query.name,
+      timeoutMs: 5000
+    })
+  }
+})
+
+let resp = client.request({
+  url: gateway.url + "/proxy?name=icoo",
+  method: "POST",
+  headers: {
+    Accept: "text/plain"
+  },
+  body: "payload"
+})
+gateway.close()
+
+if resp.status != 202 {
+  panic("expected proxied response status")
+}
+if resp.body != "proxied" {
+  panic("expected proxied response body")
+}
+if resp.header("X-Upstream") != "seen" {
+  panic("expected proxied response header")
+}
+if resp.header("Connection") != null {
+  panic("expected hop-by-hop response header filtered")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server response handle proxy pass-through to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdHTTPServerResponseHandleProxyOverridesRequest(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			http.Error(w, "bad method", http.StatusMethodNotAllowed)
+			return
+		}
+		if r.URL.Path != "/override" || r.URL.Query().Get("ok") != "1" {
+			http.Error(w, "bad url", http.StatusBadRequest)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer proxy" {
+			http.Error(w, "bad auth header", http.StatusBadRequest)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if string(body) != "changed" {
+			http.Error(w, "bad body", http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	src := `
+import std.http.client as client
+import std.http.server as server
+
+let gateway = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req, res) {
+    res.setHeader("X-Gateway", "icoo")
+    res.proxy(req, {
+      url: "` + upstream.URL + `/override?ok=1",
+      method: "PUT",
+      headers: {
+        Authorization: "Bearer proxy"
+      },
+      body: "changed",
+      timeoutMs: 5000
+    })
+  }
+})
+
+let resp = client.requestJSON({
+  url: gateway.url + "/ignored",
+  method: "POST",
+  body: "original"
+})
+gateway.close()
+
+if resp.status != 201 {
+  panic("expected override proxied response status")
+}
+if resp.header("X-Gateway") != "icoo" {
+  panic("expected local response header to survive proxy")
+}
+if resp.json.ok != true {
+  panic("expected proxied json body")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.http.server response handle proxy overrides to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_StdHTTPShortcutMethods(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

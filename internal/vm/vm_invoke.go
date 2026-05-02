@@ -8,6 +8,8 @@ func (vm *VM) nativeContext() *runtime.NativeContext {
 	return &runtime.NativeContext{
 		CallDetached:         vm.CallDetached,
 		CallDetachedWithArgs: vm.CallDetachedWithArgs,
+		CallInline:           vm.CallInline,
+		CallInlineWithArgs:   vm.CallInlineWithArgs,
 	}
 }
 
@@ -31,6 +33,30 @@ func (vm *VM) CallDetachedWithArgs(callee runtime.Value, args []runtime.Value) (
 	}
 	result, err := sub.runLoop()
 	return result, clonedArgs, err
+}
+
+func (vm *VM) CallInline(callee runtime.Value, args []runtime.Value) (runtime.Value, error) {
+	result, _, err := vm.CallInlineWithArgs(callee, args)
+	return result, err
+}
+
+func (vm *VM) CallInlineWithArgs(callee runtime.Value, args []runtime.Value) (runtime.Value, []runtime.Value, error) {
+	stackDepth := len(vm.stack)
+	frameDepth := len(vm.frames)
+
+	vm.stack = append(vm.stack, callee)
+	vm.stack = append(vm.stack, args...)
+	if err := vm.CallValue(callee, len(args)); err != nil {
+		vm.stack = vm.stack[:stackDepth]
+		return nil, args, err
+	}
+
+	if len(vm.frames) == frameDepth {
+		return vm.Pop(), args, nil
+	}
+
+	result, err := vm.runLoopUntil(frameDepth)
+	return result, args, err
 }
 
 func (vm *VM) cloneForInvocation() *VM {
