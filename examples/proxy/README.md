@@ -115,14 +115,15 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 
 ## 当前新增边界
 
-截至 `2026-05-02`，这个 proxy 还额外具备了一条很重要但仍然刻意收敛的流式能力：
+截至 `2026-05-03`，这个 proxy 还额外具备了两条很重要但仍然刻意收敛的流式能力：
 
 - 可把上游 `OpenAI Responses` 的 SSE 响应聚合回 JSON
+- 可把上游 `OpenAI Responses` 的文本 SSE 响应直接翻译成 `OpenAI Chat` SSE 响应
 
 当前仍然没有直接完成：
 
-- 下游流式跨协议翻译
-- `Responses -> Chat` 的逐事件 SSE 翻译
+- 通用化的下游流式跨协议翻译
+- `Responses -> Chat` 的 tool call / reasoning 等复杂事件翻译
 - `Responses -> Anthropic` 的逐事件 SSE 翻译
 
-也就是说，当前已经有了“流式底座 + 聚合回退路径”，但还没有进入完整的“流式协议桥”阶段。
+也就是说，当前已经有了“流式底座 + 聚合回退路径 + 最小直译路径”，但还没有进入完整的“流式协议桥”阶段。

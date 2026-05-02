@@ -173,6 +173,62 @@ const proxyHandlerApi = fn() {
     }
   }
 
+  fn forwardTranslatedDirectStreamImpl(req, res, state, route, authResult, bodyInfo, startedAt) {
+    let upstreamUrl = state.config.upstreamBaseUrl + route.upstreamPath
+    let headers = buildForwardHeaders(req, authResult, route)
+    headers.Accept = "text/event-stream"
+
+    try {
+      let streamed = stream.translateResponsesToChat(res, {
+        url: upstreamUrl,
+        method: req.method,
+        headers: headers,
+        body: bodyInfo.body,
+        timeoutMs: state.config.timeoutMs,
+        model: route.upstreamModel
+      })
+
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        streamed.status,
+        upstreamUrl,
+        route.selection + ":stream-translated",
+        elapsedMs(startedAt)
+      )
+      state.monitor.increment("proxy.forwarded")
+      state.monitor.increment("proxy.translated")
+      state.monitor.increment("proxy.stream_translated")
+      return null
+    } catch err {
+      state.monitor.increment("proxy.upstream_error")
+      recordOutcome(
+        state,
+        req,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        502,
+        upstreamUrl,
+        err.message,
+        elapsedMs(startedAt)
+      )
+      return {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+    }
+  }
+
   fn handleProxyImpl(req, state) {
     let startedAt = time.now()
     let requestedModel = object.get(req, "json")
@@ -204,6 +260,29 @@ const proxyHandlerApi = fn() {
     let bodyInfo = translate.prepareRequest(req, route)
     if translate.needsTranslation(route) {
       if bodyInfo.wantsStream == true {
+        if translate.downstreamProtocol(route) == "openai" && translate.upstreamProtocol(route) == "openai-responses" {
+          state.monitor.increment("proxy.stream_direct_not_available")
+          recordOutcome(
+            state,
+            req,
+            route.name,
+            bodyInfo.requestedModel,
+            route.upstreamModel,
+            authResult.via,
+            501,
+            "",
+            "stream translation requires direct response handle",
+            elapsedMs(startedAt)
+          )
+          return {
+            status: 501,
+            json: {
+              ok: false,
+              error: "stream_not_supported",
+              message: "stream translation requires direct response handle"
+            }
+          }
+        }
         state.monitor.increment("proxy.stream_not_supported")
         recordOutcome(
           state,
@@ -313,6 +392,9 @@ const proxyHandlerApi = fn() {
     let bodyInfo = translate.prepareRequest(req, route)
     if translate.needsTranslation(route) {
       if bodyInfo.wantsStream == true {
+        if translate.downstreamProtocol(route) == "openai" && translate.upstreamProtocol(route) == "openai-responses" {
+          return forwardTranslatedDirectStreamImpl(req, res, state, route, authResult, bodyInfo, startedAt)
+        }
         state.monitor.increment("proxy.stream_not_supported")
         recordOutcome(
           state,
