@@ -369,6 +369,27 @@ if keys[0] != "name" || keys[1] != "nested" || keys[2] != "port" {
 	}
 }
 
+func TestRuntimeRunSource_ObjectLiteralSupportsStringKeys(t *testing.T) {
+	src := `
+let headers = {
+  "X-Trace-Id": "trace-1",
+  "Content-Type": "application/json"
+}
+
+if headers["X-Trace-Id"] != "trace-1" {
+  panic("expected string-key object index")
+}
+if headers["Content-Type"] != "application/json" {
+  panic("expected second string-key field")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected string-key object literal to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ImportsStdTimeModule(t *testing.T) {
 	src := `
 import std.time as time

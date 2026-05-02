@@ -117,7 +117,7 @@ func (p *Parser) expectIdentOrKeyword(msg string) token.Token {
 	if _, isKeyword := token.Keywords[tok.Lexeme]; isKeyword {
 		return p.advance()
 	}
-	p.errorAtCurrent("expected " + msg + " after '.'")
+	p.errorAtCurrent("expected " + msg)
 	return token.Token{Type: token.Illegal, Span: tok.Span}
 }
 

@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"strings"
+
 	"icoo_lang/internal/ast"
 	"icoo_lang/internal/token"
 )
@@ -231,10 +233,19 @@ func (p *Parser) parseObjectLiteral() ast.Expr {
 	fields := make([]ast.ObjectField, 0, 4)
 	if !p.check(token.RBrace) {
 		for {
-			nameTok := p.expectIdentOrKeyword("object field name")
+			name, nameTok := p.parseObjectFieldName()
+			if nameTok.Type == token.Illegal {
+				for !p.check(token.Comma) && !p.check(token.RBrace) && !p.atEnd() {
+					p.advance()
+				}
+				if !p.match(token.Comma) {
+					break
+				}
+				continue
+			}
 			p.expect(token.Colon, "expected ':' after object field name")
 			value := p.parseExpression(PrecLowest)
-			fields = append(fields, ast.ObjectField{Name: nameTok.Lexeme, Value: value, Span_: token.Span{Start: nameTok.Span.Start, End: value.Span().End}})
+			fields = append(fields, ast.ObjectField{Name: name, Value: value, Span_: token.Span{Start: nameTok.Span.Start, End: value.Span().End}})
 			if !p.match(token.Comma) {
 				break
 			}
@@ -242,6 +253,26 @@ func (p *Parser) parseObjectLiteral() ast.Expr {
 	}
 	endTok := p.expect(token.RBrace, "expected '}' after object literal")
 	return &ast.ObjectLiteral{Fields: fields, Span_: token.Span{Start: startTok.Span.Start, End: endTok.Span.End}}
+}
+
+func (p *Parser) parseObjectFieldName() (string, token.Token) {
+	tok := p.current()
+	switch tok.Type {
+	case token.String:
+		p.advance()
+		return strings.Trim(tok.Lexeme, "\""), tok
+	case token.Ident, token.Underscore:
+		p.advance()
+		return tok.Lexeme, tok
+	default:
+		if _, isKeyword := token.Keywords[tok.Lexeme]; isKeyword {
+			p.advance()
+			return tok.Lexeme, tok
+		}
+		p.errorAtCurrent("expected object field name")
+		p.advance()
+		return "", token.Token{Type: token.Illegal, Span: tok.Span}
+	}
 }
 
 func (p *Parser) parseFnExpr() ast.Expr {

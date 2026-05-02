@@ -23,6 +23,20 @@ main()
 	}
 }
 
+func TestRuntimeCheckSource_RejectsInvalidObjectFieldWithoutHanging(t *testing.T) {
+	src := `
+let value = {
+  1: 2
+}
+`
+
+	rt := NewRuntime()
+	errs := rt.CheckSource(src)
+	if len(errs) == 0 {
+		t.Fatal("expected invalid object field to report an error")
+	}
+}
+
 func TestRuntimeRunSource_FunctionCallUsesCorrectArguments(t *testing.T) {
 	src := `
 fn add(a, b) {
