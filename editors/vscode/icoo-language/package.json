@@ -1,0 +1,99 @@
+{
+  "name": "icoo-language",
+  "displayName": "Icoo Language Support",
+  "description": "Syntax highlighting, snippets, diagnostics, and run/check commands for the Icoo language.",
+  "version": "0.1.0",
+  "publisher": "icoo-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "icoo",
+    "language",
+    "syntax",
+    "diagnostics"
+  ],
+  "activationEvents": [
+    "onLanguage:icoo",
+    "onCommand:icoo.checkCurrentFile",
+    "onCommand:icoo.runCurrentFile"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "icoo",
+        "aliases": [
+          "Icoo",
+          "icoo"
+        ],
+        "extensions": [
+          ".ic"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "icoo",
+        "scopeName": "source.icoo",
+        "path": "./syntaxes/icoo.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "icoo",
+        "path": "./snippets/icoo.code-snippets"
+      }
+    ],
+    "commands": [
+      {
+        "command": "icoo.checkCurrentFile",
+        "title": "Icoo: Check Current File",
+        "category": "Icoo"
+      },
+      {
+        "command": "icoo.runCurrentFile",
+        "title": "Icoo: Run Current File",
+        "category": "Icoo"
+      }
+    ],
+    "configuration": {
+      "title": "Icoo",
+      "properties": {
+        "icoo.cli.command": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "CLI command used to run Icoo. Leave empty to auto-detect `go run ./cmd/icoo` in the workspace, otherwise fall back to `icoo` on PATH."
+        },
+        "icoo.cli.args": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "Extra base arguments passed before the `check` or `run` subcommand, for example `[\"run\", \"./cmd/icoo\"]`."
+        },
+        "icoo.cli.cwd": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Working directory for Icoo CLI invocations. Supports `${workspaceFolder}`. Leave empty to use the active workspace folder."
+        },
+        "icoo.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Run `icoo check` automatically when an Icoo file is opened or saved."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "node ./scripts/build.js --validate",
+    "build": "node ./scripts/build.js",
+    "package": "node ./scripts/build.js"
+  }
+}

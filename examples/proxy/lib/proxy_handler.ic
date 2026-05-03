@@ -714,6 +714,354 @@ const proxyHandlerApi = fn() {
     }
   }
 
+  fn forwardTranslatedDirectAnthropicStreamImpl(req, res, state, route, authResult, bodyInfo, startedAt) {
+    let baseUrl = routeBaseUrl(state, route)
+    let upstreamUrl = baseUrl + route.upstreamPath
+    let headers = buildForwardHeaders(req, authResult, route)
+    headers.Accept = "text/event-stream"
+
+    mirrorUpstreamRequest(state, req, route, upstreamUrl, headers, bodyInfo.body)
+    recordProxyEvent(state, "proxy.upstream.request", req, route, {
+      upstream_url: upstreamUrl,
+      note: route.selection + ":stream-translated-anthropic"
+    })
+
+    try {
+      let streamed = stream.translateResponsesToAnthropic(res, {
+        url: upstreamUrl,
+        method: req.method,
+        headers: headers,
+        body: bodyInfo.body,
+        timeoutMs: state.config.timeoutMs,
+        model: route.upstreamModel
+      })
+      let durationMs = elapsedMs(startedAt)
+      let usageMetrics = extractUsageMetrics(object.get(streamed, "response"))
+
+      mirrorResponsePart(
+        state,
+        req,
+        route,
+        "upstream_response_json",
+        streamed.status,
+        {
+          "Content-Type": "application/json"
+        },
+        object.get(streamed, "response"),
+        route.selection + ":upstream",
+        "stream-completed"
+      )
+      mirrorResponsePart(
+        state,
+        req,
+        route,
+        "downstream_response_json",
+        streamed.status,
+        {
+          "Content-Type": "text/event-stream"
+        },
+        null,
+        route.selection + ":downstream-stream",
+        "streamed-to-client"
+      )
+
+      if streamed.error != null {
+        state.monitor.increment("proxy.upstream_error")
+        state.monitor.setSupplierHealth(routeSupplierName(route), {
+          ok: false,
+          baseUrl: baseUrl,
+          route: route.name,
+          error: streamed.error
+        })
+        recordProxyEvent(state, "proxy.response.error", req, route, {
+          status: streamed.status,
+          upstream_url: upstreamUrl,
+          note: streamed.error,
+          duration_ms: durationMs
+        })
+        recordOutcome(
+          state,
+          req,
+          route,
+          route.name,
+          bodyInfo.requestedModel,
+          route.upstreamModel,
+          authResult.via,
+          streamed.status,
+          upstreamUrl,
+          streamed.error,
+          durationMs,
+          usageMetrics
+        )
+        return null
+      }
+
+      recordProxyEvent(state, "proxy.response.complete", req, route, {
+        status: streamed.status,
+        upstream_url: upstreamUrl,
+        note: route.selection + ":stream-translated-anthropic",
+        duration_ms: durationMs,
+        total_tokens: object.get(usageMetrics, "total_tokens")
+      })
+      recordOutcome(
+        state,
+        req,
+        route,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        streamed.status,
+        upstreamUrl,
+        route.selection + ":stream-translated-anthropic",
+        durationMs,
+        usageMetrics
+      )
+      state.monitor.increment("proxy.forwarded")
+      state.monitor.increment("proxy.translated")
+      state.monitor.increment("proxy.stream_translated")
+      state.monitor.increment("proxy.stream_translated_anthropic")
+      state.monitor.setSupplierHealth(routeSupplierName(route), {
+        ok: true,
+        baseUrl: baseUrl,
+        route: route.name,
+        status: streamed.status
+      })
+      return null
+    } catch err {
+      let durationMs = elapsedMs(startedAt)
+      let errorResponse = {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+
+      state.monitor.increment("proxy.upstream_error")
+      state.monitor.setSupplierHealth(routeSupplierName(route), {
+        ok: false,
+        baseUrl: baseUrl,
+        route: route.name,
+        error: err.message
+      })
+      mirrorResponsePart(
+        state,
+        req,
+        route,
+        "downstream_response_json",
+        502,
+        responseHeadersFromResult(errorResponse),
+        responseBodyValue(errorResponse),
+        "proxy.response.error",
+        "empty-body"
+      )
+      recordProxyEvent(state, "proxy.response.error", req, route, {
+        status: 502,
+        upstream_url: upstreamUrl,
+        note: err.message,
+        duration_ms: durationMs
+      })
+      recordOutcome(
+        state,
+        req,
+        route,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        502,
+        upstreamUrl,
+        err.message,
+        durationMs,
+        null
+      )
+      return {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+    }
+  }
+
+  fn forwardTranslatedDirectChatFromAnthropicStreamImpl(req, res, state, route, authResult, bodyInfo, startedAt) {
+    let baseUrl = routeBaseUrl(state, route)
+    let upstreamUrl = baseUrl + route.upstreamPath
+    let headers = buildForwardHeaders(req, authResult, route)
+    headers.Accept = "text/event-stream"
+
+    mirrorUpstreamRequest(state, req, route, upstreamUrl, headers, bodyInfo.body)
+    recordProxyEvent(state, "proxy.upstream.request", req, route, {
+      upstream_url: upstreamUrl,
+      note: route.selection + ":stream-translated-chat"
+    })
+
+    try {
+      let streamed = stream.translateAnthropicToChat(res, {
+        url: upstreamUrl,
+        method: req.method,
+        headers: headers,
+        body: bodyInfo.body,
+        timeoutMs: state.config.timeoutMs,
+        model: route.upstreamModel
+      })
+      let durationMs = elapsedMs(startedAt)
+      let usageMetrics = extractUsageMetrics(object.get(streamed, "response"))
+
+      mirrorResponsePart(
+        state,
+        req,
+        route,
+        "upstream_response_json",
+        streamed.status,
+        {
+          "Content-Type": "application/json"
+        },
+        object.get(streamed, "response"),
+        route.selection + ":upstream",
+        "stream-completed"
+      )
+      mirrorResponsePart(
+        state,
+        req,
+        route,
+        "downstream_response_json",
+        streamed.status,
+        {
+          "Content-Type": "text/event-stream"
+        },
+        null,
+        route.selection + ":downstream-stream",
+        "streamed-to-client"
+      )
+
+      if streamed.error != null {
+        state.monitor.increment("proxy.upstream_error")
+        state.monitor.setSupplierHealth(routeSupplierName(route), {
+          ok: false,
+          baseUrl: baseUrl,
+          route: route.name,
+          error: streamed.error
+        })
+        recordProxyEvent(state, "proxy.response.error", req, route, {
+          status: streamed.status,
+          upstream_url: upstreamUrl,
+          note: streamed.error,
+          duration_ms: durationMs
+        })
+        recordOutcome(
+          state,
+          req,
+          route,
+          route.name,
+          bodyInfo.requestedModel,
+          route.upstreamModel,
+          authResult.via,
+          streamed.status,
+          upstreamUrl,
+          streamed.error,
+          durationMs,
+          usageMetrics
+        )
+        return null
+      }
+
+      recordProxyEvent(state, "proxy.response.complete", req, route, {
+        status: streamed.status,
+        upstream_url: upstreamUrl,
+        note: route.selection + ":stream-translated-chat",
+        duration_ms: durationMs,
+        total_tokens: object.get(usageMetrics, "total_tokens")
+      })
+      recordOutcome(
+        state,
+        req,
+        route,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        streamed.status,
+        upstreamUrl,
+        route.selection + ":stream-translated-chat",
+        durationMs,
+        usageMetrics
+      )
+      state.monitor.increment("proxy.forwarded")
+      state.monitor.increment("proxy.translated")
+      state.monitor.increment("proxy.stream_translated")
+      state.monitor.increment("proxy.stream_translated_chat")
+      state.monitor.setSupplierHealth(routeSupplierName(route), {
+        ok: true,
+        baseUrl: baseUrl,
+        route: route.name,
+        status: streamed.status
+      })
+      return null
+    } catch err {
+      let durationMs = elapsedMs(startedAt)
+      let errorResponse = {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+
+      state.monitor.increment("proxy.upstream_error")
+      state.monitor.setSupplierHealth(routeSupplierName(route), {
+        ok: false,
+        baseUrl: baseUrl,
+        route: route.name,
+        error: err.message
+      })
+      mirrorResponsePart(
+        state,
+        req,
+        route,
+        "downstream_response_json",
+        502,
+        responseHeadersFromResult(errorResponse),
+        responseBodyValue(errorResponse),
+        "proxy.response.error",
+        "empty-body"
+      )
+      recordProxyEvent(state, "proxy.response.error", req, route, {
+        status: 502,
+        upstream_url: upstreamUrl,
+        note: err.message,
+        duration_ms: durationMs
+      })
+      recordOutcome(
+        state,
+        req,
+        route,
+        route.name,
+        bodyInfo.requestedModel,
+        route.upstreamModel,
+        authResult.via,
+        502,
+        upstreamUrl,
+        err.message,
+        durationMs,
+        null
+      )
+      return {
+        status: 502,
+        json: {
+          ok: false,
+          error: "upstream_error",
+          message: err.message
+        }
+      }
+    }
+  }
+
   fn forwardStreamPassthroughImpl(req, res, state, route, authResult, bodyInfo, startedAt) {
     let baseUrl = routeBaseUrl(state, route)
     let upstreamUrl = baseUrl + route.upstreamPath
@@ -1150,13 +1498,21 @@ const proxyHandlerApi = fn() {
     }
 
     let needsTranslation = translate.needsTranslation(route)
-    let directTranslatedStream = wantsStream == true &&
+    let directTranslatedChatStream = wantsStream == true &&
       needsTranslation == true &&
       translate.downstreamProtocol(route) == "openai" &&
       translate.upstreamProtocol(route) == "openai-responses"
+    let directTranslatedChatFromAnthropicStream = wantsStream == true &&
+      needsTranslation == true &&
+      translate.downstreamProtocol(route) == "openai" &&
+      translate.upstreamProtocol(route) == "anthropic"
+    let directTranslatedAnthropicStream = wantsStream == true &&
+      needsTranslation == true &&
+      translate.downstreamProtocol(route) == "anthropic" &&
+      translate.upstreamProtocol(route) == "openai-responses"
     let directPassthroughStream = wantsStream == true && needsTranslation != true
 
-    if directTranslatedStream != true && directPassthroughStream != true {
+    if directTranslatedChatStream != true && directTranslatedChatFromAnthropicStream != true && directTranslatedAnthropicStream != true && directPassthroughStream != true {
       return handleProxyImpl(req, state)
     }
 
@@ -1194,8 +1550,14 @@ const proxyHandlerApi = fn() {
     let bodyInfo = translate.prepareRequest(req, route)
     recordRouteResolved(state, req, route, bodyInfo)
 
-    if directTranslatedStream == true {
+    if directTranslatedChatStream == true {
       return forwardTranslatedDirectStreamImpl(req, res, state, route, authResult, bodyInfo, startedAt)
+    }
+    if directTranslatedChatFromAnthropicStream == true {
+      return forwardTranslatedDirectChatFromAnthropicStreamImpl(req, res, state, route, authResult, bodyInfo, startedAt)
+    }
+    if directTranslatedAnthropicStream == true {
+      return forwardTranslatedDirectAnthropicStreamImpl(req, res, state, route, authResult, bodyInfo, startedAt)
     }
     return forwardStreamPassthroughImpl(req, res, state, route, authResult, bodyInfo, startedAt)
   }

@@ -106,6 +106,15 @@ const configApi = fn() {
           upstreamProtocol: "anthropic"
         },
         {
+          alias: "gpt-4o-anthropic",
+          endpoint: "/v1/chat/completions",
+          name: "chat-gpt-4o-anthropic",
+          upstreamPath: "/anthropic/messages",
+          upstreamModel: "claude-3-5-sonnet",
+          protocol: "openai",
+          upstreamProtocol: "anthropic"
+        },
+        {
           alias: "claude-sonnet",
           endpoint: "/v1/messages",
           name: "messages-claude-sonnet",

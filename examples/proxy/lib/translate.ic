@@ -297,6 +297,26 @@ const translateApi = fn() {
       })
   }
 
+  fn chatMessagesToAnthropicMessagesImpl(messages) {
+    if typeOf(messages) != "array" {
+      return []
+    }
+
+    return messages
+      .filter(fn(message) {
+        return typeOf(message) == "object" && object.get(message, "role", "user") != "system"
+      })
+      .map(fn(message) {
+        return {
+          role: object.get(message, "role", "user"),
+          content: contentTextImpl(object.get(message, "content"))
+        }
+      })
+      .filter(fn(message) {
+        return object.get(message, "content", "") != ""
+      })
+  }
+
   fn responsesInputToAnthropicMessagesImpl(input) {
     if typeOf(input) == "string" {
       return [
@@ -484,6 +504,48 @@ const translateApi = fn() {
     return request
   }
 
+  fn chatRequestToAnthropicImpl(payload, route) {
+    let request = {
+      model: route.upstreamModel,
+      messages: chatMessagesToAnthropicMessagesImpl(object.get(payload, "messages")),
+      max_tokens: 1024
+    }
+
+    let instructions = chatInstructionsImpl(object.get(payload, "messages"))
+    if instructions != "" {
+      request.system = instructions
+    }
+
+    let stream = object.get(payload, "stream")
+    if stream == true {
+      request.stream = true
+    }
+
+    let temperature = object.get(payload, "temperature")
+    if temperature != null {
+      request.temperature = temperature
+    }
+
+    let topP = object.get(payload, "top_p")
+    if topP != null {
+      request.top_p = topP
+    }
+
+    let maxTokens = object.get(payload, "max_completion_tokens")
+    if maxTokens == null {
+      maxTokens = object.get(payload, "max_tokens")
+    }
+    if maxTokens != null {
+      request.max_tokens = maxTokens
+    }
+
+    if object.get(route, "forceUpstreamStream", false) == true {
+      request.stream = true
+    }
+
+    return request
+  }
+
   fn responsesResponseToChatImpl(payload, route) {
     let response = {
       id: object.get(payload, "id", "chatcmpl-proxy"),
@@ -600,6 +662,36 @@ const translateApi = fn() {
     return response
   }
 
+  fn anthropicResponseToChatImpl(payload, route) {
+    let response = {
+      id: object.get(payload, "id", "chatcmpl-proxy"),
+      object: "chat.completion",
+      model: object.get(payload, "model", route.upstreamModel),
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: contentTextImpl(object.get(payload, "content"))
+          },
+          finish_reason: "stop"
+        }
+      ]
+    }
+
+    if object.get(payload, "stop_reason") == "max_tokens" {
+      response.choices[0].finish_reason = "length"
+    }
+
+    let usage = {
+      prompt_tokens: object.get(object.get(payload, "usage"), "input_tokens", 0),
+      completion_tokens: object.get(object.get(payload, "usage"), "output_tokens", 0),
+      total_tokens: object.get(object.get(payload, "usage"), "input_tokens", 0) + object.get(object.get(payload, "usage"), "output_tokens", 0)
+    }
+    response.usage = usage
+    return response
+  }
+
   fn prepareRequestImpl(req, route) {
     let payload = object.get(req, "json")
     if payload == null {
@@ -633,6 +725,8 @@ const translateApi = fn() {
     let translatedPayload = null
     if down == "openai" && up == "openai-responses" {
       translatedPayload = chatRequestToResponsesImpl(payload, route)
+    } else if down == "openai" && up == "anthropic" {
+      translatedPayload = chatRequestToAnthropicImpl(payload, route)
     } else if down == "openai-responses" && up == "openai" {
       translatedPayload = responsesRequestToChatImpl(payload, route)
     } else if down == "anthropic" && up == "openai-responses" {
@@ -681,6 +775,8 @@ const translateApi = fn() {
     let translatedPayload = null
     if down == "openai" && up == "openai-responses" {
       translatedPayload = responsesResponseToChatImpl(payload, route)
+    } else if down == "openai" && up == "anthropic" {
+      translatedPayload = anthropicResponseToChatImpl(payload, route)
     } else if down == "openai-responses" && up == "openai" {
       translatedPayload = chatResponseToResponsesImpl(payload, route)
     } else if down == "anthropic" && up == "openai-responses" {

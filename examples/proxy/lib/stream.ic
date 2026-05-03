@@ -80,6 +80,13 @@ const streamApi = fn() {
     }))
   }
 
+  fn emitAnthropicEventImpl(res, event, payload) {
+    return res.sse({
+      event: event,
+      data: json.encode(payload)
+    })
+  }
+
   fn toolStartChunkImpl(index, callId, name) {
     return {
       tool_calls: [
@@ -408,11 +415,705 @@ const streamApi = fn() {
     }
   }
 
+  fn translateResponsesToAnthropicImpl(res, options) {
+    let requestOptions = buildRequestOptionsImpl(options)
+    let stream = sseClient.connect(requestOptions)
+    let status = stream.status
+    let state = {
+      messageStarted: false,
+      messageStopped: false,
+      messageId: "msg_proxy_stream",
+      model: object.get(options, "model", ""),
+      sawToolUse: false,
+      nextBlockIndex: 0,
+      textBlocks: {},
+      toolBlocks: {},
+      inputTokens: 0,
+      outputTokens: 0,
+      completedResponse: null
+    }
+
+    fn tokenUsageFromResponse(response) {
+      if typeOf(response) != "object" {
+        return null
+      }
+      let usage = object.get(response, "usage")
+      if typeOf(usage) != "object" {
+        return null
+      }
+      return {
+        input_tokens: object.get(usage, "input_tokens", 0),
+        output_tokens: object.get(usage, "output_tokens", 0)
+      }
+    }
+
+    fn emitAnthropicError(message) {
+      state.messageStopped = true
+      return emitAnthropicEventImpl(res, "error", {
+        type: "error",
+        error: {
+          type: "api_error",
+          message: message
+        }
+      })
+    }
+
+    fn ensureMessageStart() {
+      if state.messageStarted == true {
+        return null
+      }
+      state.messageStarted = true
+      return emitAnthropicEventImpl(res, "message_start", {
+        type: "message_start",
+        message: {
+          id: state.messageId,
+          type: "message",
+          role: "assistant",
+          content: [],
+          model: state.model,
+          stop_reason: null,
+          stop_sequence: null,
+          usage: {
+            input_tokens: state.inputTokens,
+            output_tokens: state.outputTokens
+          }
+        }
+      })
+    }
+
+    fn ensureTextBlock(payload) {
+      let itemID = object.get(payload, "item_id", "")
+      let outputIndex = object.get(payload, "output_index", 0)
+      let contentIndex = object.get(payload, "content_index", 0)
+      let key = itemID + ":" + json.encode(outputIndex) + ":" + json.encode(contentIndex)
+      let block = object.get(state.textBlocks, key)
+      if block != null {
+        return block
+      }
+
+      block = {
+        index: state.nextBlockIndex,
+        key: key,
+        stopped: false,
+        hasDelta: false
+      }
+      state.nextBlockIndex = state.nextBlockIndex + 1
+      state.textBlocks[key] = block
+      emitAnthropicEventImpl(res, "content_block_start", {
+        type: "content_block_start",
+        index: block.index,
+        content_block: {
+          type: "text",
+          text: ""
+        }
+      })
+      return block
+    }
+
+    fn ensureToolBlock(payload, item) {
+      let itemID = object.get(payload, "item_id", object.get(item, "id", object.get(payload, "id", "")))
+      let outputIndex = object.get(payload, "output_index", 0)
+      let key = itemID
+      if key == null || key == "" {
+        key = "tool:" + json.encode(outputIndex)
+      }
+
+      let block = object.get(state.toolBlocks, key)
+      if block != null {
+        if object.get(block, "name", "") == "" {
+          block.name = object.get(item, "name", object.get(payload, "name", ""))
+        }
+        if object.get(block, "callId", "") == "" {
+          block.callId = object.get(item, "call_id", object.get(payload, "call_id", itemID))
+        }
+        return block
+      }
+
+      block = {
+        index: state.nextBlockIndex,
+        key: key,
+        itemId: itemID,
+        callId: object.get(item, "call_id", object.get(payload, "call_id", itemID)),
+        name: object.get(item, "name", object.get(payload, "name", "")),
+        stopped: false,
+        hasDelta: false
+      }
+      state.nextBlockIndex = state.nextBlockIndex + 1
+      state.toolBlocks[key] = block
+      state.sawToolUse = true
+      emitAnthropicEventImpl(res, "content_block_start", {
+        type: "content_block_start",
+        index: block.index,
+        content_block: {
+          type: "tool_use",
+          id: block.callId,
+          name: block.name,
+          input: {}
+        }
+      })
+      return block
+    }
+
+    fn stopBlock(block) {
+      if block == null || object.get(block, "stopped", false) == true {
+        return null
+      }
+      block.stopped = true
+      return emitAnthropicEventImpl(res, "content_block_stop", {
+        type: "content_block_stop",
+        index: block.index
+      })
+    }
+
+    fn stopReasonFromResponse(response) {
+      let statusText = object.get(response, "status", "completed")
+      if statusText != "completed" {
+        return "max_tokens"
+      }
+      return "end_turn"
+    }
+
+    fn finishMessage(response) {
+      if state.messageStopped == true {
+        return {
+          status: status,
+          streamed: true,
+          error: null,
+          response: state.completedResponse
+        }
+      }
+
+      if typeOf(response) == "object" {
+        state.completedResponse = response
+        state.messageId = object.get(response, "id", state.messageId)
+        let usage = tokenUsageFromResponse(response)
+        if usage != null {
+          state.inputTokens = object.get(usage, "input_tokens", state.inputTokens)
+          state.outputTokens = object.get(usage, "output_tokens", state.outputTokens)
+        }
+      }
+
+      ensureMessageStart()
+      for key, block in state.textBlocks {
+        stopBlock(block)
+      }
+      for key, block in state.toolBlocks {
+        stopBlock(block)
+      }
+
+      let stopReason = "end_turn"
+      if state.sawToolUse == true {
+        stopReason = "tool_use"
+      } else if typeOf(response) == "object" {
+        stopReason = stopReasonFromResponse(response)
+      }
+
+      emitAnthropicEventImpl(res, "message_delta", {
+        type: "message_delta",
+        delta: {
+          stop_reason: stopReason,
+          stop_sequence: null
+        },
+        usage: {
+          input_tokens: state.inputTokens,
+          output_tokens: state.outputTokens
+        }
+      })
+      emitAnthropicEventImpl(res, "message_stop", {
+        type: "message_stop"
+      })
+      state.messageStopped = true
+      return {
+        status: status,
+        streamed: true,
+        error: null,
+        response: state.completedResponse
+      }
+    }
+
+    res.status(status)
+    res.setHeader("Content-Type", "text/event-stream")
+    res.setHeader("Cache-Control", "no-cache")
+
+    try {
+      for true {
+        let event = stream.read()
+        if event == null {
+          break
+        }
+
+        let data = object.get(event, "data", "")
+        if data == "" {
+          continue
+        }
+        if data == "[DONE]" {
+          return finishMessage(state.completedResponse)
+        }
+
+        let payload = json.decode(data)
+        let eventType = object.get(event, "event", object.get(payload, "type", "message"))
+
+        if eventType == "response.created" || eventType == "response.in_progress" {
+          let response = object.get(payload, "response")
+          if typeOf(response) == "object" {
+            state.messageId = object.get(response, "id", state.messageId)
+            let usage = tokenUsageFromResponse(response)
+            if usage != null {
+              state.inputTokens = object.get(usage, "input_tokens", state.inputTokens)
+              state.outputTokens = object.get(usage, "output_tokens", state.outputTokens)
+            }
+          }
+          ensureMessageStart()
+          continue
+        }
+
+        if eventType == "response.output_text.delta" {
+          ensureMessageStart()
+          let block = ensureTextBlock(payload)
+          let delta = object.get(payload, "delta", "")
+          if delta != "" {
+            block.hasDelta = true
+            emitAnthropicEventImpl(res, "content_block_delta", {
+              type: "content_block_delta",
+              index: block.index,
+              delta: {
+                type: "text_delta",
+                text: delta
+              }
+            })
+          }
+          continue
+        }
+
+        if eventType == "response.output_text.done" {
+          ensureMessageStart()
+          let block = ensureTextBlock(payload)
+          let text = object.get(payload, "text", "")
+          if text != "" && object.get(block, "hasDelta", false) != true {
+            block.hasDelta = true
+            emitAnthropicEventImpl(res, "content_block_delta", {
+              type: "content_block_delta",
+              index: block.index,
+              delta: {
+                type: "text_delta",
+                text: text
+              }
+            })
+          }
+          stopBlock(block)
+          continue
+        }
+
+        if eventType == "response.output_item.added" {
+          let item = object.get(payload, "item")
+          if object.get(item, "type") == "function_call" {
+            ensureMessageStart()
+            ensureToolBlock(payload, item)
+          }
+          continue
+        }
+
+        if eventType == "response.function_call_arguments.delta" {
+          ensureMessageStart()
+          let block = ensureToolBlock(payload, null)
+          let delta = object.get(payload, "delta", "")
+          if delta != "" {
+            block.hasDelta = true
+            state.sawToolUse = true
+            emitAnthropicEventImpl(res, "content_block_delta", {
+              type: "content_block_delta",
+              index: block.index,
+              delta: {
+                type: "input_json_delta",
+                partial_json: delta
+              }
+            })
+          }
+          continue
+        }
+
+        if eventType == "response.function_call_arguments.done" {
+          ensureMessageStart()
+          let block = ensureToolBlock(payload, {
+            id: object.get(payload, "item_id", object.get(payload, "id", "")),
+            call_id: object.get(payload, "call_id", ""),
+            name: object.get(payload, "name", "")
+          })
+          let arguments = object.get(payload, "arguments", "")
+          if arguments != "" && object.get(block, "hasDelta", false) != true {
+            block.hasDelta = true
+            emitAnthropicEventImpl(res, "content_block_delta", {
+              type: "content_block_delta",
+              index: block.index,
+              delta: {
+                type: "input_json_delta",
+                partial_json: arguments
+              }
+            })
+          }
+          stopBlock(block)
+          continue
+        }
+
+        if eventType == "response.output_item.done" {
+          let item = object.get(payload, "item")
+          if object.get(item, "type") == "function_call" {
+            ensureMessageStart()
+            let block = ensureToolBlock(payload, item)
+            let arguments = object.get(item, "arguments", "")
+            if arguments != "" && object.get(block, "hasDelta", false) != true {
+              block.hasDelta = true
+              emitAnthropicEventImpl(res, "content_block_delta", {
+                type: "content_block_delta",
+                index: block.index,
+                delta: {
+                  type: "input_json_delta",
+                  partial_json: arguments
+                }
+              })
+            }
+            stopBlock(block)
+          }
+          continue
+        }
+
+        if eventType == "response.completed" {
+          return finishMessage(object.get(payload, "response"))
+        }
+
+        if eventType == "response.failed" || eventType == "error" {
+          let errorPayload = object.get(payload, "error", object.get(object.get(payload, "response"), "error"))
+          let message = object.get(errorPayload, "message", "upstream stream returned error")
+          emitAnthropicError(message)
+          return {
+            status: status,
+            streamed: true,
+            error: message,
+            response: state.completedResponse
+          }
+        }
+      }
+    } finally {
+      stream.close()
+    }
+
+    return finishMessage(state.completedResponse)
+  }
+
+  fn translateAnthropicToChatImpl(res, options) {
+    let requestOptions = buildRequestOptionsImpl(options)
+    let stream = sseClient.connect(requestOptions)
+    let status = stream.status
+    let state = {
+      responseId: "chatcmpl-proxy-stream",
+      responseModel: object.get(options, "model", ""),
+      sentAssistantRole: false,
+      streamStopped: false,
+      sawToolUse: false,
+      finishReason: "stop",
+      inputTokens: 0,
+      outputTokens: 0,
+      toolStates: {},
+      blocks: {},
+      nextToolIndex: 0,
+      completedResponse: null
+    }
+
+    fn ensureAssistantRole() {
+      if state.sentAssistantRole == true {
+        return null
+      }
+      state.sentAssistantRole = true
+      return emitChatChunkImpl(res, state.responseId, state.responseModel, {
+        role: "assistant"
+      }, null)
+    }
+
+    fn anthropicStopToChatFinish(stopReason) {
+      if stopReason == "max_tokens" {
+        return "length"
+      }
+      if stopReason == "tool_use" {
+        return "tool_calls"
+      }
+      return "stop"
+    }
+
+    fn ensureBlock(index) {
+      let key = json.encode(index)
+      let block = object.get(state.blocks, key)
+      if block != null {
+        return block
+      }
+      block = {
+        index: index,
+        type: null,
+        toolState: null,
+        textSent: false,
+        inputSent: false,
+        pendingInput: ""
+      }
+      state.blocks[key] = block
+      return block
+    }
+
+    fn ensureToolState(block, contentBlock) {
+      if object.get(block, "toolState") != null {
+        let existing = block.toolState
+        if object.get(existing, "callId", "") == "" {
+          existing.callId = object.get(contentBlock, "id", existing.key)
+        }
+        if object.get(existing, "name", "") == "" {
+          existing.name = object.get(contentBlock, "name", "")
+        }
+        return existing
+      }
+
+      let key = "anthropic:" + json.encode(block.index)
+      let toolState = {
+        index: state.nextToolIndex,
+        key: key,
+        callId: object.get(contentBlock, "id", key),
+        name: object.get(contentBlock, "name", ""),
+        arguments: ""
+      }
+      state.nextToolIndex = state.nextToolIndex + 1
+      block.type = "tool_use"
+      block.toolState = toolState
+      state.toolStates[key] = toolState
+      return toolState
+    }
+
+    fn emitToolArguments(toolState, delta) {
+      toolState.arguments = toolState.arguments + delta
+      state.sawToolUse = true
+      return emitChatChunkImpl(res, state.responseId, state.responseModel, {
+        tool_calls: [
+          {
+            index: toolState.index,
+            function: {
+              arguments: delta
+            }
+          }
+        ]
+      }, null)
+    }
+
+    fn finishStream() {
+      if state.streamStopped == true {
+        return {
+          status: status,
+          streamed: true,
+          error: null,
+          response: state.completedResponse
+        }
+      }
+
+      ensureAssistantRole()
+      let finishReason = anthropicStopToChatFinish(state.finishReason)
+      if state.sawToolUse == true {
+        finishReason = "tool_calls"
+      }
+      emitChatChunkImpl(res, state.responseId, state.responseModel, {}, finishReason)
+      res.sse("[DONE]")
+      state.streamStopped = true
+      return {
+        status: status,
+        streamed: true,
+        error: null,
+        response: state.completedResponse
+      }
+    }
+
+    res.status(status)
+    res.setHeader("Content-Type", "text/event-stream")
+    res.setHeader("Cache-Control", "no-cache")
+
+    try {
+      for true {
+        let event = stream.read()
+        if event == null {
+          break
+        }
+
+        let data = object.get(event, "data", "")
+        if data == "" {
+          continue
+        }
+        if data == "[DONE]" {
+          return finishStream()
+        }
+
+        let payload = json.decode(data)
+        let eventType = object.get(event, "event", object.get(payload, "type", "message"))
+
+        if eventType == "message_start" {
+          let message = object.get(payload, "message")
+          state.responseId = object.get(message, "id", state.responseId)
+          state.responseModel = object.get(message, "model", state.responseModel)
+          let usage = object.get(message, "usage")
+          if typeOf(usage) == "object" {
+            state.inputTokens = object.get(usage, "input_tokens", state.inputTokens)
+            state.outputTokens = object.get(usage, "output_tokens", state.outputTokens)
+          }
+          continue
+        }
+
+        if eventType == "content_block_start" {
+          ensureAssistantRole()
+          let index = object.get(payload, "index", 0)
+          let contentBlock = object.get(payload, "content_block")
+          let block = ensureBlock(index)
+          block.type = object.get(contentBlock, "type", object.get(block, "type", "text"))
+
+          if block.type == "tool_use" {
+            let toolState = ensureToolState(block, contentBlock)
+            state.sawToolUse = true
+            emitChatChunkImpl(res, state.responseId, state.responseModel, {
+              tool_calls: [
+                {
+                  index: toolState.index,
+                  id: toolState.callId,
+                  type: "function",
+                  function: {
+                    name: toolState.name,
+                    arguments: ""
+                  }
+                }
+              ]
+            }, null)
+
+            let rawInput = object.get(contentBlock, "input")
+            if rawInput != null {
+              let encoded = json.encode(rawInput)
+              if encoded != "{}" && encoded != "[]" {
+                block.pendingInput = encoded
+              }
+            }
+            continue
+          }
+
+          let text = object.get(contentBlock, "text", "")
+          if text != "" {
+            block.textSent = true
+            emitChatChunkImpl(res, state.responseId, state.responseModel, {
+              content: text
+            }, null)
+          }
+          continue
+        }
+
+        if eventType == "content_block_delta" {
+          ensureAssistantRole()
+          let index = object.get(payload, "index", 0)
+          let block = ensureBlock(index)
+          let delta = object.get(payload, "delta")
+          let deltaType = object.get(delta, "type", "")
+
+          if deltaType == "text_delta" {
+            let text = object.get(delta, "text", "")
+            if text != "" {
+              block.type = "text"
+              block.textSent = true
+              emitChatChunkImpl(res, state.responseId, state.responseModel, {
+                content: text
+              }, null)
+            }
+            continue
+          }
+
+          if deltaType == "input_json_delta" {
+            let toolState = ensureToolState(block, {})
+            let partial = object.get(delta, "partial_json", "")
+            if partial != "" {
+              block.inputSent = true
+              emitToolArguments(toolState, partial)
+            }
+            continue
+          }
+
+          continue
+        }
+
+        if eventType == "content_block_stop" {
+          let index = object.get(payload, "index", 0)
+          let block = ensureBlock(index)
+          if object.get(block, "type") == "tool_use" && object.get(block, "toolState") != null {
+            if object.get(block, "inputSent", false) != true && object.get(block, "pendingInput", "") != "" {
+              block.inputSent = true
+              emitToolArguments(block.toolState, block.pendingInput)
+            }
+          }
+          continue
+        }
+
+        if eventType == "message_delta" {
+          let delta = object.get(payload, "delta")
+          let stopReason = object.get(delta, "stop_reason", "")
+          if stopReason != "" {
+            state.finishReason = stopReason
+          }
+          let usage = object.get(payload, "usage")
+          if typeOf(usage) == "object" {
+            state.inputTokens = object.get(usage, "input_tokens", state.inputTokens)
+            state.outputTokens = object.get(usage, "output_tokens", state.outputTokens)
+          }
+          continue
+        }
+
+        if eventType == "message_stop" {
+          state.completedResponse = {
+            id: state.responseId,
+            object: "chat.completion",
+            model: state.responseModel,
+            usage: {
+              prompt_tokens: state.inputTokens,
+              completion_tokens: state.outputTokens,
+              total_tokens: state.inputTokens + state.outputTokens
+            }
+          }
+          return finishStream()
+        }
+
+        if eventType == "error" {
+          let errorPayload = object.get(payload, "error")
+          let message = object.get(errorPayload, "message", "upstream stream returned error")
+          emitChatErrorImpl(res, message)
+          state.streamStopped = true
+          return {
+            status: status,
+            streamed: true,
+            error: message,
+            response: state.completedResponse
+          }
+        }
+      }
+    } finally {
+      stream.close()
+    }
+
+    state.completedResponse = {
+      id: state.responseId,
+      object: "chat.completion",
+      model: state.responseModel,
+      usage: {
+        prompt_tokens: state.inputTokens,
+        completion_tokens: state.outputTokens,
+        total_tokens: state.inputTokens + state.outputTokens
+      }
+    }
+    return finishStream()
+  }
+
   return {
     aggregateResponsesJSON: aggregateResponsesJSONImpl,
-    translateResponsesToChat: translateResponsesToChatImpl
+    translateResponsesToChat: translateResponsesToChatImpl,
+    translateResponsesToAnthropic: translateResponsesToAnthropicImpl,
+    translateAnthropicToChat: translateAnthropicToChatImpl
   }
 }()
 
 export const aggregateResponsesJSON = streamApi.aggregateResponsesJSON
 export const translateResponsesToChat = streamApi.translateResponsesToChat
+export const translateResponsesToAnthropic = streamApi.translateResponsesToAnthropic
+export const translateAnthropicToChat = streamApi.translateAnthropicToChat

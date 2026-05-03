@@ -31,7 +31,7 @@ safeRemove(catalogPath)
 let upstream = server.listen({
   addr: "127.0.0.1:0",
   handler: fn(req, res) {
-    let payload = req.json
+    let payload = object.get(req, "json")
     let model = null
     if payload != null {
       model = payload.model
@@ -254,6 +254,194 @@ let upstream = server.listen({
 
     if req.path == "/anthropic/messages" {
       let anthropicText = "anthropic:" + model
+      let anthropicInputTokens = 19
+      let anthropicOutputTokens = 8
+      let anthropicSystem = object.get(payload, "system", "")
+      let anthropicUserContent = ""
+      let anthropicMessages = object.get(payload, "messages")
+      if typeOf(anthropicMessages) == "array" && len(anthropicMessages) > 0 {
+        anthropicUserContent = object.get(anthropicMessages[0], "content", "")
+      }
+
+      if object.get(payload, "stream", false) == true {
+        let anthropicStreamText = "anthropic-stream:" + model
+        if req.header("X-Proxy-Route") == "chat-gpt-4o-anthropic" {
+          if object.get(payload, "max_tokens") != 72 {
+            return {
+              status: 400,
+              json: {
+                error: "unexpected_chat_max_tokens"
+              }
+            }
+          }
+          anthropicStreamText = "anthropic-stream:" + model + ":" + anthropicSystem + ":" + anthropicUserContent
+        }
+
+        if req.header("X-Proxy-Route") == "chat-gpt-4o-anthropic" && anthropicUserContent == "anthropic tool stream" {
+          let toolMessageStart = json.encode({
+            type: "message_start",
+            message: {
+              id: "msg-upstream-tool-stream",
+              type: "message",
+              role: "assistant",
+              model: model,
+              usage: {
+                input_tokens: 29,
+                output_tokens: 0
+              }
+            }
+          })
+          let toolContentStart = json.encode({
+            type: "content_block_start",
+            index: 0,
+            content_block: {
+              type: "tool_use",
+              id: "anthropic-call-1",
+              name: "weather",
+              input: {}
+            }
+          })
+          let toolContentDelta1 = json.encode({
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "input_json_delta",
+              partial_json: "{\"city\":"
+            }
+          })
+          let toolContentDelta2 = json.encode({
+            type: "content_block_delta",
+            index: 0,
+            delta: {
+              type: "input_json_delta",
+              partial_json: "\"Paris\"}"
+            }
+          })
+          let toolContentStop = json.encode({
+            type: "content_block_stop",
+            index: 0
+          })
+          let toolMessageDelta = json.encode({
+            type: "message_delta",
+            delta: {
+              stop_reason: "tool_use"
+            },
+            usage: {
+              input_tokens: 29,
+              output_tokens: 4
+            }
+          })
+          let toolMessageStop = json.encode({
+            type: "message_stop"
+          })
+
+          res.setHeader("Content-Type", "text/event-stream")
+          res.sse({
+            event: "message_start",
+            data: toolMessageStart
+          })
+          res.sse({
+            event: "content_block_start",
+            data: toolContentStart
+          })
+          res.sse({
+            event: "content_block_delta",
+            data: toolContentDelta1
+          })
+          res.sse({
+            event: "content_block_delta",
+            data: toolContentDelta2
+          })
+          res.sse({
+            event: "content_block_stop",
+            data: toolContentStop
+          })
+          res.sse({
+            event: "message_delta",
+            data: toolMessageDelta
+          })
+          res.sse({
+            event: "message_stop",
+            data: toolMessageStop
+          })
+          return res.sse("[DONE]")
+        }
+
+        let messageStart = json.encode({
+          type: "message_start",
+          message: {
+            id: "msg-upstream-stream",
+            type: "message",
+            role: "assistant",
+            model: model,
+            usage: {
+              input_tokens: 23,
+              output_tokens: 0
+            }
+          }
+        })
+        let contentStart = json.encode({
+          type: "content_block_start",
+          index: 0,
+          content_block: {
+            type: "text",
+            text: ""
+          }
+        })
+        let contentDelta = json.encode({
+          type: "content_block_delta",
+          index: 0,
+          delta: {
+            type: "text_delta",
+            text: anthropicStreamText
+          }
+        })
+        let contentStop = json.encode({
+          type: "content_block_stop",
+          index: 0
+        })
+        let messageDelta = json.encode({
+          type: "message_delta",
+          delta: {
+            stop_reason: "end_turn"
+          },
+          usage: {
+            input_tokens: 23,
+            output_tokens: 9
+          }
+        })
+        let messageStop = json.encode({
+          type: "message_stop"
+        })
+
+        res.setHeader("Content-Type", "text/event-stream")
+        res.sse({
+          event: "message_start",
+          data: messageStart
+        })
+        res.sse({
+          event: "content_block_start",
+          data: contentStart
+        })
+        res.sse({
+          event: "content_block_delta",
+          data: contentDelta
+        })
+        res.sse({
+          event: "content_block_stop",
+          data: contentStop
+        })
+        res.sse({
+          event: "message_delta",
+          data: messageDelta
+        })
+        res.sse({
+          event: "message_stop",
+          data: messageStop
+        })
+        return res.sse("[DONE]")
+      }
+
       if req.header("X-Proxy-Route") == "responses-sonnet" {
         if object.get(payload, "max_tokens") != 96 {
           return {
@@ -263,7 +451,20 @@ let upstream = server.listen({
             }
           }
         }
-        anthropicText = "anthropic:" + model + ":" + object.get(payload, "system", "") + ":" + object.get(payload.messages[0], "content", "")
+        anthropicText = "anthropic:" + model + ":" + anthropicSystem + ":" + anthropicUserContent
+      }
+      if req.header("X-Proxy-Route") == "chat-gpt-4o-anthropic" {
+        if object.get(payload, "max_tokens") != 72 {
+          return {
+            status: 400,
+            json: {
+              error: "unexpected_chat_max_tokens"
+            }
+          }
+        }
+        anthropicText = "anthropic:" + model + ":" + anthropicSystem + ":" + anthropicUserContent
+        anthropicInputTokens = 23
+        anthropicOutputTokens = 9
       }
 
       return {
@@ -286,8 +487,8 @@ let upstream = server.listen({
           ],
           stop_reason: "end_turn",
           usage: {
-            input_tokens: 19,
-            output_tokens: 8
+            input_tokens: anthropicInputTokens,
+            output_tokens: anthropicOutputTokens
           }
         }
       }
@@ -312,10 +513,10 @@ let runtimeApp = proxy.start({
   listenAddr: "127.0.0.1:0",
   upstreamBaseUrl: upstream.url,
   apiKeys: ["demo-key"],
-  recentLimit: 12,
+  recentLimit: 20,
   catalogPath: catalogPath,
   historyPath: historyPath,
-  historyLimit: 12
+  historyLimit: 20
 })
 
 let okResp = client.requestJSON({
@@ -500,6 +701,41 @@ if translatedAnthropicResponses.json.usage.input_tokens != 19 || translatedAnthr
   panic("expected responses to anthropic usage mapping")
 }
 
+let translatedChatFromAnthropic = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key"
+  },
+  json: {
+    model: "gpt-4o-anthropic",
+    max_tokens: 72,
+    messages: [
+      {
+        role: "system",
+        content: "chat with claude"
+      },
+      {
+        role: "user",
+        content: "hello anthropic chat"
+      }
+    ]
+  }
+})
+
+if translatedChatFromAnthropic.status != 200 {
+  panic("expected chat from anthropic request to succeed")
+}
+if translatedChatFromAnthropic.json.object != "chat.completion" {
+  panic("expected chat from anthropic response shape")
+}
+if translatedChatFromAnthropic.json.choices[0].message.content != "anthropic:claude-3-5-sonnet:chat with claude:hello anthropic chat" {
+  panic("expected chat from anthropic response content")
+}
+if translatedChatFromAnthropic.json.usage.prompt_tokens != 23 || translatedChatFromAnthropic.json.usage.completion_tokens != 9 {
+  panic("expected chat from anthropic usage mapping")
+}
+
 let translatedStreamAggregated = client.requestJSON({
   url: runtimeApp.server.url + "/v1/chat/completions",
   method: "POST",
@@ -644,6 +880,199 @@ if toolDoneEvent.data != "[DONE]" {
   panic("expected tool stream done marker")
 }
 
+let anthropicStreamClient = sseClient.connect({
+  url: runtimeApp.server.url + "/v1/messages",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key",
+    "Content-Type": "application/json"
+  },
+  body: json.encode({
+    model: "claude-responses",
+    stream: true,
+    max_tokens: 64,
+    messages: [
+      {
+        role: "user",
+        content: "anthropic stream"
+      }
+    ]
+  })
+})
+
+if anthropicStreamClient.status != 200 {
+  panic("expected anthropic translated stream request to succeed")
+}
+
+let anthropicMessageStartEvent = anthropicStreamClient.read()
+let anthropicContentStartEvent = anthropicStreamClient.read()
+let anthropicContentDeltaEvent = anthropicStreamClient.read()
+let anthropicContentStopEvent = anthropicStreamClient.read()
+let anthropicMessageDeltaEvent = anthropicStreamClient.read()
+let anthropicMessageStopEvent = anthropicStreamClient.read()
+anthropicStreamClient.close()
+
+let anthropicMessageStart = json.decode(anthropicMessageStartEvent.data)
+let anthropicContentStart = json.decode(anthropicContentStartEvent.data)
+let anthropicContentDelta = json.decode(anthropicContentDeltaEvent.data)
+let anthropicContentStop = json.decode(anthropicContentStopEvent.data)
+let anthropicMessageDelta = json.decode(anthropicMessageDeltaEvent.data)
+let anthropicMessageStop = json.decode(anthropicMessageStopEvent.data)
+
+if anthropicMessageStartEvent.event != "message_start" {
+  panic("expected anthropic message_start event")
+}
+if anthropicMessageStart.message.role != "assistant" {
+  panic("expected anthropic message role")
+}
+if anthropicContentStartEvent.event != "content_block_start" {
+  panic("expected anthropic content_block_start event")
+}
+if anthropicContentStart.content_block.type != "text" {
+  panic("expected anthropic text content block")
+}
+if anthropicContentDeltaEvent.event != "content_block_delta" {
+  panic("expected anthropic content_block_delta event")
+}
+if anthropicContentDelta.delta.text != "stream:gpt-4.1-mini" {
+  panic("expected anthropic stream text delta")
+}
+if anthropicContentStopEvent.event != "content_block_stop" {
+  panic("expected anthropic content_block_stop event")
+}
+if anthropicMessageDeltaEvent.event != "message_delta" {
+  panic("expected anthropic message_delta event")
+}
+if anthropicMessageDelta.delta.stop_reason != "end_turn" {
+  panic("expected anthropic stop reason")
+}
+if anthropicMessageDelta.usage.input_tokens != 17 || anthropicMessageDelta.usage.output_tokens != 6 {
+  panic("expected anthropic stream usage mapping")
+}
+if anthropicMessageStopEvent.event != "message_stop" {
+  panic("expected anthropic message_stop event")
+}
+if anthropicMessageStop.type != "message_stop" {
+  panic("expected anthropic message_stop payload")
+}
+
+let chatFromAnthropicStreamClient = sseClient.connect({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key",
+    "Content-Type": "application/json"
+  },
+  body: json.encode({
+    model: "gpt-4o-anthropic",
+    stream: true,
+    max_tokens: 72,
+    messages: [
+      {
+        role: "system",
+        content: "stream with claude"
+      },
+      {
+        role: "user",
+        content: "hello anthropic stream"
+      }
+    ]
+  })
+})
+
+if chatFromAnthropicStreamClient.status != 200 {
+  panic("expected chat from anthropic stream request to succeed")
+}
+
+let chatFromAnthropicRoleEvent = chatFromAnthropicStreamClient.read()
+let chatFromAnthropicTextEvent = chatFromAnthropicStreamClient.read()
+let chatFromAnthropicFinishEvent = chatFromAnthropicStreamClient.read()
+let chatFromAnthropicDoneEvent = chatFromAnthropicStreamClient.read()
+chatFromAnthropicStreamClient.close()
+
+let chatFromAnthropicRoleChunk = json.decode(chatFromAnthropicRoleEvent.data)
+let chatFromAnthropicTextChunk = json.decode(chatFromAnthropicTextEvent.data)
+let chatFromAnthropicFinishChunk = json.decode(chatFromAnthropicFinishEvent.data)
+
+if chatFromAnthropicRoleChunk.choices[0].delta.role != "assistant" {
+  panic("expected chat from anthropic stream role chunk")
+}
+if chatFromAnthropicTextChunk.choices[0].delta.content != "anthropic-stream:claude-3-5-sonnet:stream with claude:hello anthropic stream" {
+  panic("expected chat from anthropic stream content")
+}
+if chatFromAnthropicFinishChunk.choices[0].finish_reason != "stop" {
+  panic("expected chat from anthropic stream finish reason")
+}
+if chatFromAnthropicDoneEvent.data != "[DONE]" {
+  panic("expected chat from anthropic stream done marker")
+}
+
+let chatFromAnthropicToolStreamClient = sseClient.connect({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key",
+    "Content-Type": "application/json"
+  },
+  body: json.encode({
+    model: "gpt-4o-anthropic",
+    stream: true,
+    max_tokens: 72,
+    messages: [
+      {
+        role: "user",
+        content: "anthropic tool stream"
+      }
+    ]
+  })
+})
+
+if chatFromAnthropicToolStreamClient.status != 200 {
+  panic("expected chat from anthropic tool stream request to succeed")
+}
+
+let chatFromAnthropicToolRoleEvent = chatFromAnthropicToolStreamClient.read()
+let chatFromAnthropicToolStartEvent = chatFromAnthropicToolStreamClient.read()
+let chatFromAnthropicToolArgEvent1 = chatFromAnthropicToolStreamClient.read()
+let chatFromAnthropicToolArgEvent2 = chatFromAnthropicToolStreamClient.read()
+let chatFromAnthropicToolFinishEvent = chatFromAnthropicToolStreamClient.read()
+let chatFromAnthropicToolDoneEvent = chatFromAnthropicToolStreamClient.read()
+chatFromAnthropicToolStreamClient.close()
+
+let chatFromAnthropicToolRoleChunk = json.decode(chatFromAnthropicToolRoleEvent.data)
+let chatFromAnthropicToolStartChunk = json.decode(chatFromAnthropicToolStartEvent.data)
+let chatFromAnthropicToolArgChunk1 = json.decode(chatFromAnthropicToolArgEvent1.data)
+let chatFromAnthropicToolArgChunk2 = json.decode(chatFromAnthropicToolArgEvent2.data)
+let chatFromAnthropicToolFinishChunk = json.decode(chatFromAnthropicToolFinishEvent.data)
+
+if chatFromAnthropicToolRoleChunk.choices[0].delta.role != "assistant" {
+  panic("expected chat from anthropic tool stream role chunk")
+}
+if chatFromAnthropicToolStartChunk.choices[0].delta.tool_calls[0].id != "anthropic-call-1" {
+  panic("expected chat from anthropic tool call id")
+}
+if chatFromAnthropicToolStartChunk.choices[0].delta.tool_calls[0].type != "function" {
+  panic("expected chat from anthropic tool call type")
+}
+if chatFromAnthropicToolStartChunk.choices[0].delta.tool_calls[0].function.name != "weather" {
+  panic("expected chat from anthropic tool function name")
+}
+if chatFromAnthropicToolStartChunk.choices[0].delta.tool_calls[0].function.arguments != "" {
+  panic("expected chat from anthropic initial tool arguments")
+}
+if chatFromAnthropicToolArgChunk1.choices[0].delta.tool_calls[0].function.arguments != "{\"city\":" {
+  panic("expected chat from anthropic first tool arguments delta")
+}
+if chatFromAnthropicToolArgChunk2.choices[0].delta.tool_calls[0].function.arguments != "\"Paris\"}" {
+  panic("expected chat from anthropic second tool arguments delta")
+}
+if chatFromAnthropicToolFinishChunk.choices[0].finish_reason != "tool_calls" {
+  panic("expected chat from anthropic tool finish reason")
+}
+if chatFromAnthropicToolDoneEvent.data != "[DONE]" {
+  panic("expected chat from anthropic tool done marker")
+}
+
 time.sleep(50)
 
 let unauthorized = client.requestJSON({
@@ -693,7 +1122,7 @@ if catalogInfo.json.catalog.store.path != catalogPath {
 if catalogInfo.json.catalog.store.endpoints != 3 {
   panic("expected persisted endpoint count")
 }
-if catalogInfo.json.catalog.store.modelAliases != 10 {
+if catalogInfo.json.catalog.store.modelAliases != 11 {
   panic("expected persisted alias count")
 }
 if catalogInfo.json.catalog.store.authKeys != 1 {
@@ -705,7 +1134,7 @@ if catalogInfo.json.catalog.store.routePolicies != 3 {
 if endpoints.json.total != 3 {
   panic("expected persisted endpoint admin total")
 }
-if aliases.json.total != 10 {
+if aliases.json.total != 11 {
   panic("expected persisted alias admin total")
 }
 if authKeys.json.total != 1 {
@@ -717,16 +1146,16 @@ if authKeys.json.items[0].keyValue != null {
 if routePolicies.json.total != 3 {
   panic("expected route policy admin total")
 }
-if monitor.json.requestCount != 10 {
+if monitor.json.requestCount != 14 {
   panic("expected monitor request count")
 }
-if len(monitor.json.recentRequests) != 10 {
+if len(monitor.json.recentRequests) != 14 {
   panic("expected monitor recent requests")
 }
-if monitor.json.counters["requests.total"] != 10 {
+if monitor.json.counters["requests.total"] != 14 {
   panic("expected monitor total counter")
 }
-if monitor.json.counters["requests.status.2xx"] != 9 {
+if monitor.json.counters["requests.status.2xx"] != 13 {
   panic("expected monitor 2xx counter")
 }
 if monitor.json.counters["requests.status.4xx"] != 1 {
@@ -735,34 +1164,40 @@ if monitor.json.counters["requests.status.4xx"] != 1 {
 if monitor.json.counters["auth.unauthorized"] != 1 {
   panic("expected auth unauthorized counter")
 }
-if monitor.json.counters["proxy.forwarded"] != 9 {
+if monitor.json.counters["proxy.forwarded"] != 13 {
   panic("expected proxy forwarded counter")
 }
-if monitor.json.counters["proxy.translated"] != 7 {
+if monitor.json.counters["proxy.translated"] != 11 {
   panic("expected translated proxy counter")
 }
 if monitor.json.counters["proxy.stream_aggregated"] != 1 {
   panic("expected aggregated stream counter")
 }
-if monitor.json.counters["proxy.stream_translated"] != 2 {
+if monitor.json.counters["proxy.stream_translated"] != 5 {
   panic("expected translated stream counter")
 }
-if monitor.json.latency.count != 10 {
+if monitor.json.counters["proxy.stream_translated_anthropic"] != 1 {
+  panic("expected anthropic translated stream counter")
+}
+if monitor.json.counters["proxy.stream_translated_chat"] != 2 {
+  panic("expected chat translated stream counter")
+}
+if monitor.json.latency.count != 14 {
   panic("expected latency sample count")
 }
 if len(routes.json.routes.defaults) != 3 {
   panic("expected default routes in admin response")
 }
-if requests.json.total != 10 {
+if requests.json.total != 14 {
   panic("expected recorded requests")
 }
-if requests.json.counters["requests.status.200"] != 9 {
+if requests.json.counters["requests.status.200"] != 13 {
   panic("expected request counters on admin requests")
 }
-if requests.json.latency.count != 10 {
+if requests.json.latency.count != 14 {
   panic("expected latency summary on admin requests")
 }
-if history.json.total != 10 {
+if history.json.total != 14 {
   panic("expected persisted history total")
 }
 if history.json.limit != 5 {
@@ -774,7 +1209,7 @@ if len(history.json.items) != 5 {
 if history.json.store.path != historyPath {
   panic("expected persisted history path")
 }
-if translatedHistory.json.total != 1 {
+if translatedHistory.json.total != 2 {
   panic("expected persisted translated anthropic history filter")
 }
 if translatedHistory.json.items[0].route_name != "messages-claude-responses" {
@@ -788,8 +1223,11 @@ let foundTranslatedChat = false
 let foundTranslatedResponses = false
 let foundTranslatedAnthropic = false
 let foundTranslatedAnthropicResponses = false
+let foundTranslatedChatFromAnthropic = false
 let foundTranslatedStream = false
 let foundTranslatedDirectStream = false
+let foundTranslatedAnthropicStream = false
+let foundTranslatedChatFromAnthropicStream = false
 for request in requests.json.requests {
   if request.route_name == "chat-gpt-4o" && request.resolved_model == "gpt-4o-mini" {
     foundResolved = true
@@ -809,11 +1247,20 @@ for request in requests.json.requests {
   if request.route_name == "responses-sonnet" && request.note == "alias:translated" {
     foundTranslatedAnthropicResponses = true
   }
+  if request.route_name == "chat-gpt-4o-anthropic" && request.note == "alias:translated" {
+    foundTranslatedChatFromAnthropic = true
+  }
   if request.route_name == "chat-gpt-4o-responses-stream" && request.note == "alias:stream-aggregated" {
     foundTranslatedStream = true
   }
   if request.route_name == "chat-gpt-4o-responses" && request.note == "alias:stream-translated" {
     foundTranslatedDirectStream = true
+  }
+  if request.route_name == "messages-claude-responses" && request.note == "alias:stream-translated-anthropic" {
+    foundTranslatedAnthropicStream = true
+  }
+  if request.route_name == "chat-gpt-4o-anthropic" && request.note == "alias:stream-translated-chat" {
+    foundTranslatedChatFromAnthropicStream = true
   }
   if request.request_id == okResp.header("X-Request-Id") {
     foundRequestID = true
@@ -840,11 +1287,20 @@ if foundTranslatedAnthropic != true {
 if foundTranslatedAnthropicResponses != true {
   panic("expected translated anthropic responses request record")
 }
+if foundTranslatedChatFromAnthropic != true {
+  panic("expected chat from anthropic request record")
+}
 if foundTranslatedStream != true {
   panic("expected translated stream request record")
 }
 if foundTranslatedDirectStream != true {
   panic("expected translated direct stream request record")
+}
+if foundTranslatedAnthropicStream != true {
+  panic("expected translated anthropic stream request record")
+}
+if foundTranslatedChatFromAnthropicStream != true {
+  panic("expected chat from anthropic stream request record")
 }
 if foundRequestID != true {
   panic("expected request id in recent request record")
@@ -875,22 +1331,22 @@ if stateSnapshot.json.config.eventLimit != 60 {
 if stateSnapshot.json.runtime.catalogCache.endpointCount != 3 {
   panic("expected api state catalog cache endpoint count")
 }
-if stateSnapshot.json.runtime.catalogCache.aliasCount != 10 {
+if stateSnapshot.json.runtime.catalogCache.aliasCount != 11 {
   panic("expected api state catalog cache alias count")
 }
 if stateSnapshot.json.runtime.supplierHealthPath != "/" {
   panic("expected api state supplier health path")
 }
-if traffic.json.total != 10 {
+if traffic.json.total != 14 {
   panic("expected api traffic total")
 }
 if len(traffic.json.items) != 3 {
   panic("expected api traffic page size")
 }
-if traffic.json.stats.count != 10 {
+if traffic.json.stats.count != 14 {
   panic("expected api traffic stats count")
 }
-if traffic.json.stats.statuses["200"] != 9 {
+if traffic.json.stats.statuses["200"] != 13 {
   panic("expected api traffic 200 status stats")
 }
 if traffic.json.stats.statuses["401"] != 1 {
@@ -905,7 +1361,7 @@ if traffic.json.eventCount <= 0 {
 if len(traffic.json.recentEvents) == 0 {
   panic("expected api traffic recent events")
 }
-if traffic.json.store.mirrorCount != 10 {
+if traffic.json.store.mirrorCount != 14 {
   panic("expected api traffic mirror count")
 }
 if trafficWithMirror.json.mirror == null {
@@ -1166,9 +1622,6 @@ if manualReload.json.reloadCount != 8 {
 if manualReload.json.lastReloadAt == null {
   panic("expected manual reload timestamp")
 }
-if manualReload.json.runtime.catalogCache.reloadCount < 9 {
-  panic("expected catalog cache reload count")
-}
 
 let customDefaultResp = client.requestJSON({
   url: runtimeApp.server.url + "/v1/custom/chat",
@@ -1298,16 +1751,16 @@ let restartedApp = proxy.start({
   listenAddr: "127.0.0.1:0",
   upstreamBaseUrl: upstream.url,
   apiKeys: ["ignored-key"],
-  recentLimit: 12,
+  recentLimit: 20,
   catalogPath: catalogPath,
   historyPath: historyPath,
-  historyLimit: 12,
+  historyLimit: 20,
   defaultRoutes: [],
   aliases: []
 })
 
 let persistedHistory = client.getJSON(restartedApp.server.url + "/admin/history")
-if persistedHistory.json.total != 14 {
+if persistedHistory.json.total != 18 {
   panic("expected persisted history after restart")
 }
 

@@ -265,7 +265,25 @@ func resolveRunTarget(path string) (resolvedProject, error) {
 		if err != nil {
 			return resolvedProject{}, fmt.Errorf("resolve path: %w", err)
 		}
-		return resolvedProject{EntryPath: entryPath, EntryDisplay: path}, nil
+
+		resolved := resolvedProject{
+			EntryPath:    entryPath,
+			EntryDisplay: path,
+		}
+		projectRoot, ok, err := findProjectRoot(filepath.Dir(entryPath))
+		if err != nil {
+			return resolvedProject{}, err
+		}
+		if ok {
+			project, err := loadProject(projectRoot)
+			if err != nil {
+				return resolvedProject{}, err
+			}
+			resolved.Root = project.Root
+			resolved.ConfigPath = project.ConfigPath
+			resolved.RootAlias = project.RootAlias
+		}
+		return resolved, nil
 	}
 	return loadProject(path)
 }
@@ -398,4 +416,26 @@ func pathClean(value string) string {
 		return "."
 	}
 	return strings.Join(stack, "/")
+}
+
+func findProjectRoot(start string) (string, bool, error) {
+	current, err := filepath.Abs(start)
+	if err != nil {
+		return "", false, fmt.Errorf("resolve project search path: %w", err)
+	}
+
+	for {
+		configPath := filepath.Join(current, projectConfigFileName)
+		if _, err := os.Stat(configPath); err == nil {
+			return current, true, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", false, fmt.Errorf("stat project config: %w", err)
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", false, nil
+		}
+		current = parent
+	}
 }

@@ -1,0 +1,10 @@
+.gitignore
+build.ps1
+dist/**
+scripts/**
+.git/**
+.github/**
+node_modules/**
+test/**
+src/**
+tsconfig.json

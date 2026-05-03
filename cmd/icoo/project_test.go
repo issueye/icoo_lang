@@ -205,3 +205,73 @@ func TestResolveRunTargetLoadsProjectDirectory(t *testing.T) {
 		t.Fatalf("expected entry path to end with src/main.ic, got %q", resolved.EntryPath)
 	}
 }
+
+func TestResolveRunTargetLoadsProjectContextForFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "demo")
+	if err := runInit([]string{root, "--root-alias", "app"}); err != nil {
+		t.Fatalf("expected init to succeed, got: %v", err)
+	}
+
+	libPath := filepath.Join(root, "lib", "helper.ic")
+	if err := os.MkdirAll(filepath.Dir(libPath), 0o755); err != nil {
+		t.Fatalf("mkdir lib dir: %v", err)
+	}
+	if err := os.WriteFile(libPath, []byte("export fn greet() { return \"hi\" }\n"), 0o644); err != nil {
+		t.Fatalf("write lib file: %v", err)
+	}
+
+	entryPath := filepath.Join(root, "src", "main.ic")
+	source := strings.Join([]string{
+		"import \"app/lib/helper.ic\" as helper",
+		"",
+		"helper.greet()",
+		"",
+	}, "\n")
+	if err := os.WriteFile(entryPath, []byte(source), 0o644); err != nil {
+		t.Fatalf("write entry file: %v", err)
+	}
+
+	resolved, err := resolveRunTarget(entryPath)
+	if err != nil {
+		t.Fatalf("expected resolveRunTarget for file to succeed, got: %v", err)
+	}
+	if filepath.Clean(resolved.Root) != filepath.Clean(root) {
+		t.Fatalf("expected root %q, got %q", root, resolved.Root)
+	}
+	if resolved.RootAlias != "app" {
+		t.Fatalf("expected root alias %q, got %q", "app", resolved.RootAlias)
+	}
+	if resolved.EntryFunction != "" {
+		t.Fatalf("expected direct file runs to skip project entry function, got %q", resolved.EntryFunction)
+	}
+}
+
+func TestRunProjectPathUsesProjectContextForFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "demo")
+	if err := runInit([]string{root, "--root-alias", "app"}); err != nil {
+		t.Fatalf("expected init to succeed, got: %v", err)
+	}
+
+	libPath := filepath.Join(root, "lib", "helper.ic")
+	if err := os.MkdirAll(filepath.Dir(libPath), 0o755); err != nil {
+		t.Fatalf("mkdir lib dir: %v", err)
+	}
+	if err := os.WriteFile(libPath, []byte("export fn greet() { return \"hi\" }\n"), 0o644); err != nil {
+		t.Fatalf("write lib file: %v", err)
+	}
+
+	entryPath := filepath.Join(root, "src", "main.ic")
+	source := strings.Join([]string{
+		"import \"app/lib/helper.ic\" as helper",
+		"",
+		"helper.greet()",
+		"",
+	}, "\n")
+	if err := os.WriteFile(entryPath, []byte(source), 0o644); err != nil {
+		t.Fatalf("write entry file: %v", err)
+	}
+
+	if err := runProjectPath(entryPath); err != nil {
+		t.Fatalf("expected runProjectPath to use project context for file, got: %v", err)
+	}
+}

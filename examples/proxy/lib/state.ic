@@ -6,6 +6,15 @@ import "./history.ic" as history
 import "./services/catalog_service.ic" as catalogService
 
 const stateApi = fn() {
+  fn recentEventByKind(state, kind) {
+    for i, event in state.monitor.recentEvents() {
+      if object.get(event, "kind") == kind {
+        return event
+      }
+    }
+    return null
+  }
+
   fn applyCatalogImpl(state) {
     state.config.apiKeys = catalogService.listAuthKeyValues(state.catalogService)
     state.config.defaultRoutes = catalogService.listEndpoints(state.catalogService)
@@ -55,10 +64,20 @@ const stateApi = fn() {
   }
 
   fn runtimeSnapshotImpl(state) {
+    let reloadEvent = recentEventByKind(state, "proxy.reload")
+    let supplierHealthEvent = recentEventByKind(state, "supplier.health.checked")
+    let lastReloadAt = null
+    let lastSupplierHealthCheckAt = null
+    if reloadEvent != null {
+      lastReloadAt = object.get(reloadEvent, "ts")
+    }
+    if supplierHealthEvent != null {
+      lastSupplierHealthCheckAt = object.get(supplierHealthEvent, "ts")
+    }
     return {
-      reloadCount: state.reloadCount,
-      lastReloadAt: state.lastReloadAt,
-      lastSupplierHealthCheckAt: state.lastSupplierHealthCheckAt,
+      reloadCount: state.monitor.counter("proxy.reload"),
+      lastReloadAt: lastReloadAt,
+      lastSupplierHealthCheckAt: lastSupplierHealthCheckAt,
       catalogCache: catalogService.cacheSnapshot(state.catalogService),
       supplierHealthPath: state.config.supplierHealthPath,
       supplierHealthTimeoutMs: state.config.supplierHealthTimeoutMs
@@ -157,13 +176,10 @@ const stateApi = fn() {
   }
 
   fn checkSuppliersImpl(state, supplierName) {
-    let suppliers = catalogService.listSuppliers(state.catalogService)
-    let selected = []
-    for i, supplier in suppliers {
-      if supplierName == null || supplierName == "" || supplier.name == supplierName {
-        selected = selected + [supplier]
-      }
-    }
+    let selected = catalogService.listSuppliers(state.catalogService)
+      .filter(fn(supplier) {
+        return supplierName == null || supplierName == "" || supplier.name == supplierName
+      })
 
     if len(selected) == 0 {
       return {
@@ -176,17 +192,16 @@ const stateApi = fn() {
     }
 
     let checkedAt = time.now()
-    let items = []
+    let items = selected.map(fn(supplier) {
+      return checkSingleSupplierImpl(state, supplier)
+    })
     let allOK = true
-    for i, supplier in selected {
-      let item = checkSingleSupplierImpl(state, supplier)
-      items = items + [item]
+    for i, item in items {
       if item.ok != true {
         allOK = false
       }
     }
 
-    state.lastSupplierHealthCheckAt = checkedAt
     return {
       ok: allOK,
       checkedAt: checkedAt,
@@ -203,9 +218,6 @@ const stateApi = fn() {
       catalogService: proxyCatalog,
       catalog: catalogService.currentCatalog(proxyCatalog),
       history: history.newHistory(config),
-      reloadCount: 0,
-      lastReloadAt: null,
-      lastSupplierHealthCheckAt: null,
       monitor: service.create({
         name: "icoo-proxy",
         recentLimit: config.recentLimit,
@@ -223,20 +235,19 @@ const stateApi = fn() {
     catalogService.reload(state.catalogService)
     applyCatalogImpl(state)
     syncSupplierHealthImpl(state)
-    state.reloadCount = state.reloadCount + 1
-    state.lastReloadAt = time.now()
+    let reloadedAt = time.now()
     state.monitor.recordEvent({
       kind: "proxy.reload",
-      reload_count: state.reloadCount,
+      reload_count: state.monitor.counter("proxy.reload") + 1,
       route_count: len(state.config.defaultRoutes),
       alias_count: len(state.config.aliases),
-      ts: state.lastReloadAt
+      ts: reloadedAt
     })
     state.monitor.increment("proxy.reload")
     return {
       ok: true,
-      reloadCount: state.reloadCount,
-      lastReloadAt: state.lastReloadAt,
+      reloadCount: state.monitor.counter("proxy.reload"),
+      lastReloadAt: reloadedAt,
       upstreamBaseUrl: state.config.upstreamBaseUrl,
       runtime: runtimeSnapshotImpl(state),
       routes: catalogService.snapshot(state.catalogService)

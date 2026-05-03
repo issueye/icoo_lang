@@ -1,6 +1,5 @@
-import "../catalog.ic" as catalog
 import std.object as object
-import std.time as time
+import "../catalog.ic" as catalog
 import "../store/catalog_store.ic" as catalogStore
 
 const catalogServiceApi = fn() {
@@ -38,59 +37,36 @@ const catalogServiceApi = fn() {
   }
 
   fn currentCatalogImpl(service) {
-    return service.catalog
+    let suppliers = catalogStore.listSuppliers(service.store)
+    let suppliersByName = suppliersByNameImpl(suppliers)
+
+    return catalog.buildCatalog({
+      defaultRoutes: enrichRoutes(catalogStore.listEndpoints(service.store), suppliersByName),
+      aliases: enrichRoutes(catalogStore.listModelAliases(service.store), suppliersByName)
+    })
   }
 
   fn defaultSupplierImpl(service) {
-    return service.defaultSupplier
+    return defaultSupplierFromList(catalogStore.listSuppliers(service.store))
   }
 
   fn cacheSnapshotImpl(service) {
     return {
-      loadedAt: service.cacheLoadedAt,
-      reloadCount: service.cacheReloadCount,
-      supplierCount: len(service.suppliers),
-      endpointCount: len(service.endpoints),
-      aliasCount: len(service.modelAliases),
-      routePolicyCount: len(service.routePolicies),
-      authKeyCount: len(service.authKeys)
+      supplierCount: len(catalogStore.listSuppliers(service.store)),
+      endpointCount: len(catalogStore.listEndpoints(service.store)),
+      aliasCount: len(catalogStore.listModelAliases(service.store)),
+      routePolicyCount: len(catalogStore.listRoutePolicies(service.store)),
+      authKeyCount: len(catalogStore.listAuthKeyValues(service.store))
     }
   }
 
   fn reloadImpl(service) {
-    service.authKeys = catalogStore.listAuthKeyValues(service.store)
-    service.suppliers = catalogStore.listSuppliers(service.store)
-    service.endpoints = catalogStore.listEndpoints(service.store)
-    service.modelAliases = catalogStore.listModelAliases(service.store)
-    service.routePolicies = catalogStore.listRoutePolicies(service.store)
-    service.settings = catalogStore.listSettings(service.store)
-    service.uiPrefs = catalogStore.listUIPrefs(service.store)
-    service.suppliersByName = suppliersByNameImpl(service.suppliers)
-    service.defaultSupplier = defaultSupplierFromList(service.suppliers)
-    service.catalog = catalog.buildCatalog({
-      defaultRoutes: enrichRoutes(service.endpoints, service.suppliersByName),
-      aliases: enrichRoutes(service.modelAliases, service.suppliersByName)
-    })
-    service.cacheLoadedAt = time.now()
-    service.cacheReloadCount = service.cacheReloadCount + 1
-    return service.catalog
+    return currentCatalogImpl(service)
   }
 
   fn newCatalogServiceImpl(config) {
     let service = {
-      store: catalogStore.newCatalogStore(config),
-      catalog: null,
-      suppliersByName: {},
-      authKeys: [],
-      suppliers: [],
-      endpoints: [],
-      modelAliases: [],
-      routePolicies: [],
-      settings: [],
-      uiPrefs: [],
-      defaultSupplier: null,
-      cacheLoadedAt: null,
-      cacheReloadCount: 0
+      store: catalogStore.newCatalogStore(config)
     }
 
     reloadImpl(service)
@@ -101,13 +77,13 @@ const catalogServiceApi = fn() {
     return {
       store: catalogStore.snapshot(service.store),
       cache: cacheSnapshotImpl(service),
-      suppliers: service.suppliers,
-      endpoints: service.endpoints,
+      suppliers: catalogStore.listSuppliers(service.store),
+      endpoints: catalogStore.listEndpoints(service.store),
       authKeys: catalogStore.listAuthKeys(service.store, false),
-      modelAliases: service.modelAliases,
-      routePolicies: service.routePolicies,
-      settings: service.settings,
-      uiPrefs: service.uiPrefs,
+      modelAliases: catalogStore.listModelAliases(service.store),
+      routePolicies: catalogStore.listRoutePolicies(service.store),
+      settings: catalogStore.listSettings(service.store),
+      uiPrefs: catalogStore.listUIPrefs(service.store),
       defaultSupplier: defaultSupplierImpl(service)
     }
   }
@@ -131,13 +107,13 @@ const catalogServiceApi = fn() {
     cacheSnapshot: cacheSnapshotImpl,
     revealAuthKeys: revealAuthKeysImpl,
     listSuppliers: fn(service) {
-      return service.suppliers
+      return catalogStore.listSuppliers(service.store)
     },
     listEndpoints: fn(service) {
-      return service.endpoints
+      return catalogStore.listEndpoints(service.store)
     },
     listModelAliases: fn(service) {
-      return service.modelAliases
+      return catalogStore.listModelAliases(service.store)
     },
     listAuthKeys: fn(service) {
       return catalogStore.listAuthKeys(service.store, false)
@@ -146,13 +122,13 @@ const catalogServiceApi = fn() {
       return catalogStore.listAuthKeyValues(service.store)
     },
     listRoutePolicies: fn(service) {
-      return service.routePolicies
+      return catalogStore.listRoutePolicies(service.store)
     },
     listSettings: fn(service) {
-      return service.settings
+      return catalogStore.listSettings(service.store)
     },
     listUIPrefs: fn(service) {
-      return service.uiPrefs
+      return catalogStore.listUIPrefs(service.store)
     },
     upsertSupplier: fn(service, input) {
       return catalogStore.upsertSupplier(service.store, input)
