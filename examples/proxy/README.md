@@ -79,11 +79,16 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 - `/admin/models`
 - `/admin/requests`
 - `/admin/monitor`
+- `/admin/suppliers/health`
+- `/admin/history`
+- `/admin/history/clear`
 
 其中：
 
 - `/admin/requests` 用于查看 recent requests、计数器和延迟摘要
 - `/admin/monitor` 用于查看完整服务监控快照
+- `/admin/suppliers/health` 用于查看当前 upstream 供应方健康状态
+- `/admin/history` 用于查看持久化请求历史
 
 ## v0.1 可用交付标准
 
@@ -95,6 +100,7 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 4. 请求 ID 能在下游响应和上游透传中保持一致
 5. 服务监控数据可通过管理接口读取
 6. 主路径不再依赖旧的 store 监控实现
+7. 请求 history 可通过持久化接口跨重启读取
 
 ## 当前边界
 
@@ -128,3 +134,41 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 - `Responses -> Anthropic` 的逐事件 SSE 翻译
 
 也就是说，当前已经有了“流式底座 + 聚合回退路径 + 最小直译路径”，但还没有进入完整的“流式协议桥”阶段。
+
+## 当前协议转换边界
+
+截至 `2026-05-03`，这个 proxy 在非流式 JSON 路径上已经具备最小三协议转换能力：
+
+- `OpenAI Chat <-> OpenAI Responses`
+- `Anthropic Messages -> OpenAI Responses`
+- `OpenAI Responses -> Anthropic Messages`
+
+当前这层能力刻意只覆盖主路径字段：
+
+- `system` / `instructions`
+- text message / content
+- `max_tokens` / `max_output_tokens`
+- usage 的最小映射
+
+仍然明确没有一次性补齐：
+
+- Anthropic tool use / tool result 的完整双向映射
+- reasoning / thinking block 的完整跨协议语义保持
+- Anthropic 逐事件 SSE 翻译
+
+这也是当前这轮反哺的重要设计结论：先把主路径 JSON 转换薄化进语言侧，再继续决定哪些复杂协议细节值得进入标准库，哪些仍应留在宿主层。
+
+## 当前持久化边界
+
+截至 `2026-05-03`，这个 proxy 还额外具备了最小持久化 history 闭环：
+
+- 基于 `std.db + std.orm` 的 SQLite 请求历史存储
+- `/admin/history` 的只读查询接口
+- `/admin/history/clear` 的清理入口
+- 跨重启 history 保留验证
+
+这一步反哺出的语言结论同样明确：
+
+- `std.db` / `std.orm` 已经足以支撑轻量服务级持久化
+- 服务控制面要真正可用，还需要薄的 query 参数数值解析原语
+- 因此本轮同步补上了 `std.math.parseInt(...)`

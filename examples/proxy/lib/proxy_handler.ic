@@ -4,6 +4,7 @@ import std.object as object
 import std.time as time
 import "./auth.ic" as auth
 import "./catalog.ic" as catalog
+import "./history.ic" as history
 import "./stream.ic" as stream
 import "./translate.ic" as translate
 
@@ -37,8 +38,16 @@ const proxyHandlerApi = fn() {
     return duration
   }
 
-  fn recordOutcome(state, req, routeName, requestedModel, resolvedModel, authVia, status, upstreamUrl, note, durationMs) {
-    state.monitor.recordRequest({
+  fn recordOutcome(state, req, route, routeName, requestedModel, resolvedModel, authVia, status, upstreamUrl, note, durationMs) {
+    let downstreamProtocol = null
+    let upstreamProtocol = null
+    if route != null {
+      downstreamProtocol = translate.downstreamProtocol(route)
+      upstreamProtocol = translate.upstreamProtocol(route)
+    }
+
+    let record = {
+      ts: time.now(),
       request_id: req.requestId,
       method: req.method,
       path: req.path,
@@ -49,8 +58,12 @@ const proxyHandlerApi = fn() {
       status: status,
       duration_ms: durationMs,
       upstream_url: upstreamUrl,
-      note: note
-    })
+      note: note,
+      downstream_protocol: downstreamProtocol,
+      upstream_protocol: upstreamProtocol
+    }
+    state.monitor.recordRequest(record)
+    history.record(state.history, record)
     return null
   }
 
@@ -71,6 +84,7 @@ const proxyHandlerApi = fn() {
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -82,12 +96,25 @@ const proxyHandlerApi = fn() {
       )
       state.monitor.increment("proxy.forwarded")
       state.monitor.increment("proxy.translated")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: true,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        status: resp.status
+      })
       return translated
     } catch err {
       state.monitor.increment("proxy.upstream_error")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: false,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        error: err.message
+      })
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -135,6 +162,7 @@ const proxyHandlerApi = fn() {
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -147,12 +175,25 @@ const proxyHandlerApi = fn() {
       state.monitor.increment("proxy.forwarded")
       state.monitor.increment("proxy.translated")
       state.monitor.increment("proxy.stream_aggregated")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: true,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        status: aggregated.status
+      })
       return translated
     } catch err {
       state.monitor.increment("proxy.upstream_error")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: false,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        error: err.message
+      })
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -191,6 +232,7 @@ const proxyHandlerApi = fn() {
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -203,12 +245,25 @@ const proxyHandlerApi = fn() {
       state.monitor.increment("proxy.forwarded")
       state.monitor.increment("proxy.translated")
       state.monitor.increment("proxy.stream_translated")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: true,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        status: streamed.status
+      })
       return null
     } catch err {
       state.monitor.increment("proxy.upstream_error")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: false,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        error: err.message
+      })
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -238,14 +293,14 @@ const proxyHandlerApi = fn() {
     let authResult = auth.authenticate(state.config, req)
     if authResult.ok != true {
       state.monitor.increment("auth.unauthorized")
-      recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized", elapsedMs(startedAt))
+      recordOutcome(state, req, null, "", requestedModel, null, "rejected", 401, "", "unauthorized", elapsedMs(startedAt))
       return authResult.response
     }
 
     let route = catalog.resolveRoute(state.catalog, req.path, requestedModel)
     if route == null {
       state.monitor.increment("proxy.route_not_found")
-      recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found", elapsedMs(startedAt))
+      recordOutcome(state, req, null, "", requestedModel, null, authResult.via, 404, "", "route not found", elapsedMs(startedAt))
       return {
         status: 404,
         json: {
@@ -265,6 +320,7 @@ const proxyHandlerApi = fn() {
           recordOutcome(
             state,
             req,
+            route,
             route.name,
             bodyInfo.requestedModel,
             route.upstreamModel,
@@ -287,6 +343,7 @@ const proxyHandlerApi = fn() {
         recordOutcome(
           state,
           req,
+          route,
           route.name,
           bodyInfo.requestedModel,
           route.upstreamModel,
@@ -325,6 +382,7 @@ const proxyHandlerApi = fn() {
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -335,12 +393,25 @@ const proxyHandlerApi = fn() {
         elapsedMs(startedAt)
       )
       state.monitor.increment("proxy.forwarded")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: true,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        status: resp.status
+      })
       return resp
     } catch err {
       state.monitor.increment("proxy.upstream_error")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: false,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        error: err.message
+      })
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -370,14 +441,14 @@ const proxyHandlerApi = fn() {
     let authResult = auth.authenticate(state.config, req)
     if authResult.ok != true {
       state.monitor.increment("auth.unauthorized")
-      recordOutcome(state, req, "", requestedModel, null, "rejected", 401, "", "unauthorized", elapsedMs(startedAt))
+      recordOutcome(state, req, null, "", requestedModel, null, "rejected", 401, "", "unauthorized", elapsedMs(startedAt))
       return authResult.response
     }
 
     let route = catalog.resolveRoute(state.catalog, req.path, requestedModel)
     if route == null {
       state.monitor.increment("proxy.route_not_found")
-      recordOutcome(state, req, "", requestedModel, null, authResult.via, 404, "", "route not found", elapsedMs(startedAt))
+      recordOutcome(state, req, null, "", requestedModel, null, authResult.via, 404, "", "route not found", elapsedMs(startedAt))
       return {
         status: 404,
         json: {
@@ -399,6 +470,7 @@ const proxyHandlerApi = fn() {
         recordOutcome(
           state,
           req,
+          route,
           route.name,
           bodyInfo.requestedModel,
           route.upstreamModel,
@@ -437,6 +509,7 @@ const proxyHandlerApi = fn() {
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,
@@ -447,12 +520,25 @@ const proxyHandlerApi = fn() {
         elapsedMs(startedAt)
       )
       state.monitor.increment("proxy.forwarded")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: true,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        status: res.statusCode()
+      })
       return proxied
     } catch err {
       state.monitor.increment("proxy.upstream_error")
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: false,
+        baseUrl: state.config.upstreamBaseUrl,
+        route: route.name,
+        error: err.message
+      })
       recordOutcome(
         state,
         req,
+        route,
         route.name,
         bodyInfo.requestedModel,
         route.upstreamModel,

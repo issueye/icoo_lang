@@ -1,0 +1,203 @@
+import std.db as db
+import std.fs as fs
+import std.object as object
+import std.orm as orm
+
+const historyApi = fn() {
+  fn newHistoryImpl(config) {
+    let enabled = object.get(config, "historyEnabled", true)
+    let store = {
+      enabled: enabled,
+      path: object.get(config, "historyPath"),
+      defaultLimit: object.get(config, "historyLimit", 50)
+    }
+
+    if enabled != true {
+      return store
+    }
+
+    fs.mkdir(fs.dir(store.path))
+    let handle = db.sqlite(store.path)
+    let requests = orm.model(handle, {
+      name: "proxy_requests",
+      columns: {
+        id: "integer primary key autoincrement",
+        ts: "integer not null",
+        request_id: "text",
+        method: "text",
+        path: "text",
+        route_name: "text",
+        requested_model: "text",
+        resolved_model: "text",
+        auth_via: "text",
+        status: "integer",
+        duration_ms: "integer",
+        upstream_url: "text",
+        note: "text",
+        downstream_protocol: "text",
+        upstream_protocol: "text"
+      }
+    })
+    requests.create()
+
+    store.db = handle
+    store.requests = requests
+    return store
+  }
+
+  fn normalizeLimitImpl(store, limitValue) {
+    let limit = limitValue
+    if limit == null {
+      limit = store.defaultLimit
+    }
+    if limit <= 0 {
+      limit = store.defaultLimit
+    }
+    if limit > 200 {
+      limit = 200
+    }
+    return limit
+  }
+
+  fn normalizeOffsetImpl(offsetValue) {
+    let offset = offsetValue
+    if offset == null || offset < 0 {
+      return 0
+    }
+    return offset
+  }
+
+  fn applyFiltersImpl(query, filters) {
+    if filters == null {
+      return query
+    }
+
+    let requestID = object.get(filters, "request_id")
+    if requestID != null && requestID != "" {
+      query = query.where({
+        request_id: requestID
+      })
+    }
+
+    let routeName = object.get(filters, "route_name")
+    if routeName != null && routeName != "" {
+      query = query.where({
+        route_name: routeName
+      })
+    }
+
+    let method = object.get(filters, "method")
+    if method != null && method != "" {
+      query = query.where({
+        method: method
+      })
+    }
+
+    let path = object.get(filters, "path")
+    if path != null && path != "" {
+      query = query.where({
+        path: path
+      })
+    }
+
+    let downstreamProtocol = object.get(filters, "downstream_protocol")
+    if downstreamProtocol != null && downstreamProtocol != "" {
+      query = query.where({
+        downstream_protocol: downstreamProtocol
+      })
+    }
+
+    let upstreamProtocol = object.get(filters, "upstream_protocol")
+    if upstreamProtocol != null && upstreamProtocol != "" {
+      query = query.where({
+        upstream_protocol: upstreamProtocol
+      })
+    }
+
+    let status = object.get(filters, "status")
+    if status != null {
+      query = query.where({
+        status: status
+      })
+    }
+
+    return query
+  }
+
+  fn recordImpl(store, record) {
+    if store.enabled != true || record == null {
+      return null
+    }
+    store.requests.insert(record)
+    return null
+  }
+
+  fn listImpl(store, filters) {
+    if store.enabled != true {
+      return []
+    }
+
+    let limit = normalizeLimitImpl(store, object.get(filters, "limit"))
+    let offset = normalizeOffsetImpl(object.get(filters, "offset"))
+    let query = applyFiltersImpl(store.requests, filters)
+      .orderBy("ts desc, id desc")
+      .limit(limit)
+      .offset(offset)
+    return query.all()
+  }
+
+  fn countImpl(store, filters) {
+    if store.enabled != true {
+      return 0
+    }
+
+    let query = applyFiltersImpl(store.requests, filters)
+    return query.count()
+  }
+
+  fn clearImpl(store) {
+    if store.enabled != true {
+      return {
+        rowsAffected: 0
+      }
+    }
+
+    return store.db.exec("delete from proxy_requests")
+  }
+
+  fn snapshotImpl(store) {
+    return {
+      enabled: store.enabled,
+      path: store.path,
+      defaultLimit: store.defaultLimit
+    }
+  }
+
+  fn closeImpl(store) {
+    if store == null || store.enabled != true {
+      return null
+    }
+    if store.db != null {
+      store.db.close()
+    }
+    return null
+  }
+
+  return {
+    newHistory: newHistoryImpl,
+    record: recordImpl,
+    list: listImpl,
+    count: countImpl,
+    clear: clearImpl,
+    snapshot: snapshotImpl,
+    close: closeImpl
+  }
+}()
+
+export const newHistory = historyApi.newHistory
+export const record = historyApi.record
+export const list = historyApi.list
+export const count = historyApi.count
+export const clear = historyApi.clear
+export const snapshot = historyApi.snapshot
+export const close = historyApi.close

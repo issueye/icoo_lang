@@ -248,6 +248,95 @@ const translateApi = fn() {
     }
   }
 
+  fn mapResponsesUsageToAnthropicImpl(usage) {
+    if usage == null {
+      return null
+    }
+
+    return {
+      input_tokens: object.get(usage, "input_tokens", 0),
+      output_tokens: object.get(usage, "output_tokens", 0)
+    }
+  }
+
+  fn mapAnthropicUsageToResponsesImpl(usage) {
+    if usage == null {
+      return null
+    }
+
+    let inputTokens = object.get(usage, "input_tokens", 0)
+    let outputTokens = object.get(usage, "output_tokens", 0)
+    return {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens
+    }
+  }
+
+  fn anthropicSystemToInstructionsImpl(system) {
+    return contentTextImpl(system)
+  }
+
+  fn anthropicMessagesToResponsesInputImpl(messages) {
+    if typeOf(messages) != "array" {
+      return []
+    }
+
+    return messages
+      .filter(fn(message) {
+        return typeOf(message) == "object"
+      })
+      .map(fn(message) {
+        return {
+          role: object.get(message, "role", "user"),
+          content: contentTextImpl(object.get(message, "content"))
+        }
+      })
+      .filter(fn(message) {
+        return object.get(message, "content", "") != ""
+      })
+  }
+
+  fn responsesInputToAnthropicMessagesImpl(input) {
+    if typeOf(input) == "string" {
+      return [
+        {
+          role: "user",
+          content: input
+        }
+      ]
+    }
+
+    if typeOf(input) != "array" {
+      return []
+    }
+
+    return input
+      .filter(fn(item) {
+        return typeOf(item) == "object"
+      })
+      .map(fn(item) {
+        return {
+          role: object.get(item, "role", "user"),
+          content: responsesInputTextImpl(item)
+        }
+      })
+      .filter(fn(message) {
+        return object.get(message, "content", "") != ""
+      })
+  }
+
+  fn resolveAnthropicMaxTokensImpl(payload) {
+    let maxTokens = object.get(payload, "max_output_tokens")
+    if maxTokens == null {
+      maxTokens = object.get(payload, "max_tokens")
+    }
+    if maxTokens == null || maxTokens <= 0 {
+      return 1024
+    }
+    return maxTokens
+  }
+
   fn rewriteSameProtocolRequestImpl(payload, route) {
     if route.upstreamModel != null {
       payload.model = route.upstreamModel
@@ -333,6 +422,68 @@ const translateApi = fn() {
     return request
   }
 
+  fn anthropicRequestToResponsesImpl(payload, route) {
+    let request = {
+      model: route.upstreamModel,
+      input: anthropicMessagesToResponsesInputImpl(object.get(payload, "messages"))
+    }
+
+    let instructions = anthropicSystemToInstructionsImpl(object.get(payload, "system"))
+    if instructions != "" {
+      request.instructions = instructions
+    }
+
+    let stream = object.get(payload, "stream")
+    if stream == true {
+      request.stream = true
+    }
+
+    let maxOutputTokens = object.get(payload, "max_tokens")
+    if maxOutputTokens != null {
+      request.max_output_tokens = maxOutputTokens
+    }
+
+    if object.get(route, "forceUpstreamStream", false) == true {
+      request.stream = true
+    }
+
+    return request
+  }
+
+  fn responsesRequestToAnthropicImpl(payload, route) {
+    let request = {
+      model: route.upstreamModel,
+      messages: responsesInputToAnthropicMessagesImpl(object.get(payload, "input")),
+      max_tokens: resolveAnthropicMaxTokensImpl(payload)
+    }
+
+    let stream = object.get(payload, "stream")
+    if stream == true {
+      request.stream = true
+    }
+
+    let instructions = object.get(payload, "instructions", "")
+    if instructions != "" {
+      request.system = instructions
+    }
+
+    let temperature = object.get(payload, "temperature")
+    if temperature != null {
+      request.temperature = temperature
+    }
+
+    let topP = object.get(payload, "top_p")
+    if topP != null {
+      request.top_p = topP
+    }
+
+    if object.get(route, "forceUpstreamStream", false) == true {
+      request.stream = true
+    }
+
+    return request
+  }
+
   fn responsesResponseToChatImpl(payload, route) {
     let response = {
       id: object.get(payload, "id", "chatcmpl-proxy"),
@@ -393,6 +544,62 @@ const translateApi = fn() {
     return response
   }
 
+  fn responsesResponseToAnthropicImpl(payload, route) {
+    let response = {
+      id: object.get(payload, "id", "msg_proxy"),
+      type: "message",
+      role: "assistant",
+      model: object.get(payload, "model", route.upstreamModel),
+      content: [
+        {
+          type: "text",
+          text: responsesOutputTextImpl(object.get(payload, "output"))
+        }
+      ],
+      stop_reason: "end_turn"
+    }
+
+    if object.get(payload, "status") != "completed" {
+      response.stop_reason = "max_tokens"
+    }
+
+    let usage = mapResponsesUsageToAnthropicImpl(object.get(payload, "usage"))
+    if usage != null {
+      response.usage = usage
+    }
+
+    return response
+  }
+
+  fn anthropicResponseToResponsesImpl(payload, route) {
+    let response = {
+      id: object.get(payload, "id", "resp-proxy"),
+      object: "response",
+      model: object.get(payload, "model", route.upstreamModel),
+      status: "completed",
+      output: [
+        {
+          id: "msg_proxy_1",
+          type: "message",
+          role: "assistant",
+          content: [
+            {
+              type: "output_text",
+              text: contentTextImpl(object.get(payload, "content"))
+            }
+          ]
+        }
+      ]
+    }
+
+    let usage = mapAnthropicUsageToResponsesImpl(object.get(payload, "usage"))
+    if usage != null {
+      response.usage = usage
+    }
+
+    return response
+  }
+
   fn prepareRequestImpl(req, route) {
     let payload = object.get(req, "json")
     if payload == null {
@@ -428,6 +635,10 @@ const translateApi = fn() {
       translatedPayload = chatRequestToResponsesImpl(payload, route)
     } else if down == "openai-responses" && up == "openai" {
       translatedPayload = responsesRequestToChatImpl(payload, route)
+    } else if down == "anthropic" && up == "openai-responses" {
+      translatedPayload = anthropicRequestToResponsesImpl(payload, route)
+    } else if down == "openai-responses" && up == "anthropic" {
+      translatedPayload = responsesRequestToAnthropicImpl(payload, route)
     } else {
       panic("request translation not implemented: " + down + " -> " + up)
     }
@@ -472,6 +683,10 @@ const translateApi = fn() {
       translatedPayload = responsesResponseToChatImpl(payload, route)
     } else if down == "openai-responses" && up == "openai" {
       translatedPayload = chatResponseToResponsesImpl(payload, route)
+    } else if down == "anthropic" && up == "openai-responses" {
+      translatedPayload = responsesResponseToAnthropicImpl(payload, route)
+    } else if down == "openai-responses" && up == "anthropic" {
+      translatedPayload = anthropicResponseToResponsesImpl(payload, route)
     } else {
       panic("response translation not implemented: " + up + " -> " + down)
     }

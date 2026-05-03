@@ -1,20 +1,31 @@
 import std.service as service
 import "./catalog.ic" as catalog
+import "./history.ic" as history
 
 const stateApi = fn() {
   fn newStateImpl(config) {
-    return {
+    let runtimeState = {
       config: config,
       catalog: catalog.buildCatalog(config),
+      history: history.newHistory(config),
       monitor: service.create({
         name: "icoo-proxy",
         recentLimit: config.recentLimit
       })
     }
+
+    runtimeState.monitor.setSupplierHealth("default-upstream", {
+      ok: true,
+      baseUrl: config.upstreamBaseUrl,
+      kind: "http"
+    })
+
+    return runtimeState
   }
 
   fn closeImpl(state) {
     state.monitor.markNotReady("stopped")
+    history.close(state.history)
     return null
   }
 

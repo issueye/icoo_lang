@@ -1,9 +1,11 @@
 import std.json as json
+import std.fs as fs
 import std.object as object
 import std.os as os
 
 const configApi = fn() {
   fn defaultConfig() {
+    let historyDir = fs.join(os.cwd(), ".icoo_proxy")
     return {
       listenAddr: "127.0.0.1:8086",
       upstreamBaseUrl: "http://127.0.0.1:8096",
@@ -11,6 +13,9 @@ const configApi = fn() {
       allowUnauthenticatedLocal: false,
       timeoutMs: 5000,
       recentLimit: 20,
+      historyEnabled: true,
+      historyLimit: 50,
+      historyPath: fs.join(historyDir, "history.sqlite"),
       defaultRoutes: [
         {
           name: "chat-default",
@@ -88,12 +93,30 @@ const configApi = fn() {
           upstreamProtocol: "openai"
         },
         {
+          alias: "responses-sonnet",
+          endpoint: "/v1/responses",
+          name: "responses-sonnet",
+          upstreamPath: "/anthropic/messages",
+          upstreamModel: "claude-3-5-sonnet",
+          protocol: "openai-responses",
+          upstreamProtocol: "anthropic"
+        },
+        {
           alias: "claude-sonnet",
           endpoint: "/v1/messages",
           name: "messages-claude-sonnet",
           upstreamPath: "/anthropic/messages",
           upstreamModel: "claude-3-5-sonnet",
           protocol: "anthropic"
+        },
+        {
+          alias: "claude-responses",
+          endpoint: "/v1/messages",
+          name: "messages-claude-responses",
+          upstreamPath: "/openai/responses",
+          upstreamModel: "gpt-4.1-mini",
+          protocol: "anthropic",
+          upstreamProtocol: "openai-responses"
         },
         {
           alias: "sonnet",
@@ -128,6 +151,19 @@ const configApi = fn() {
     let allowLocal = os.getEnv("ICOO_PROXY_ALLOW_LOCAL")
     if allowLocal == "1" || allowLocal == "true" {
       config.allowUnauthenticatedLocal = true
+    }
+
+    let historyEnabled = os.getEnv("ICOO_PROXY_HISTORY_ENABLED")
+    if historyEnabled == "0" || historyEnabled == "false" {
+      config.historyEnabled = false
+    }
+    if historyEnabled == "1" || historyEnabled == "true" {
+      config.historyEnabled = true
+    }
+
+    let historyPath = os.getEnv("ICOO_PROXY_HISTORY_PATH")
+    if historyPath != null {
+      config.historyPath = historyPath
     }
 
     return object.merge(config, overrides)

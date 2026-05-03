@@ -1048,6 +1048,9 @@ if math.floor(1.8) != 1 {
 if math.ceil(1.2) != 2 {
   panic("unexpected ceil result")
 }
+if math.parseInt("42") != 42 {
+  panic("unexpected parseInt result")
+}
 `
 
 	rt := NewRuntime()
@@ -1070,10 +1073,10 @@ for key, value in math {
   }
 }
 
-if keys != "absceilfloormaxmin" {
+if keys != "absceilfloormaxminparseInt" {
   panic("unexpected std.math iteration order")
 }
-if count != 5 {
+if count != 6 {
   panic("unexpected std.math export count")
 }
 `

@@ -1,8 +1,60 @@
 import std.express as express
+import std.math as math
 import std.object as object
 import "./catalog.ic" as catalog
+import "./history.ic" as history
 
 const adminApi = fn() {
+  fn queryText(req, name) {
+    let value = object.get(req.query, name)
+    if typeOf(value) == "array" {
+      if len(value) == 0 {
+        return null
+      }
+      return value[0]
+    }
+    return value
+  }
+
+  fn queryInt(req, name, fallback) {
+    let value = queryText(req, name)
+    if value == null || value == "" {
+      return fallback
+    }
+    try {
+      return math.parseInt(value)
+    } catch err {
+      return fallback
+    }
+  }
+
+  fn historyFilters(req, state) {
+    let limit = queryInt(req, "limit", state.config.historyLimit)
+    if limit <= 0 {
+      limit = state.config.historyLimit
+    }
+    if limit > 200 {
+      limit = 200
+    }
+
+    let page = queryInt(req, "page", 1)
+    if page <= 0 {
+      page = 1
+    }
+
+    return {
+      request_id: queryText(req, "request_id"),
+      route_name: queryText(req, "route_name"),
+      method: queryText(req, "method"),
+      path: queryText(req, "path"),
+      downstream_protocol: queryText(req, "downstream_protocol"),
+      upstream_protocol: queryText(req, "upstream_protocol"),
+      status: queryInt(req, "status", null),
+      limit: limit,
+      offset: (page - 1) * limit
+    }
+  }
+
   fn registerRoutesImpl(app, state) {
     app.get("/healthz", fn(req) {
       return express.json(state.monitor.health())
@@ -44,6 +96,53 @@ const adminApi = fn() {
 
     app.get("/admin/monitor", fn(req) {
       return express.json(state.monitor.snapshot())
+    })
+
+    app.get("/admin/suppliers/health", fn(req) {
+      return express.json({
+        ok: true,
+        suppliers: state.monitor.suppliersHealth()
+      })
+    })
+
+    app.get("/admin/history", fn(req) {
+      let filters = historyFilters(req, state)
+      let items = history.list(state.history, filters)
+      let total = history.count(state.history, filters)
+
+      return express.json({
+        ok: true,
+        total: total,
+        items: items,
+        page: queryInt(req, "page", 1),
+        limit: filters.limit,
+        filters: {
+          request_id: filters.request_id,
+          route_name: filters.route_name,
+          method: filters.method,
+          path: filters.path,
+          downstream_protocol: filters.downstream_protocol,
+          upstream_protocol: filters.upstream_protocol,
+          status: filters.status
+        },
+        store: history.snapshot(state.history)
+      })
+    })
+
+    app.post("/admin/history/clear", fn(req) {
+      let result = history.clear(state.history)
+      state.monitor.increment("admin.history_cleared")
+      state.monitor.recordEvent({
+        kind: "admin.history.clear",
+        request_id: req.requestId
+      })
+
+      return express.json({
+        ok: true,
+        cleared: true,
+        result: result,
+        store: history.snapshot(state.history)
+      })
     })
 
     return app

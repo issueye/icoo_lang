@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
 	"icoo_lang/internal/runtime"
 )
@@ -17,6 +19,7 @@ func LoadStdMathModule() *runtime.Module {
 			"min":   &runtime.NativeFunction{Name: "min", Arity: 2, Fn: mathMin},
 			"floor": &runtime.NativeFunction{Name: "floor", Arity: 1, Fn: mathFloor},
 			"ceil":  &runtime.NativeFunction{Name: "ceil", Arity: 1, Fn: mathCeil},
+			"parseInt": &runtime.NativeFunction{Name: "parseInt", Arity: 1, Fn: mathParseInt},
 		},
 		Done: true,
 	}
@@ -88,6 +91,25 @@ func mathCeil(args []runtime.Value) (runtime.Value, error) {
 		return runtime.FloatValue{Value: math.Ceil(v.Value)}, nil
 	default:
 		return nil, fmt.Errorf("ceil expects int or float")
+	}
+}
+
+func mathParseInt(args []runtime.Value) (runtime.Value, error) {
+	switch v := args[0].(type) {
+	case runtime.IntValue:
+		return v, nil
+	case runtime.StringValue:
+		text := strings.TrimSpace(v.Value)
+		if text == "" {
+			return nil, fmt.Errorf("parseInt expects non-empty string")
+		}
+		value, err := strconv.ParseInt(text, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parseInt expects base-10 integer string")
+		}
+		return runtime.IntValue{Value: value}, nil
+	default:
+		return nil, fmt.Errorf("parseInt expects string or int")
 	}
 }
 
