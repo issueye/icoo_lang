@@ -13,9 +13,13 @@ const configApi = fn() {
       allowUnauthenticatedLocal: false,
       timeoutMs: 5000,
       recentLimit: 20,
+      eventLimit: 60,
+      supplierHealthPath: "/",
+      supplierHealthTimeoutMs: 1500,
       historyEnabled: true,
       historyLimit: 50,
       historyPath: fs.join(historyDir, "history.sqlite"),
+      catalogPath: fs.join(historyDir, "catalog.sqlite"),
       defaultRoutes: [
         {
           name: "chat-default",
@@ -164,6 +168,11 @@ const configApi = fn() {
     let historyPath = os.getEnv("ICOO_PROXY_HISTORY_PATH")
     if historyPath != null {
       config.historyPath = historyPath
+    }
+
+    let catalogPath = os.getEnv("ICOO_PROXY_CATALOG_PATH")
+    if catalogPath != null {
+      config.catalogPath = catalogPath
     }
 
     return object.merge(config, overrides)

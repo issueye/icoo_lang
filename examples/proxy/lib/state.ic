@@ -1,39 +1,266 @@
+import std.net.http.client as client
+import std.object as object
 import std.service as service
-import "./catalog.ic" as catalog
+import std.time as time
 import "./history.ic" as history
+import "./services/catalog_service.ic" as catalogService
 
 const stateApi = fn() {
+  fn applyCatalogImpl(state) {
+    state.config.apiKeys = catalogService.listAuthKeyValues(state.catalogService)
+    state.config.defaultRoutes = catalogService.listEndpoints(state.catalogService)
+    state.config.aliases = catalogService.listModelAliases(state.catalogService)
+    state.catalog = catalogService.currentCatalog(state.catalogService)
+
+    let supplier = catalogService.defaultSupplier(state.catalogService)
+    if supplier != null {
+      state.config.upstreamBaseUrl = supplier.baseUrl
+    }
+
+    let settings = catalogService.listSettings(state.catalogService)
+    for i, item in settings {
+      if item.name == "proxy.timeout_ms" && typeOf(item.value) == "int" {
+        state.config.timeoutMs = item.value
+      }
+      if item.name == "proxy.recent_limit" && typeOf(item.value) == "int" {
+        state.config.recentLimit = item.value
+      }
+      if item.name == "proxy.allow_unauthenticated_local" && typeOf(item.value) == "bool" {
+        state.config.allowUnauthenticatedLocal = item.value
+      }
+    }
+
+    return state.catalog
+  }
+
+  fn syncSupplierHealthImpl(state) {
+    let suppliers = catalogService.listSuppliers(state.catalogService)
+    if len(suppliers) == 0 {
+      state.monitor.setSupplierHealth("default-upstream", {
+        ok: true,
+        baseUrl: state.config.upstreamBaseUrl,
+        kind: "http"
+      })
+      return null
+    }
+
+    for i, supplier in suppliers {
+      state.monitor.setSupplierHealth(supplier.name, {
+        ok: supplier.enabled,
+        baseUrl: supplier.baseUrl,
+        kind: supplier.kind
+      })
+    }
+    return null
+  }
+
+  fn runtimeSnapshotImpl(state) {
+    return {
+      reloadCount: state.reloadCount,
+      lastReloadAt: state.lastReloadAt,
+      lastSupplierHealthCheckAt: state.lastSupplierHealthCheckAt,
+      catalogCache: catalogService.cacheSnapshot(state.catalogService),
+      supplierHealthPath: state.config.supplierHealthPath,
+      supplierHealthTimeoutMs: state.config.supplierHealthTimeoutMs
+    }
+  }
+
+  fn supplierHealthURL(state, supplier) {
+    return supplier.baseUrl + state.config.supplierHealthPath
+  }
+
+  fn checkSingleSupplierImpl(state, supplier) {
+    let checkedAt = time.now()
+    let result = {
+      name: supplier.name,
+      baseUrl: supplier.baseUrl,
+      kind: supplier.kind,
+      enabled: supplier.enabled,
+      checkedAt: checkedAt,
+      url: supplierHealthURL(state, supplier)
+    }
+
+    if supplier.enabled != true {
+      result.ok = false
+      result.skipped = true
+      result.reason = "supplier_disabled"
+      state.monitor.setSupplierHealth(supplier.name, object.merge(result, {
+        ok: false
+      }))
+      state.monitor.recordEvent({
+        kind: "supplier.health.checked",
+        supplier_name: supplier.name,
+        ok: false,
+        skipped: true,
+        reason: "supplier_disabled",
+        ts: checkedAt
+      })
+      return result
+    }
+
+    let startedAt = time.now()
+    try {
+      let resp = client.request({
+        url: result.url,
+        method: "GET",
+        timeoutMs: state.config.supplierHealthTimeoutMs,
+        headers: {
+          Accept: "application/json"
+        }
+      })
+      let latencyMs = time.now() - startedAt
+      if latencyMs < 0 {
+        latencyMs = 0
+      }
+
+      result.status = resp.status
+      result.latencyMs = latencyMs
+      result.ok = resp.status < 500
+      state.monitor.setSupplierHealth(supplier.name, result)
+      state.monitor.recordEvent({
+        kind: "supplier.health.checked",
+        supplier_name: supplier.name,
+        ok: result.ok,
+        status: resp.status,
+        latency_ms: latencyMs,
+        ts: checkedAt
+      })
+      state.monitor.increment("supplier.health.checked")
+      if result.ok == true {
+        state.monitor.increment("supplier.health.ok")
+      } else {
+        state.monitor.increment("supplier.health.failed")
+      }
+      return result
+    } catch err {
+      let latencyMs = time.now() - startedAt
+      if latencyMs < 0 {
+        latencyMs = 0
+      }
+
+      result.ok = false
+      result.latencyMs = latencyMs
+      result.error = err.message
+      state.monitor.setSupplierHealth(supplier.name, result)
+      state.monitor.recordEvent({
+        kind: "supplier.health.checked",
+        supplier_name: supplier.name,
+        ok: false,
+        error: err.message,
+        latency_ms: latencyMs,
+        ts: checkedAt
+      })
+      state.monitor.increment("supplier.health.checked")
+      state.monitor.increment("supplier.health.failed")
+      return result
+    }
+  }
+
+  fn checkSuppliersImpl(state, supplierName) {
+    let suppliers = catalogService.listSuppliers(state.catalogService)
+    let selected = []
+    for i, supplier in suppliers {
+      if supplierName == null || supplierName == "" || supplier.name == supplierName {
+        selected = selected + [supplier]
+      }
+    }
+
+    if len(selected) == 0 {
+      return {
+        ok: false,
+        error: "supplier_not_found",
+        supplier: supplierName,
+        total: 0,
+        items: []
+      }
+    }
+
+    let checkedAt = time.now()
+    let items = []
+    let allOK = true
+    for i, supplier in selected {
+      let item = checkSingleSupplierImpl(state, supplier)
+      items = items + [item]
+      if item.ok != true {
+        allOK = false
+      }
+    }
+
+    state.lastSupplierHealthCheckAt = checkedAt
+    return {
+      ok: allOK,
+      checkedAt: checkedAt,
+      total: len(items),
+      items: items
+    }
+  }
+
   fn newStateImpl(config) {
+    let proxyCatalog = catalogService.newCatalogService(config)
+
     let runtimeState = {
       config: config,
-      catalog: catalog.buildCatalog(config),
+      catalogService: proxyCatalog,
+      catalog: catalogService.currentCatalog(proxyCatalog),
       history: history.newHistory(config),
+      reloadCount: 0,
+      lastReloadAt: null,
+      lastSupplierHealthCheckAt: null,
       monitor: service.create({
         name: "icoo-proxy",
-        recentLimit: config.recentLimit
+        recentLimit: config.recentLimit,
+        eventLimit: config.eventLimit
       })
     }
 
-    runtimeState.monitor.setSupplierHealth("default-upstream", {
-      ok: true,
-      baseUrl: config.upstreamBaseUrl,
-      kind: "http"
-    })
+    applyCatalogImpl(runtimeState)
+    syncSupplierHealthImpl(runtimeState)
 
     return runtimeState
+  }
+
+  fn reloadImpl(state) {
+    catalogService.reload(state.catalogService)
+    applyCatalogImpl(state)
+    syncSupplierHealthImpl(state)
+    state.reloadCount = state.reloadCount + 1
+    state.lastReloadAt = time.now()
+    state.monitor.recordEvent({
+      kind: "proxy.reload",
+      reload_count: state.reloadCount,
+      route_count: len(state.config.defaultRoutes),
+      alias_count: len(state.config.aliases),
+      ts: state.lastReloadAt
+    })
+    state.monitor.increment("proxy.reload")
+    return {
+      ok: true,
+      reloadCount: state.reloadCount,
+      lastReloadAt: state.lastReloadAt,
+      upstreamBaseUrl: state.config.upstreamBaseUrl,
+      runtime: runtimeSnapshotImpl(state),
+      routes: catalogService.snapshot(state.catalogService)
+    }
   }
 
   fn closeImpl(state) {
     state.monitor.markNotReady("stopped")
     history.close(state.history)
+    catalogService.close(state.catalogService)
     return null
   }
 
   return {
     newState: newStateImpl,
+    reload: reloadImpl,
+    runtimeSnapshot: runtimeSnapshotImpl,
+    checkSuppliers: checkSuppliersImpl,
     close: closeImpl
   }
 }()
 
 export const newState = stateApi.newState
+export const reload = stateApi.reload
+export const runtimeSnapshot = stateApi.runtimeSnapshot
+export const checkSuppliers = stateApi.checkSuppliers
 export const close = stateApi.close

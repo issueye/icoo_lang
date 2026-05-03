@@ -80,15 +80,36 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 - `/admin/requests`
 - `/admin/monitor`
 - `/admin/suppliers/health`
+- `/admin/catalog`
+- `/admin/suppliers`
+- `/admin/endpoints`
+- `/admin/model-aliases`
+- `/admin/auth-keys`
+- `/admin/route-policies`
 - `/admin/history`
 - `/admin/history/clear`
+- `/api/overview`
+- `/api/state`
+- `/api/proxy/reload`
+- `/api/traffic`
+- `/api/traffic/clear`
+- `/api/suppliers`
+- `/api/endpoints`
+- `/api/model-aliases`
+- `/api/auth-keys`
+- `/api/route-policies`
+- `/api/settings`
+- `/api/ui-prefs`
 
 其中：
 
 - `/admin/requests` 用于查看 recent requests、计数器和延迟摘要
 - `/admin/monitor` 用于查看完整服务监控快照
 - `/admin/suppliers/health` 用于查看当前 upstream 供应方健康状态
+- `/admin/catalog` 用于查看持久化目录模型快照
+- `/admin/endpoints`、`/admin/model-aliases`、`/admin/auth-keys`、`/admin/route-policies` 用于查看当前 catalog store 的只读数据
 - `/admin/history` 用于查看持久化请求历史
+- `/api/*` 当前提供最小控制面，可对 suppliers、endpoints、model aliases、auth keys、route policies、settings、ui prefs 做最小 list/upsert/delete，并支持 `reload`
 
 ## v0.1 可用交付标准
 
@@ -163,9 +184,13 @@ go run ./cmd/icoo run examples/proxy/smoke.ic
 截至 `2026-05-03`，这个 proxy 还额外具备了最小持久化 history 闭环：
 
 - 基于 `std.db + std.orm` 的 SQLite 请求历史存储
+- 基于 `std.db + std.orm` 的 SQLite catalog 存储
 - `/admin/history` 的只读查询接口
 - `/admin/history/clear` 的清理入口
+- `/admin/catalog` 及目录只读接口
+- `/api/*` 最小控制面与 runtime reload
 - 跨重启 history 保留验证
+- 跨重启 catalog / alias / auth key 保留验证
 
 这一步反哺出的语言结论同样明确：
 

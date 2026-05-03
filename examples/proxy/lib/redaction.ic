@@ -1,0 +1,220 @@
+import std.json as json
+import std.object as object
+
+const redactionApi = fn() {
+  fn truncateText(text, limit) {
+    if text == null || typeOf(text) != "string" {
+      return text
+    }
+    if limit == null || limit <= 0 {
+      return ""
+    }
+    if len(text) <= limit {
+      return text
+    }
+
+    let out = ""
+    for idx, ch in text {
+      if idx >= limit {
+        return out + "...<truncated>"
+      }
+      out = out + ch
+    }
+    return out
+  }
+
+  fn isSensitiveKey(name) {
+    return name == "Authorization" ||
+      name == "authorization" ||
+      name == "X-Api-Key" ||
+      name == "x-api-key" ||
+      name == "Api-Key" ||
+      name == "api-key" ||
+      name == "apiKey" ||
+      name == "apikey" ||
+      name == "api_key" ||
+      name == "key" ||
+      name == "key_value" ||
+      name == "secret" ||
+      name == "token" ||
+      name == "password"
+  }
+
+  fn summarizeNestedValue(value) {
+    if value == null {
+      return null
+    }
+
+    let kind = typeOf(value)
+    if kind == "string" {
+      return truncateText(value, 256)
+    }
+    if kind == "int" || kind == "float" || kind == "bool" {
+      return value
+    }
+    if kind == "array" || kind == "object" {
+      return truncateText(json.encode(value), 256)
+    }
+    return "<unsupported>"
+  }
+
+  fn sanitizeObject(value) {
+    let out = {}
+    for key, item in value {
+      if isSensitiveKey(key) == true {
+        out[key] = "[REDACTED]"
+      } else {
+        out[key] = summarizeNestedValue(item)
+      }
+    }
+    return out
+  }
+
+  fn sanitizeArray(value) {
+    return value.map(fn(item) {
+      if typeOf(item) == "object" {
+        return sanitizeObject(item)
+      }
+      return summarizeNestedValue(item)
+    })
+  }
+
+  fn redactValue(value) {
+    if value == null {
+      return null
+    }
+
+    let kind = typeOf(value)
+    if kind == "string" {
+      return truncateText(value, 256)
+    }
+    if kind == "int" || kind == "float" || kind == "bool" {
+      return value
+    }
+    if kind == "array" {
+      return sanitizeArray(value)
+    }
+    if kind == "object" {
+      return sanitizeObject(value)
+    }
+    return "<unsupported>"
+  }
+
+  fn redactHeadersImpl(headers) {
+    if headers == null || typeOf(headers) != "object" {
+      return {}
+    }
+
+    let out = {}
+    for key, value in headers {
+      if isSensitiveKey(key) == true {
+        out[key] = "[REDACTED]"
+      } else {
+        out[key] = redactValue(value)
+      }
+    }
+    return out
+  }
+
+  fn summarizeBodyImpl(bodyValue, limit) {
+    if bodyValue == null {
+      return null
+    }
+
+    let original = bodyValue
+    let parsed = typeOf(bodyValue) == "object" || typeOf(bodyValue) == "array"
+    if typeOf(bodyValue) == "string" {
+      try {
+        original = json.decode(bodyValue)
+        parsed = true
+      } catch err {
+      }
+    }
+
+    let sanitized = redactValue(original)
+    let text = null
+    if typeOf(sanitized) == "string" {
+      text = sanitized
+    } else {
+      text = json.encode(sanitized)
+    }
+
+    return {
+      parsedJson: parsed,
+      bytes: len(text),
+      truncated: len(text) > limit,
+      preview: truncateText(text, limit)
+    }
+  }
+
+  fn requestSnapshotImpl(req, route, bodyValue) {
+    let payload = bodyValue
+    if payload == null {
+      if object.get(req, "json") != null {
+        payload = object.get(req, "json")
+      } else {
+        payload = req.body
+      }
+    }
+
+    let routeName = null
+    if route != null {
+      routeName = object.get(route, "name")
+    }
+
+    return {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.path,
+      routeName: routeName,
+      headers: redactHeadersImpl(req.headers),
+      body: summarizeBodyImpl(payload, 2048)
+    }
+  }
+
+  fn upstreamRequestSnapshotImpl(url, method, headers, bodyValue) {
+    return {
+      url: url,
+      method: method,
+      headers: redactHeadersImpl(headers),
+      body: summarizeBodyImpl(bodyValue, 2048)
+    }
+  }
+
+  fn responseSnapshotImpl(status, headers, bodyValue) {
+    return {
+      status: status,
+      headers: redactHeadersImpl(headers),
+      body: summarizeBodyImpl(bodyValue, 2048)
+    }
+  }
+
+  fn omittedBodySnapshotImpl(status, headers, reason) {
+    return {
+      status: status,
+      headers: redactHeadersImpl(headers),
+      body: {
+        parsedJson: false,
+        bytes: 0,
+        truncated: false,
+        preview: "<omitted:" + reason + ">"
+      }
+    }
+  }
+
+  return {
+    redactHeaders: redactHeadersImpl,
+    summarizeBody: summarizeBodyImpl,
+    requestSnapshot: requestSnapshotImpl,
+    upstreamRequestSnapshot: upstreamRequestSnapshotImpl,
+    responseSnapshot: responseSnapshotImpl,
+    omittedBodySnapshot: omittedBodySnapshotImpl
+  }
+}()
+
+export const redactHeaders = redactionApi.redactHeaders
+export const summarizeBody = redactionApi.summarizeBody
+export const requestSnapshot = redactionApi.requestSnapshot
+export const upstreamRequestSnapshot = redactionApi.upstreamRequestSnapshot
+export const responseSnapshot = redactionApi.responseSnapshot
+export const omittedBodySnapshot = redactionApi.omittedBodySnapshot

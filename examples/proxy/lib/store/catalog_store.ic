@@ -1,0 +1,763 @@
+import std.db as db
+import std.fs as fs
+import std.json as json
+import std.object as object
+import std.orm as orm
+import std.time as time
+
+const catalogStoreApi = fn() {
+  fn boolInt(value) {
+    if value == true {
+      return 1
+    }
+    return 0
+  }
+
+  fn intBool(value, fallback) {
+    if value == null {
+      return fallback == true
+    }
+    return value == 1
+  }
+
+  fn defaultSupplierName() {
+    return "default-upstream"
+  }
+
+  fn defaultSettingRows(config) {
+    let now = time.now()
+    return [
+      {
+        name: "proxy.timeout_ms",
+        value_json: json.encode(object.get(config, "timeoutMs", 5000)),
+        note: "seeded-from-config",
+        updated_at: now
+      },
+      {
+        name: "proxy.recent_limit",
+        value_json: json.encode(object.get(config, "recentLimit", 20)),
+        note: "seeded-from-config",
+        updated_at: now
+      },
+      {
+        name: "proxy.allow_unauthenticated_local",
+        value_json: json.encode(object.get(config, "allowUnauthenticatedLocal", false)),
+        note: "seeded-from-config",
+        updated_at: now
+      }
+    ]
+  }
+
+  fn endpointRow(route) {
+    return {
+      name: route.name,
+      endpoint: route.endpoint,
+      upstream_path: route.upstreamPath,
+      upstream_model: route.upstreamModel,
+      protocol: route.protocol,
+      upstream_protocol: object.get(route, "upstreamProtocol", route.protocol),
+      force_upstream_stream: boolInt(object.get(route, "forceUpstreamStream", false)),
+      supplier_name: object.get(route, "supplierName", defaultSupplierName()),
+      enabled: boolInt(object.get(route, "enabled", true)),
+      note: object.get(route, "note")
+    }
+  }
+
+  fn aliasRow(route) {
+    return {
+      alias: route.alias,
+      endpoint: route.endpoint,
+      route_name: route.name,
+      upstream_path: route.upstreamPath,
+      upstream_model: route.upstreamModel,
+      protocol: route.protocol,
+      upstream_protocol: object.get(route, "upstreamProtocol", route.protocol),
+      force_upstream_stream: boolInt(object.get(route, "forceUpstreamStream", false)),
+      supplier_name: object.get(route, "supplierName", defaultSupplierName()),
+      enabled: boolInt(object.get(route, "enabled", true)),
+      note: object.get(route, "note")
+    }
+  }
+
+  fn authKeyRow(key) {
+    return {
+      name: object.get(key, "name", "seed-key"),
+      key_value: object.get(key, "keyValue", key),
+      enabled: boolInt(object.get(key, "enabled", true)),
+      note: object.get(key, "note")
+    }
+  }
+
+  fn routePolicyRow(route, config) {
+    return {
+      name: object.get(route, "name", route.endpoint),
+      endpoint: route.endpoint,
+      auth_mode: object.get(route, "authMode", "api_key"),
+      allow_local: boolInt(object.get(route, "allowLocal", object.get(config, "allowUnauthenticatedLocal", false))),
+      supplier_name: object.get(route, "supplierName", defaultSupplierName()),
+      enabled: boolInt(object.get(route, "enabled", true)),
+      note: object.get(route, "note")
+    }
+  }
+
+  fn normalizeSupplier(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      baseUrl: row.base_url,
+      enabled: intBool(row.enabled, true),
+      note: row.note
+    }
+  }
+
+  fn normalizeEndpoint(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      endpoint: row.endpoint,
+      upstreamPath: row.upstream_path,
+      upstreamModel: row.upstream_model,
+      protocol: row.protocol,
+      upstreamProtocol: row.upstream_protocol,
+      forceUpstreamStream: intBool(row.force_upstream_stream, false),
+      supplierName: row.supplier_name,
+      enabled: intBool(row.enabled, true),
+      note: row.note
+    }
+  }
+
+  fn normalizeAlias(row) {
+    return {
+      id: row.id,
+      alias: row.alias,
+      name: row.route_name,
+      endpoint: row.endpoint,
+      upstreamPath: row.upstream_path,
+      upstreamModel: row.upstream_model,
+      protocol: row.protocol,
+      upstreamProtocol: row.upstream_protocol,
+      forceUpstreamStream: intBool(row.force_upstream_stream, false),
+      supplierName: row.supplier_name,
+      enabled: intBool(row.enabled, true),
+      note: row.note
+    }
+  }
+
+  fn normalizeAuthKey(row, revealSecret) {
+    let value = null
+    if revealSecret == true {
+      value = row.key_value
+    }
+
+    return {
+      id: row.id,
+      name: row.name,
+      enabled: intBool(row.enabled, true),
+      note: row.note,
+      keyValue: value,
+      hasSecret: row.key_value != null && row.key_value != ""
+    }
+  }
+
+  fn normalizeRoutePolicy(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      endpoint: row.endpoint,
+      authMode: row.auth_mode,
+      allowLocal: intBool(row.allow_local, false),
+      supplierName: row.supplier_name,
+      enabled: intBool(row.enabled, true),
+      note: row.note
+    }
+  }
+
+  fn decodeJSONValue(text, fallback) {
+    if text == null || text == "" {
+      return fallback
+    }
+
+    try {
+      return json.decode(text)
+    } catch err {
+      return fallback
+    }
+  }
+
+  fn normalizeNamedValue(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      value: decodeJSONValue(row.value_json, null),
+      note: row.note,
+      updatedAt: row.updated_at
+    }
+  }
+
+  fn resolveByIDOrName(model, id, name) {
+    if id != null {
+      let found = model.where({id: id}).first()
+      if found != null {
+        return found
+      }
+    }
+    if name != null && name != "" {
+      return model.where({name: name}).first()
+    }
+    return null
+  }
+
+  fn resolveEndpoint(model, input) {
+    let current = resolveByIDOrName(model, object.get(input, "id"), object.get(input, "name"))
+    if current != null {
+      return current
+    }
+    let endpoint = object.get(input, "endpoint")
+    if endpoint != null && endpoint != "" {
+      return model.where({endpoint: endpoint}).first()
+    }
+    return null
+  }
+
+  fn resolveAlias(model, input) {
+    let id = object.get(input, "id")
+    if id != null {
+      let found = model.where({id: id}).first()
+      if found != null {
+        return found
+      }
+    }
+    let alias = object.get(input, "alias")
+    if alias != null && alias != "" {
+      return model.where({alias: alias}).first()
+    }
+    return null
+  }
+
+  fn resolveNamedValue(model, input) {
+    return resolveByIDOrName(model, object.get(input, "id"), object.get(input, "name"))
+  }
+
+  fn ensureInserted(model, result) {
+    if result == null || result.lastInsertId == null {
+      return null
+    }
+    return model.where({id: result.lastInsertId}).first()
+  }
+
+  fn seedStoreImpl(store, config) {
+    if store.suppliers.count() == 0 {
+      store.suppliers.insert({
+        name: defaultSupplierName(),
+        kind: "http",
+        base_url: object.get(config, "upstreamBaseUrl"),
+        enabled: 1,
+        note: "seeded-from-config"
+      })
+    }
+
+    if store.endpoints.count() == 0 {
+      for i, route in object.get(config, "defaultRoutes", []) {
+        store.endpoints.insert(endpointRow(route))
+      }
+    }
+
+    if store.modelAliases.count() == 0 {
+      for i, route in object.get(config, "aliases", []) {
+        store.modelAliases.insert(aliasRow(route))
+      }
+    }
+
+    if store.authKeys.count() == 0 {
+      for i, key in object.get(config, "apiKeys", []) {
+        store.authKeys.insert(authKeyRow({
+          name: "seed-key",
+          keyValue: key,
+          enabled: true,
+          note: "seeded-from-config"
+        }))
+      }
+    }
+
+    if store.routePolicies.count() == 0 {
+      let seeded = {}
+      for i, route in object.get(config, "defaultRoutes", []) {
+        if object.get(seeded, route.endpoint) == true {
+          continue
+        }
+        seeded[route.endpoint] = true
+        store.routePolicies.insert(routePolicyRow(route, config))
+      }
+    }
+
+    if store.settings.count() == 0 {
+      for i, row in defaultSettingRows(config) {
+        store.settings.insert(row)
+      }
+    }
+
+    return null
+  }
+
+  fn newCatalogStoreImpl(config) {
+    let store = {
+      enabled: true,
+      path: object.get(config, "catalogPath")
+    }
+
+    fs.mkdir(fs.dir(store.path))
+    let handle = db.sqlite(store.path)
+
+    let suppliers = orm.model(handle, {
+      name: "proxy_suppliers",
+      columns: {
+        id: "integer primary key autoincrement",
+        name: "text not null",
+        kind: "text not null",
+        base_url: "text not null",
+        enabled: "integer not null",
+        note: "text"
+      }
+    })
+    suppliers.create()
+
+    let endpoints = orm.model(handle, {
+      name: "proxy_endpoints",
+      columns: {
+        id: "integer primary key autoincrement",
+        name: "text not null",
+        endpoint: "text not null",
+        upstream_path: "text not null",
+        upstream_model: "text not null",
+        protocol: "text not null",
+        upstream_protocol: "text",
+        force_upstream_stream: "integer not null",
+        supplier_name: "text not null",
+        enabled: "integer not null",
+        note: "text"
+      }
+    })
+    endpoints.create()
+
+    let authKeys = orm.model(handle, {
+      name: "proxy_auth_keys",
+      columns: {
+        id: "integer primary key autoincrement",
+        name: "text not null",
+        key_value: "text not null",
+        enabled: "integer not null",
+        note: "text"
+      }
+    })
+    authKeys.create()
+
+    let modelAliases = orm.model(handle, {
+      name: "proxy_model_aliases",
+      columns: {
+        id: "integer primary key autoincrement",
+        alias: "text not null",
+        endpoint: "text not null",
+        route_name: "text not null",
+        upstream_path: "text not null",
+        upstream_model: "text not null",
+        protocol: "text not null",
+        upstream_protocol: "text",
+        force_upstream_stream: "integer not null",
+        supplier_name: "text not null",
+        enabled: "integer not null",
+        note: "text"
+      }
+    })
+    modelAliases.create()
+
+    let routePolicies = orm.model(handle, {
+      name: "proxy_route_policies",
+      columns: {
+        id: "integer primary key autoincrement",
+        name: "text not null",
+        endpoint: "text not null",
+        auth_mode: "text not null",
+        allow_local: "integer not null",
+        supplier_name: "text not null",
+        enabled: "integer not null",
+        note: "text"
+      }
+    })
+    routePolicies.create()
+
+    let settings = orm.model(handle, {
+      name: "proxy_settings",
+      columns: {
+        id: "integer primary key autoincrement",
+        name: "text not null",
+        value_json: "text",
+        note: "text",
+        updated_at: "integer not null"
+      }
+    })
+    settings.create()
+
+    let uiPrefs = orm.model(handle, {
+      name: "proxy_ui_prefs",
+      columns: {
+        id: "integer primary key autoincrement",
+        name: "text not null",
+        value_json: "text",
+        note: "text",
+        updated_at: "integer not null"
+      }
+    })
+    uiPrefs.create()
+
+    store.db = handle
+    store.suppliers = suppliers
+    store.endpoints = endpoints
+    store.authKeys = authKeys
+    store.modelAliases = modelAliases
+    store.routePolicies = routePolicies
+    store.settings = settings
+    store.uiPrefs = uiPrefs
+    store.createdAt = time.now()
+
+    seedStoreImpl(store, config)
+    return store
+  }
+
+  fn listSuppliersImpl(store) {
+    return store.suppliers
+      .orderBy("name asc, id asc")
+      .all()
+      .map(normalizeSupplier)
+  }
+
+  fn listEndpointsImpl(store) {
+    return store.endpoints
+      .where({enabled: 1})
+      .orderBy("name asc, id asc")
+      .all()
+      .map(normalizeEndpoint)
+  }
+
+  fn listModelAliasesImpl(store) {
+    return store.modelAliases
+      .where({enabled: 1})
+      .orderBy("alias asc, id asc")
+      .all()
+      .map(normalizeAlias)
+  }
+
+  fn listAuthKeysImpl(store, revealSecret) {
+    return store.authKeys
+      .where({enabled: 1})
+      .orderBy("name asc, id asc")
+      .all()
+      .map(fn(row) {
+        return normalizeAuthKey(row, revealSecret)
+      })
+  }
+
+  fn listAuthKeyValuesImpl(store) {
+    return store.authKeys
+      .where({enabled: 1})
+      .orderBy("name asc, id asc")
+      .all()
+      .map(fn(row) {
+        return row.key_value
+      })
+  }
+
+  fn listRoutePoliciesImpl(store) {
+    return store.routePolicies
+      .where({enabled: 1})
+      .orderBy("name asc, id asc")
+      .all()
+      .map(normalizeRoutePolicy)
+  }
+
+  fn listSettingsImpl(store) {
+    return store.settings
+      .orderBy("name asc, id asc")
+      .all()
+      .map(normalizeNamedValue)
+  }
+
+  fn listUIPrefsImpl(store) {
+    return store.uiPrefs
+      .orderBy("name asc, id asc")
+      .all()
+      .map(normalizeNamedValue)
+  }
+
+  fn upsertSupplierImpl(store, input) {
+    let current = resolveByIDOrName(store.suppliers, object.get(input, "id"), object.get(input, "name"))
+    let payload = {
+      name: object.get(input, "name", object.get(current, "name", defaultSupplierName())),
+      kind: object.get(input, "kind", object.get(current, "kind", "http")),
+      base_url: object.get(input, "baseUrl", object.get(current, "base_url", "")),
+      enabled: boolInt(object.get(input, "enabled", intBool(object.get(current, "enabled"), true))),
+      note: object.get(input, "note", object.get(current, "note"))
+    }
+
+    if current == null {
+      return normalizeSupplier(ensureInserted(store.suppliers, store.suppliers.insert(payload)))
+    }
+
+    store.suppliers.where({id: current.id}).update(payload)
+    return normalizeSupplier(store.suppliers.where({id: current.id}).first())
+  }
+
+  fn upsertEndpointImpl(store, input) {
+    let current = resolveEndpoint(store.endpoints, input)
+    let payload = {
+      name: object.get(input, "name", object.get(current, "name", "")),
+      endpoint: object.get(input, "endpoint", object.get(current, "endpoint", "")),
+      upstream_path: object.get(input, "upstreamPath", object.get(current, "upstream_path", "")),
+      upstream_model: object.get(input, "upstreamModel", object.get(current, "upstream_model", "")),
+      protocol: object.get(input, "protocol", object.get(current, "protocol", "openai")),
+      upstream_protocol: object.get(input, "upstreamProtocol", object.get(current, "upstream_protocol", object.get(input, "protocol", "openai"))),
+      force_upstream_stream: boolInt(object.get(input, "forceUpstreamStream", intBool(object.get(current, "force_upstream_stream"), false))),
+      supplier_name: object.get(input, "supplierName", object.get(current, "supplier_name", defaultSupplierName())),
+      enabled: boolInt(object.get(input, "enabled", intBool(object.get(current, "enabled"), true))),
+      note: object.get(input, "note", object.get(current, "note"))
+    }
+
+    if current == null {
+      return normalizeEndpoint(ensureInserted(store.endpoints, store.endpoints.insert(payload)))
+    }
+
+    store.endpoints.where({id: current.id}).update(payload)
+    return normalizeEndpoint(store.endpoints.where({id: current.id}).first())
+  }
+
+  fn upsertModelAliasImpl(store, input) {
+    let current = resolveAlias(store.modelAliases, input)
+    let payload = {
+      alias: object.get(input, "alias", object.get(current, "alias", "")),
+      endpoint: object.get(input, "endpoint", object.get(current, "endpoint", "")),
+      route_name: object.get(input, "name", object.get(current, "route_name", "")),
+      upstream_path: object.get(input, "upstreamPath", object.get(current, "upstream_path", "")),
+      upstream_model: object.get(input, "upstreamModel", object.get(current, "upstream_model", "")),
+      protocol: object.get(input, "protocol", object.get(current, "protocol", "openai")),
+      upstream_protocol: object.get(input, "upstreamProtocol", object.get(current, "upstream_protocol", object.get(input, "protocol", "openai"))),
+      force_upstream_stream: boolInt(object.get(input, "forceUpstreamStream", intBool(object.get(current, "force_upstream_stream"), false))),
+      supplier_name: object.get(input, "supplierName", object.get(current, "supplier_name", defaultSupplierName())),
+      enabled: boolInt(object.get(input, "enabled", intBool(object.get(current, "enabled"), true))),
+      note: object.get(input, "note", object.get(current, "note"))
+    }
+
+    if current == null {
+      return normalizeAlias(ensureInserted(store.modelAliases, store.modelAliases.insert(payload)))
+    }
+
+    store.modelAliases.where({id: current.id}).update(payload)
+    return normalizeAlias(store.modelAliases.where({id: current.id}).first())
+  }
+
+  fn upsertAuthKeyImpl(store, input) {
+    let current = resolveByIDOrName(store.authKeys, object.get(input, "id"), object.get(input, "name"))
+    let payload = {
+      name: object.get(input, "name", object.get(current, "name", "api-key")),
+      key_value: object.get(input, "keyValue", object.get(current, "key_value", "")),
+      enabled: boolInt(object.get(input, "enabled", intBool(object.get(current, "enabled"), true))),
+      note: object.get(input, "note", object.get(current, "note"))
+    }
+
+    if current == null {
+      return normalizeAuthKey(ensureInserted(store.authKeys, store.authKeys.insert(payload)), false)
+    }
+
+    store.authKeys.where({id: current.id}).update(payload)
+    return normalizeAuthKey(store.authKeys.where({id: current.id}).first(), false)
+  }
+
+  fn upsertRoutePolicyImpl(store, input) {
+    let current = resolveByIDOrName(store.routePolicies, object.get(input, "id"), object.get(input, "name"))
+    let payload = {
+      name: object.get(input, "name", object.get(current, "name", "")),
+      endpoint: object.get(input, "endpoint", object.get(current, "endpoint", "")),
+      auth_mode: object.get(input, "authMode", object.get(current, "auth_mode", "api_key")),
+      allow_local: boolInt(object.get(input, "allowLocal", intBool(object.get(current, "allow_local"), false))),
+      supplier_name: object.get(input, "supplierName", object.get(current, "supplier_name", defaultSupplierName())),
+      enabled: boolInt(object.get(input, "enabled", intBool(object.get(current, "enabled"), true))),
+      note: object.get(input, "note", object.get(current, "note"))
+    }
+
+    if current == null {
+      return normalizeRoutePolicy(ensureInserted(store.routePolicies, store.routePolicies.insert(payload)))
+    }
+
+    store.routePolicies.where({id: current.id}).update(payload)
+    return normalizeRoutePolicy(store.routePolicies.where({id: current.id}).first())
+  }
+
+  fn upsertNamedValue(model, input) {
+    let current = resolveNamedValue(model, input)
+    let payload = {
+      name: object.get(input, "name", object.get(current, "name", "")),
+      value_json: json.encode(object.get(input, "value", decodeJSONValue(object.get(current, "value_json"), null))),
+      note: object.get(input, "note", object.get(current, "note")),
+      updated_at: time.now()
+    }
+
+    if current == null {
+      return normalizeNamedValue(ensureInserted(model, model.insert(payload)))
+    }
+
+    model.where({id: current.id}).update(payload)
+    return normalizeNamedValue(model.where({id: current.id}).first())
+  }
+
+  fn upsertSettingImpl(store, input) {
+    return upsertNamedValue(store.settings, input)
+  }
+
+  fn upsertUIPrefImpl(store, input) {
+    return upsertNamedValue(store.uiPrefs, input)
+  }
+
+  fn deleteByIDOrName(model, input) {
+    let current = resolveNamedValue(model, input)
+    if current == null {
+      return {
+        rowsAffected: 0
+      }
+    }
+    return model.where({id: current.id}).delete()
+  }
+
+  fn deleteSupplierImpl(store, input) {
+    let current = resolveByIDOrName(store.suppliers, object.get(input, "id"), object.get(input, "name"))
+    if current == null {
+      return {
+        rowsAffected: 0
+      }
+    }
+    return store.suppliers.where({id: current.id}).delete()
+  }
+
+  fn deleteEndpointImpl(store, input) {
+    let current = resolveEndpoint(store.endpoints, input)
+    if current == null {
+      return {
+        rowsAffected: 0
+      }
+    }
+    return store.endpoints.where({id: current.id}).delete()
+  }
+
+  fn deleteModelAliasImpl(store, input) {
+    let current = resolveAlias(store.modelAliases, input)
+    if current == null {
+      return {
+        rowsAffected: 0
+      }
+    }
+    return store.modelAliases.where({id: current.id}).delete()
+  }
+
+  fn deleteAuthKeyImpl(store, input) {
+    let current = resolveByIDOrName(store.authKeys, object.get(input, "id"), object.get(input, "name"))
+    if current == null {
+      return {
+        rowsAffected: 0
+      }
+    }
+    return store.authKeys.where({id: current.id}).delete()
+  }
+
+  fn deleteRoutePolicyImpl(store, input) {
+    let current = resolveByIDOrName(store.routePolicies, object.get(input, "id"), object.get(input, "name"))
+    if current == null {
+      return {
+        rowsAffected: 0
+      }
+    }
+    return store.routePolicies.where({id: current.id}).delete()
+  }
+
+  fn deleteSettingImpl(store, input) {
+    return deleteByIDOrName(store.settings, input)
+  }
+
+  fn deleteUIPrefImpl(store, input) {
+    return deleteByIDOrName(store.uiPrefs, input)
+  }
+
+  fn snapshotImpl(store) {
+    return {
+      enabled: store.enabled,
+      path: store.path,
+      suppliers: store.suppliers.count(),
+      endpoints: store.endpoints.count(),
+      authKeys: store.authKeys.count(),
+      modelAliases: store.modelAliases.count(),
+      routePolicies: store.routePolicies.count(),
+      settings: store.settings.count(),
+      uiPrefs: store.uiPrefs.count(),
+      createdAt: store.createdAt
+    }
+  }
+
+  fn closeImpl(store) {
+    if store == null || store.db == null {
+      return null
+    }
+    store.db.close()
+    return null
+  }
+
+  return {
+    newCatalogStore: newCatalogStoreImpl,
+    listSuppliers: listSuppliersImpl,
+    listEndpoints: listEndpointsImpl,
+    listModelAliases: listModelAliasesImpl,
+    listAuthKeys: listAuthKeysImpl,
+    listAuthKeyValues: listAuthKeyValuesImpl,
+    listRoutePolicies: listRoutePoliciesImpl,
+    listSettings: listSettingsImpl,
+    listUIPrefs: listUIPrefsImpl,
+    upsertSupplier: upsertSupplierImpl,
+    upsertEndpoint: upsertEndpointImpl,
+    upsertModelAlias: upsertModelAliasImpl,
+    upsertAuthKey: upsertAuthKeyImpl,
+    upsertRoutePolicy: upsertRoutePolicyImpl,
+    upsertSetting: upsertSettingImpl,
+    upsertUIPref: upsertUIPrefImpl,
+    deleteSupplier: deleteSupplierImpl,
+    deleteEndpoint: deleteEndpointImpl,
+    deleteModelAlias: deleteModelAliasImpl,
+    deleteAuthKey: deleteAuthKeyImpl,
+    deleteRoutePolicy: deleteRoutePolicyImpl,
+    deleteSetting: deleteSettingImpl,
+    deleteUIPref: deleteUIPrefImpl,
+    snapshot: snapshotImpl,
+    close: closeImpl
+  }
+}()
+
+export const newCatalogStore = catalogStoreApi.newCatalogStore
+export const listSuppliers = catalogStoreApi.listSuppliers
+export const listEndpoints = catalogStoreApi.listEndpoints
+export const listModelAliases = catalogStoreApi.listModelAliases
+export const listAuthKeys = catalogStoreApi.listAuthKeys
+export const listAuthKeyValues = catalogStoreApi.listAuthKeyValues
+export const listRoutePolicies = catalogStoreApi.listRoutePolicies
+export const listSettings = catalogStoreApi.listSettings
+export const listUIPrefs = catalogStoreApi.listUIPrefs
+export const upsertSupplier = catalogStoreApi.upsertSupplier
+export const upsertEndpoint = catalogStoreApi.upsertEndpoint
+export const upsertModelAlias = catalogStoreApi.upsertModelAlias
+export const upsertAuthKey = catalogStoreApi.upsertAuthKey
+export const upsertRoutePolicy = catalogStoreApi.upsertRoutePolicy
+export const upsertSetting = catalogStoreApi.upsertSetting
+export const upsertUIPref = catalogStoreApi.upsertUIPref
+export const deleteSupplier = catalogStoreApi.deleteSupplier
+export const deleteEndpoint = catalogStoreApi.deleteEndpoint
+export const deleteModelAlias = catalogStoreApi.deleteModelAlias
+export const deleteAuthKey = catalogStoreApi.deleteAuthKey
+export const deleteRoutePolicy = catalogStoreApi.deleteRoutePolicy
+export const deleteSetting = catalogStoreApi.deleteSetting
+export const deleteUIPref = catalogStoreApi.deleteUIPref
+export const snapshot = catalogStoreApi.snapshot
+export const close = catalogStoreApi.close

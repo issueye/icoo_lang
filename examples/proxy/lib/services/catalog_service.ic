@@ -1,0 +1,236 @@
+import "../catalog.ic" as catalog
+import std.object as object
+import std.time as time
+import "../store/catalog_store.ic" as catalogStore
+
+const catalogServiceApi = fn() {
+  fn suppliersByNameImpl(suppliers) {
+    let index = {}
+    for i, supplier in suppliers {
+      index[supplier.name] = supplier
+    }
+    return index
+  }
+
+  fn enrichRoutes(routes, suppliersByName) {
+    return routes.map(fn(route) {
+      let supplier = object.get(suppliersByName, object.get(route, "supplierName", "default-upstream"))
+      if supplier == null {
+        return route
+      }
+      let copy = object.merge({}, route)
+      copy.supplierBaseUrl = supplier.baseUrl
+      copy.supplierKind = supplier.kind
+      return copy
+    })
+  }
+
+  fn defaultSupplierFromList(suppliers) {
+    for i, supplier in suppliers {
+      if supplier.name == "default-upstream" {
+        return supplier
+      }
+    }
+    if len(suppliers) == 0 {
+      return null
+    }
+    return suppliers[0]
+  }
+
+  fn currentCatalogImpl(service) {
+    return service.catalog
+  }
+
+  fn defaultSupplierImpl(service) {
+    return service.defaultSupplier
+  }
+
+  fn cacheSnapshotImpl(service) {
+    return {
+      loadedAt: service.cacheLoadedAt,
+      reloadCount: service.cacheReloadCount,
+      supplierCount: len(service.suppliers),
+      endpointCount: len(service.endpoints),
+      aliasCount: len(service.modelAliases),
+      routePolicyCount: len(service.routePolicies),
+      authKeyCount: len(service.authKeys)
+    }
+  }
+
+  fn reloadImpl(service) {
+    service.authKeys = catalogStore.listAuthKeyValues(service.store)
+    service.suppliers = catalogStore.listSuppliers(service.store)
+    service.endpoints = catalogStore.listEndpoints(service.store)
+    service.modelAliases = catalogStore.listModelAliases(service.store)
+    service.routePolicies = catalogStore.listRoutePolicies(service.store)
+    service.settings = catalogStore.listSettings(service.store)
+    service.uiPrefs = catalogStore.listUIPrefs(service.store)
+    service.suppliersByName = suppliersByNameImpl(service.suppliers)
+    service.defaultSupplier = defaultSupplierFromList(service.suppliers)
+    service.catalog = catalog.buildCatalog({
+      defaultRoutes: enrichRoutes(service.endpoints, service.suppliersByName),
+      aliases: enrichRoutes(service.modelAliases, service.suppliersByName)
+    })
+    service.cacheLoadedAt = time.now()
+    service.cacheReloadCount = service.cacheReloadCount + 1
+    return service.catalog
+  }
+
+  fn newCatalogServiceImpl(config) {
+    let service = {
+      store: catalogStore.newCatalogStore(config),
+      catalog: null,
+      suppliersByName: {},
+      authKeys: [],
+      suppliers: [],
+      endpoints: [],
+      modelAliases: [],
+      routePolicies: [],
+      settings: [],
+      uiPrefs: [],
+      defaultSupplier: null,
+      cacheLoadedAt: null,
+      cacheReloadCount: 0
+    }
+
+    reloadImpl(service)
+    return service
+  }
+
+  fn snapshotImpl(service) {
+    return {
+      store: catalogStore.snapshot(service.store),
+      cache: cacheSnapshotImpl(service),
+      suppliers: service.suppliers,
+      endpoints: service.endpoints,
+      authKeys: catalogStore.listAuthKeys(service.store, false),
+      modelAliases: service.modelAliases,
+      routePolicies: service.routePolicies,
+      settings: service.settings,
+      uiPrefs: service.uiPrefs,
+      defaultSupplier: defaultSupplierImpl(service)
+    }
+  }
+
+  fn revealAuthKeysImpl(service) {
+    return catalogStore.listAuthKeys(service.store, true)
+  }
+
+  fn closeImpl(service) {
+    if service == null {
+      return null
+    }
+    catalogStore.close(service.store)
+    return null
+  }
+
+  return {
+    newCatalogService: newCatalogServiceImpl,
+    reload: reloadImpl,
+    snapshot: snapshotImpl,
+    cacheSnapshot: cacheSnapshotImpl,
+    revealAuthKeys: revealAuthKeysImpl,
+    listSuppliers: fn(service) {
+      return service.suppliers
+    },
+    listEndpoints: fn(service) {
+      return service.endpoints
+    },
+    listModelAliases: fn(service) {
+      return service.modelAliases
+    },
+    listAuthKeys: fn(service) {
+      return catalogStore.listAuthKeys(service.store, false)
+    },
+    listAuthKeyValues: fn(service) {
+      return catalogStore.listAuthKeyValues(service.store)
+    },
+    listRoutePolicies: fn(service) {
+      return service.routePolicies
+    },
+    listSettings: fn(service) {
+      return service.settings
+    },
+    listUIPrefs: fn(service) {
+      return service.uiPrefs
+    },
+    upsertSupplier: fn(service, input) {
+      return catalogStore.upsertSupplier(service.store, input)
+    },
+    upsertEndpoint: fn(service, input) {
+      return catalogStore.upsertEndpoint(service.store, input)
+    },
+    upsertModelAlias: fn(service, input) {
+      return catalogStore.upsertModelAlias(service.store, input)
+    },
+    upsertAuthKey: fn(service, input) {
+      return catalogStore.upsertAuthKey(service.store, input)
+    },
+    upsertRoutePolicy: fn(service, input) {
+      return catalogStore.upsertRoutePolicy(service.store, input)
+    },
+    upsertSetting: fn(service, input) {
+      return catalogStore.upsertSetting(service.store, input)
+    },
+    upsertUIPref: fn(service, input) {
+      return catalogStore.upsertUIPref(service.store, input)
+    },
+    deleteSupplier: fn(service, input) {
+      return catalogStore.deleteSupplier(service.store, input)
+    },
+    deleteEndpoint: fn(service, input) {
+      return catalogStore.deleteEndpoint(service.store, input)
+    },
+    deleteModelAlias: fn(service, input) {
+      return catalogStore.deleteModelAlias(service.store, input)
+    },
+    deleteAuthKey: fn(service, input) {
+      return catalogStore.deleteAuthKey(service.store, input)
+    },
+    deleteRoutePolicy: fn(service, input) {
+      return catalogStore.deleteRoutePolicy(service.store, input)
+    },
+    deleteSetting: fn(service, input) {
+      return catalogStore.deleteSetting(service.store, input)
+    },
+    deleteUIPref: fn(service, input) {
+      return catalogStore.deleteUIPref(service.store, input)
+    },
+    currentCatalog: fn(service) {
+      return currentCatalogImpl(service)
+    },
+    defaultSupplier: defaultSupplierImpl,
+    close: closeImpl
+  }
+}()
+
+export const newCatalogService = catalogServiceApi.newCatalogService
+export const reload = catalogServiceApi.reload
+export const snapshot = catalogServiceApi.snapshot
+export const cacheSnapshot = catalogServiceApi.cacheSnapshot
+export const revealAuthKeys = catalogServiceApi.revealAuthKeys
+export const listSuppliers = catalogServiceApi.listSuppliers
+export const listEndpoints = catalogServiceApi.listEndpoints
+export const listModelAliases = catalogServiceApi.listModelAliases
+export const listAuthKeys = catalogServiceApi.listAuthKeys
+export const listAuthKeyValues = catalogServiceApi.listAuthKeyValues
+export const listRoutePolicies = catalogServiceApi.listRoutePolicies
+export const listSettings = catalogServiceApi.listSettings
+export const listUIPrefs = catalogServiceApi.listUIPrefs
+export const upsertSupplier = catalogServiceApi.upsertSupplier
+export const upsertEndpoint = catalogServiceApi.upsertEndpoint
+export const upsertModelAlias = catalogServiceApi.upsertModelAlias
+export const upsertAuthKey = catalogServiceApi.upsertAuthKey
+export const upsertRoutePolicy = catalogServiceApi.upsertRoutePolicy
+export const upsertSetting = catalogServiceApi.upsertSetting
+export const upsertUIPref = catalogServiceApi.upsertUIPref
+export const deleteSupplier = catalogServiceApi.deleteSupplier
+export const deleteEndpoint = catalogServiceApi.deleteEndpoint
+export const deleteModelAlias = catalogServiceApi.deleteModelAlias
+export const deleteAuthKey = catalogServiceApi.deleteAuthKey
+export const deleteRoutePolicy = catalogServiceApi.deleteRoutePolicy
+export const deleteSetting = catalogServiceApi.deleteSetting
+export const deleteUIPref = catalogServiceApi.deleteUIPref
+export const currentCatalog = catalogServiceApi.currentCatalog
+export const defaultSupplier = catalogServiceApi.defaultSupplier
+export const close = catalogServiceApi.close

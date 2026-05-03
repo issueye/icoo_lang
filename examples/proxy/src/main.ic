@@ -3,7 +3,6 @@ import std.time as time
 import std.express as express
 import "../lib/config.ic" as config
 import "../lib/state.ic" as state
-import "../lib/catalog.ic" as catalog
 import "../lib/admin.ic" as admin
 import "../lib/proxy_handler.ic" as proxy
 
@@ -22,13 +21,11 @@ const runtimeApi = fn() {
       })
     })
 
-    for i, route in catalog.endpoints(runtimeState.catalog) {
-      app.post(route.endpoint, fn(req, res) {
-        return proxy.handleProxyDirect(req, res, runtimeState)
-      })
-    }
-
     admin.registerRoutes(app, runtimeState)
+
+    app.post("*", fn(req, res) {
+      return proxy.handleProxyDirect(req, res, runtimeState)
+    })
 
     let server = app.listen({addr: cfg.listenAddr})
     return {

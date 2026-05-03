@@ -205,6 +205,7 @@ const streamApi = fn() {
     let finished = false
     let toolStates = {}
     let nextToolIndex = 0
+    let completedResponse = null
 
     res.status(status)
     res.setHeader("Content-Type", "text/event-stream")
@@ -348,6 +349,7 @@ const streamApi = fn() {
 
         if eventType == "response.completed" {
           let response = object.get(payload, "response")
+          completedResponse = response
           responseId = object.get(response, "id", responseId)
           responseModel = object.get(response, "model", responseModel)
           if sentAssistantRole != true {
@@ -364,7 +366,8 @@ const streamApi = fn() {
           return {
             status: status,
             streamed: true,
-            error: null
+            error: null,
+            response: completedResponse
           }
         }
 
@@ -376,7 +379,8 @@ const streamApi = fn() {
           return {
             status: status,
             streamed: true,
-            error: message
+            error: message,
+            response: completedResponse
           }
         }
       }
@@ -399,7 +403,8 @@ const streamApi = fn() {
     return {
       status: status,
       streamed: true,
-      error: null
+      error: null,
+      response: completedResponse
     }
   }
 

@@ -1,7 +1,9 @@
 import std.db as db
 import std.fs as fs
+import std.json as json
 import std.object as object
 import std.orm as orm
+import std.time as time
 
 const historyApi = fn() {
   fn newHistoryImpl(config) {
@@ -35,13 +37,33 @@ const historyApi = fn() {
         upstream_url: "text",
         note: "text",
         downstream_protocol: "text",
-        upstream_protocol: "text"
+        upstream_protocol: "text",
+        prompt_tokens: "integer",
+        completion_tokens: "integer",
+        total_tokens: "integer"
       }
     })
     requests.create()
 
+    let mirrors = orm.model(handle, {
+      name: "proxy_request_mirrors",
+      columns: {
+        id: "integer primary key autoincrement",
+        ts: "integer not null",
+        request_id: "text not null",
+        route_name: "text",
+        downstream_request_json: "text",
+        upstream_request_json: "text",
+        upstream_response_json: "text",
+        downstream_response_json: "text",
+        note: "text"
+      }
+    })
+    mirrors.create()
+
     store.db = handle
     store.requests = requests
+    store.mirrors = mirrors
     return store
   }
 
@@ -132,6 +154,161 @@ const historyApi = fn() {
     return null
   }
 
+  fn updateMirrorRow(store, requestID, routeName, changes) {
+    let current = store.mirrors.where({request_id: requestID}).first()
+    let payload = object.merge({
+      ts: time.now(),
+      request_id: requestID,
+      route_name: routeName
+    }, changes)
+
+    if current == null {
+      store.mirrors.insert(payload)
+      return null
+    }
+
+    store.mirrors.where({id: current.id}).update(payload)
+    return null
+  }
+
+  fn recordMirrorImpl(store, requestID, routeName, part, payload, note) {
+    if store.enabled != true || requestID == null || requestID == "" {
+      return null
+    }
+
+    let changes = {
+      ts: time.now(),
+      route_name: routeName,
+      note: note
+    }
+    changes[part] = json.encode(payload)
+    return updateMirrorRow(store, requestID, routeName, changes)
+  }
+
+  fn decodeMirrorPart(value) {
+    if value == null || value == "" {
+      return null
+    }
+
+    try {
+      return json.decode(value)
+    } catch err {
+      return {
+        preview: value
+      }
+    }
+  }
+
+  fn mirrorImpl(store, requestID) {
+    if store.enabled != true || requestID == null || requestID == "" {
+      return null
+    }
+
+    let row = store.mirrors.where({request_id: requestID}).orderBy("ts desc, id desc").first()
+    if row == null {
+      return null
+    }
+
+    return {
+      request_id: row.request_id,
+      route_name: row.route_name,
+      note: row.note,
+      downstream_request: decodeMirrorPart(row.downstream_request_json),
+      upstream_request: decodeMirrorPart(row.upstream_request_json),
+      upstream_response: decodeMirrorPart(row.upstream_response_json),
+      downstream_response: decodeMirrorPart(row.downstream_response_json)
+    }
+  }
+
+  fn trafficStatsImpl(store, filters) {
+    if store.enabled != true {
+      return {
+        count: 0,
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0
+        },
+        latency: {
+          count: 0,
+          avg_ms: 0,
+          max_ms: 0
+        },
+        statuses: {},
+        protocols: {
+          downstream: [],
+          upstream: []
+        }
+      }
+    }
+
+    fn intOrZero(value) {
+      if value == null {
+        return 0
+      }
+      return value
+    }
+
+    let rows = applyFiltersImpl(store.requests, filters).all()
+    let statuses = {}
+    let downstreamSet = {}
+    let upstreamSet = {}
+    let promptTokens = 0
+    let completionTokens = 0
+    let totalTokens = 0
+    let latencyCount = 0
+    let latencyTotal = 0
+    let latencyMax = 0
+
+    for i, row in rows {
+      let statusKey = json.encode(row.status)
+      statuses[statusKey] = object.get(statuses, statusKey, 0) + 1
+      if row.downstream_protocol != null && row.downstream_protocol != "" {
+        downstreamSet[row.downstream_protocol] = true
+      }
+      if row.upstream_protocol != null && row.upstream_protocol != "" {
+        upstreamSet[row.upstream_protocol] = true
+      }
+      promptTokens = promptTokens + intOrZero(object.get(row, "prompt_tokens"))
+      completionTokens = completionTokens + intOrZero(object.get(row, "completion_tokens"))
+      totalTokens = totalTokens + intOrZero(object.get(row, "total_tokens"))
+      let duration = object.get(row, "duration_ms")
+      if duration != null && duration >= 0 {
+        latencyCount = latencyCount + 1
+        latencyTotal = latencyTotal + duration
+        if duration > latencyMax {
+          latencyMax = duration
+        }
+      }
+    }
+
+    let downstream = object.keys(downstreamSet)
+    let upstream = object.keys(upstreamSet)
+    let avgLatency = 0
+    if latencyCount > 0 {
+      avgLatency = latencyTotal / latencyCount
+    }
+
+    return {
+      count: len(rows),
+      usage: {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: totalTokens
+      },
+      latency: {
+        count: latencyCount,
+        avg_ms: avgLatency,
+        max_ms: latencyMax
+      },
+      statuses: statuses,
+      protocols: {
+        downstream: downstream,
+        upstream: upstream
+      }
+    }
+  }
+
   fn listImpl(store, filters) {
     if store.enabled != true {
       return []
@@ -162,14 +339,21 @@ const historyApi = fn() {
       }
     }
 
+    store.db.exec("delete from proxy_request_mirrors")
     return store.db.exec("delete from proxy_requests")
   }
 
   fn snapshotImpl(store) {
+    let mirrorCount = 0
+    if store.enabled == true && store.mirrors != null {
+      mirrorCount = store.mirrors.count()
+    }
+
     return {
       enabled: store.enabled,
       path: store.path,
-      defaultLimit: store.defaultLimit
+      defaultLimit: store.defaultLimit,
+      mirrorCount: mirrorCount
     }
   }
 
@@ -186,6 +370,9 @@ const historyApi = fn() {
   return {
     newHistory: newHistoryImpl,
     record: recordImpl,
+    recordMirror: recordMirrorImpl,
+    mirror: mirrorImpl,
+    trafficStats: trafficStatsImpl,
     list: listImpl,
     count: countImpl,
     clear: clearImpl,
@@ -196,6 +383,9 @@ const historyApi = fn() {
 
 export const newHistory = historyApi.newHistory
 export const record = historyApi.record
+export const recordMirror = historyApi.recordMirror
+export const mirror = historyApi.mirror
+export const trafficStats = historyApi.trafficStats
 export const list = historyApi.list
 export const count = historyApi.count
 export const clear = historyApi.clear

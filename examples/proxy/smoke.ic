@@ -9,10 +9,24 @@ import std.os as os
 import std.time as time
 import "./src/main.ic" as proxy
 
-let historyPath = fs.join(os.tempDir(), "icoo_proxy_smoke_history.sqlite")
-if fs.exists(historyPath) {
-  fs.remove(historyPath)
+fn safeRemove(path) {
+  if fs.exists(path) != true {
+    return null
+  }
+
+  try {
+    fs.remove(path)
+  } catch err {
+    return null
+  }
+
+  return null
 }
+
+let historyPath = fs.join(os.tempDir(), "icoo_proxy_smoke_history.sqlite")
+let catalogPath = fs.join(os.tempDir(), "icoo_proxy_smoke_catalog.sqlite")
+safeRemove(historyPath)
+safeRemove(catalogPath)
 
 let upstream = server.listen({
   addr: "127.0.0.1:0",
@@ -299,6 +313,7 @@ let runtimeApp = proxy.start({
   upstreamBaseUrl: upstream.url,
   apiKeys: ["demo-key"],
   recentLimit: 12,
+  catalogPath: catalogPath,
   historyPath: historyPath,
   historyLimit: 12
 })
@@ -649,6 +664,11 @@ let routes = client.getJSON(runtimeApp.server.url + "/admin/routes")
 let requests = client.getJSON(runtimeApp.server.url + "/admin/requests")
 let monitor = client.getJSON(runtimeApp.server.url + "/admin/monitor")
 let suppliers = client.getJSON(runtimeApp.server.url + "/admin/suppliers/health")
+let catalogInfo = client.getJSON(runtimeApp.server.url + "/admin/catalog")
+let endpoints = client.getJSON(runtimeApp.server.url + "/admin/endpoints")
+let aliases = client.getJSON(runtimeApp.server.url + "/admin/model-aliases")
+let authKeys = client.getJSON(runtimeApp.server.url + "/admin/auth-keys")
+let routePolicies = client.getJSON(runtimeApp.server.url + "/admin/route-policies")
 let history = client.getJSON(runtimeApp.server.url + "/admin/history?limit=5&page=1")
 let translatedHistory = client.getJSON(runtimeApp.server.url + "/admin/history?route_name=messages-claude-responses")
 
@@ -666,6 +686,36 @@ if suppliers.json.suppliers["default-upstream"].ok != true {
 }
 if suppliers.json.suppliers["default-upstream"].baseUrl != upstream.url {
   panic("expected supplier health base url")
+}
+if catalogInfo.json.catalog.store.path != catalogPath {
+  panic("expected persisted catalog path")
+}
+if catalogInfo.json.catalog.store.endpoints != 3 {
+  panic("expected persisted endpoint count")
+}
+if catalogInfo.json.catalog.store.modelAliases != 10 {
+  panic("expected persisted alias count")
+}
+if catalogInfo.json.catalog.store.authKeys != 1 {
+  panic("expected persisted auth key count")
+}
+if catalogInfo.json.catalog.store.routePolicies != 3 {
+  panic("expected persisted route policy count")
+}
+if endpoints.json.total != 3 {
+  panic("expected persisted endpoint admin total")
+}
+if aliases.json.total != 10 {
+  panic("expected persisted alias admin total")
+}
+if authKeys.json.total != 1 {
+  panic("expected persisted auth key admin total")
+}
+if authKeys.json.items[0].keyValue != null {
+  panic("expected auth key secret hidden by default")
+}
+if routePolicies.json.total != 3 {
+  panic("expected route policy admin total")
 }
 if monitor.json.requestCount != 10 {
   panic("expected monitor request count")
@@ -800,27 +850,512 @@ if foundRequestID != true {
   panic("expected request id in recent request record")
 }
 
+let overview = client.getJSON(runtimeApp.server.url + "/api/overview")
+let stateSnapshot = client.getJSON(runtimeApp.server.url + "/api/state")
+let traffic = client.getJSON(runtimeApp.server.url + "/api/traffic?limit=3&page=1")
+let trafficWithMirror = client.getJSON(runtimeApp.server.url + "/api/traffic?limit=3&page=1&request_id=" + okResp.header("X-Request-Id"))
+let trafficMirror = client.getJSON(runtimeApp.server.url + "/api/traffic/mirror?request_id=" + okResp.header("X-Request-Id"))
+let trafficEvents = client.getJSON(runtimeApp.server.url + "/api/traffic/events")
+
+if overview.json.catalog.endpoints != 3 {
+  panic("expected api overview endpoint count")
+}
+if overview.json.catalog.settings != 3 {
+  panic("expected api overview seeded settings count")
+}
+if overview.json.runtime.reloadCount != 0 {
+  panic("expected api overview initial reload count")
+}
+if stateSnapshot.json.config.catalogPath != catalogPath {
+  panic("expected api state catalog path")
+}
+if stateSnapshot.json.config.eventLimit != 60 {
+  panic("expected api state event limit")
+}
+if stateSnapshot.json.runtime.catalogCache.endpointCount != 3 {
+  panic("expected api state catalog cache endpoint count")
+}
+if stateSnapshot.json.runtime.catalogCache.aliasCount != 10 {
+  panic("expected api state catalog cache alias count")
+}
+if stateSnapshot.json.runtime.supplierHealthPath != "/" {
+  panic("expected api state supplier health path")
+}
+if traffic.json.total != 10 {
+  panic("expected api traffic total")
+}
+if len(traffic.json.items) != 3 {
+  panic("expected api traffic page size")
+}
+if traffic.json.stats.count != 10 {
+  panic("expected api traffic stats count")
+}
+if traffic.json.stats.statuses["200"] != 9 {
+  panic("expected api traffic 200 status stats")
+}
+if traffic.json.stats.statuses["401"] != 1 {
+  panic("expected api traffic 401 status stats")
+}
+if traffic.json.stats.usage.total_tokens <= 0 {
+  panic("expected api traffic usage stats")
+}
+if traffic.json.eventCount <= 0 {
+  panic("expected api traffic event count")
+}
+if len(traffic.json.recentEvents) == 0 {
+  panic("expected api traffic recent events")
+}
+if traffic.json.store.mirrorCount != 10 {
+  panic("expected api traffic mirror count")
+}
+if trafficWithMirror.json.mirror == null {
+  panic("expected api traffic request mirror")
+}
+if trafficMirror.json.mirror.request_id != okResp.header("X-Request-Id") {
+  panic("expected api traffic mirror request id")
+}
+if trafficMirror.json.mirror.route_name != "chat-gpt-4o" {
+  panic("expected api traffic mirror route name")
+}
+if trafficMirror.json.mirror.downstream_request.headers.Authorization != "[REDACTED]" {
+  panic("expected api traffic mirror authorization redaction")
+}
+if trafficMirror.json.mirror.upstream_request.body.parsedJson != true {
+  panic("expected api traffic upstream request json summary")
+}
+if trafficMirror.json.mirror.downstream_response.body.parsedJson != true {
+  panic("expected api traffic downstream response json summary")
+}
+
+let foundTrafficStartEvent = false
+let foundTrafficCompleteEvent = false
+for event in trafficEvents.json.items {
+  let kind = object.get(event, "kind")
+  let requestID = object.get(event, "request_id")
+  if kind == "proxy.request.start" && requestID == okResp.header("X-Request-Id") {
+    foundTrafficStartEvent = true
+  }
+  if kind == "proxy.response.complete" {
+    foundTrafficCompleteEvent = true
+  }
+}
+if foundTrafficStartEvent != true {
+  panic("expected api traffic start event")
+}
+if foundTrafficCompleteEvent != true {
+  panic("expected api traffic completion event")
+}
+
+let runtimeKeyUpsert = client.requestJSON({
+  url: runtimeApp.server.url + "/api/auth-keys",
+  method: "POST",
+  json: {
+    name: "runtime-key",
+    keyValue: "runtime-key",
+    note: "created-by-smoke"
+  }
+})
+
+if runtimeKeyUpsert.status != 200 {
+  panic("expected api auth key upsert to succeed")
+}
+if runtimeKeyUpsert.json.item.name != "runtime-key" {
+  panic("expected api auth key name")
+}
+if runtimeKeyUpsert.json.item.hasSecret != true {
+  panic("expected api auth key secret marker")
+}
+
+let authKeysAfterUpsert = client.getJSON(runtimeApp.server.url + "/api/auth-keys?reveal=true")
+let stateAfterAuthKey = client.getJSON(runtimeApp.server.url + "/api/state")
+if authKeysAfterUpsert.json.total != 2 {
+  panic("expected auth key count after upsert")
+}
+if stateAfterAuthKey.json.config.apiKeyCount != 2 {
+  panic("expected runtime config api key count after upsert")
+}
+
+let runtimeKeyProxy = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer runtime-key"
+  },
+  json: {
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: "runtime key works"
+      }
+    ]
+  }
+})
+
+if runtimeKeyProxy.status != 200 {
+  panic("expected runtime auth key proxy request to succeed: " + runtimeKeyProxy.body)
+}
+
+let supplierUpsert = client.requestJSON({
+  url: runtimeApp.server.url + "/api/suppliers",
+  method: "POST",
+  json: {
+    name: "alt-upstream",
+    kind: "http",
+    baseUrl: upstream.url,
+    note: "second supplier"
+  }
+})
+
+if supplierUpsert.status != 200 {
+  panic("expected supplier upsert to succeed")
+}
+if supplierUpsert.json.item.name != "alt-upstream" {
+  panic("expected supplier upserted name")
+}
+
+let supplierHealthCheck = client.requestJSON({
+  url: runtimeApp.server.url + "/api/suppliers/health/check",
+  method: "POST",
+  json: {
+    name: "alt-upstream"
+  }
+})
+
+if supplierHealthCheck.status != 200 {
+  panic("expected supplier health check to succeed")
+}
+if supplierHealthCheck.json.total != 1 {
+  panic("expected supplier health check total")
+}
+if supplierHealthCheck.json.items[0].name != "alt-upstream" {
+  panic("expected supplier health check supplier name")
+}
+if supplierHealthCheck.json.items[0].ok != true {
+  panic("expected supplier health check ok")
+}
+if supplierHealthCheck.json.items[0].status != 200 {
+  panic("expected supplier health check status")
+}
+
+let endpointUpsert = client.requestJSON({
+  url: runtimeApp.server.url + "/api/endpoints",
+  method: "POST",
+  json: {
+    name: "custom-chat-default",
+    endpoint: "/v1/custom/chat",
+    upstreamPath: "/openai/chat/completions",
+    upstreamModel: "gpt-4o-mini",
+    protocol: "openai",
+    supplierName: "alt-upstream",
+    note: "dynamic endpoint"
+  }
+})
+
+if endpointUpsert.status != 200 {
+  panic("expected endpoint upsert to succeed")
+}
+if endpointUpsert.json.item.endpoint != "/v1/custom/chat" {
+  panic("expected endpoint path to persist")
+}
+
+let endpointsAfterUpsert = client.getJSON(runtimeApp.server.url + "/api/endpoints")
+let routesAfterEndpoint = client.getJSON(runtimeApp.server.url + "/admin/routes")
+if endpointsAfterUpsert.json.total != 4 {
+  panic("expected endpoint count after upsert")
+}
+if len(routesAfterEndpoint.json.routes.defaults) != 4 {
+  panic("expected route snapshot count after endpoint upsert")
+}
+
+let aliasUpsert = client.requestJSON({
+  url: runtimeApp.server.url + "/api/model-aliases",
+  method: "POST",
+  json: {
+    alias: "custom-alias",
+    name: "custom-chat-alias",
+    endpoint: "/v1/custom/chat",
+    upstreamPath: "/openai/chat/completions",
+    upstreamModel: "gpt-4o-mini",
+    protocol: "openai",
+    supplierName: "alt-upstream",
+    note: "dynamic alias"
+  }
+})
+
+if aliasUpsert.status != 200 {
+  panic("expected alias upsert to succeed")
+}
+if aliasUpsert.json.item.alias != "custom-alias" {
+  panic("expected alias upserted alias")
+}
+
+let routePolicyUpsert = client.requestJSON({
+  url: runtimeApp.server.url + "/api/route-policies",
+  method: "POST",
+  json: {
+    name: "custom-chat-policy",
+    endpoint: "/v1/custom/chat",
+    authMode: "api_key",
+    supplierName: "alt-upstream",
+    allowLocal: false,
+    note: "dynamic policy"
+  }
+})
+
+if routePolicyUpsert.status != 200 {
+  panic("expected route policy upsert to succeed")
+}
+if routePolicyUpsert.json.item.endpoint != "/v1/custom/chat" {
+  panic("expected route policy endpoint")
+}
+
+let settingUpsert = client.requestJSON({
+  url: runtimeApp.server.url + "/api/settings",
+  method: "POST",
+  json: {
+    name: "proxy.test_flag",
+    value: {
+      enabled: true
+    },
+    note: "smoke setting"
+  }
+})
+
+if settingUpsert.status != 200 {
+  panic("expected setting upsert to succeed")
+}
+if settingUpsert.json.item.name != "proxy.test_flag" {
+  panic("expected setting name")
+}
+
+let uiPrefUpsert = client.requestJSON({
+  url: runtimeApp.server.url + "/api/ui-prefs",
+  method: "POST",
+  json: {
+    name: "dashboard.layout",
+    value: {
+      mode: "compact"
+    },
+    note: "smoke ui pref"
+  }
+})
+
+if uiPrefUpsert.status != 200 {
+  panic("expected ui pref upsert to succeed")
+}
+if uiPrefUpsert.json.item.name != "dashboard.layout" {
+  panic("expected ui pref name")
+}
+
+let manualReload = client.requestJSON({
+  url: runtimeApp.server.url + "/api/proxy/reload",
+  method: "POST",
+  json: {}
+})
+
+if manualReload.status != 200 {
+  panic("expected manual reload to succeed")
+}
+if manualReload.json.upstreamBaseUrl != upstream.url {
+  panic("expected manual reload upstream base url")
+}
+if manualReload.json.reloadCount != 8 {
+  panic("expected manual reload count after prior api mutations")
+}
+if manualReload.json.lastReloadAt == null {
+  panic("expected manual reload timestamp")
+}
+if manualReload.json.runtime.catalogCache.reloadCount < 9 {
+  panic("expected catalog cache reload count")
+}
+
+let customDefaultResp = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/custom/chat",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer runtime-key"
+  },
+  json: {
+    model: "custom-default",
+    messages: [
+      {
+        role: "user",
+        content: "dynamic endpoint"
+      }
+    ]
+  }
+})
+
+if customDefaultResp.status != 200 {
+  panic("expected custom endpoint request to succeed: " + customDefaultResp.body)
+}
+if customDefaultResp.json.route != "custom-chat-default" {
+  panic("expected custom endpoint default route")
+}
+
+let customAliasResp = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/custom/chat",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer runtime-key"
+  },
+  json: {
+    model: "custom-alias",
+    messages: [
+      {
+        role: "user",
+        content: "dynamic alias"
+      }
+    ]
+  }
+})
+
+if customAliasResp.status != 200 {
+  panic("expected custom alias request to succeed")
+}
+if customAliasResp.json.route != "custom-chat-alias" {
+  panic("expected custom alias route")
+}
+
+let updatedState = client.getJSON(runtimeApp.server.url + "/api/state")
+if updatedState.json.catalog.store.suppliers != 2 {
+  panic("expected updated supplier count")
+}
+if updatedState.json.catalog.store.authKeys != 2 {
+  panic("expected updated auth key count")
+}
+if updatedState.json.catalog.store.settings != 4 {
+  panic("expected updated setting count")
+}
+if updatedState.json.catalog.store.uiPrefs != 1 {
+  panic("expected updated ui pref count")
+}
+if updatedState.json.runtime.reloadCount != 8 {
+  panic("expected updated runtime reload count")
+}
+if updatedState.json.runtime.lastSupplierHealthCheckAt == null {
+  panic("expected supplier health check timestamp")
+}
+if updatedState.json.runtime.catalogCache.supplierCount != 2 {
+  panic("expected updated runtime cache supplier count")
+}
+
+let deleteAlias = client.requestJSON({
+  url: runtimeApp.server.url + "/api/model-aliases",
+  method: "DELETE",
+  json: {
+    alias: "custom-alias"
+  }
+})
+
+if deleteAlias.status != 200 {
+  panic("expected alias delete to succeed")
+}
+if deleteAlias.json.result.rowsAffected != 1 {
+  panic("expected alias delete rowsAffected")
+}
+
+let deleteEndpoint = client.requestJSON({
+  url: runtimeApp.server.url + "/api/endpoints",
+  method: "DELETE",
+  json: {
+    name: "custom-chat-default"
+  }
+})
+
+if deleteEndpoint.status != 200 {
+  panic("expected endpoint delete to succeed")
+}
+if deleteEndpoint.json.result.rowsAffected != 1 {
+  panic("expected endpoint delete rowsAffected")
+}
+
+let removedEndpointResp = client.requestJSON({
+  url: runtimeApp.server.url + "/v1/custom/chat",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer runtime-key"
+  },
+  json: {
+    model: "custom-alias",
+    messages: [
+      {
+        role: "user",
+        content: "should fail"
+      }
+    ]
+  }
+})
+
+if removedEndpointResp.status != 404 {
+  panic("expected removed endpoint to stop routing")
+}
+
 proxy.stop(runtimeApp)
 
 let restartedApp = proxy.start({
   listenAddr: "127.0.0.1:0",
   upstreamBaseUrl: upstream.url,
-  apiKeys: ["demo-key"],
+  apiKeys: ["ignored-key"],
   recentLimit: 12,
+  catalogPath: catalogPath,
   historyPath: historyPath,
-  historyLimit: 12
+  historyLimit: 12,
+  defaultRoutes: [],
+  aliases: []
 })
 
 let persistedHistory = client.getJSON(restartedApp.server.url + "/admin/history")
-if persistedHistory.json.total != 10 {
+if persistedHistory.json.total != 14 {
   panic("expected persisted history after restart")
+}
+
+let persistedCatalog = client.getJSON(restartedApp.server.url + "/admin/catalog")
+if persistedCatalog.json.catalog.store.path != catalogPath {
+  panic("expected persisted catalog after restart")
+}
+if persistedCatalog.json.catalog.store.suppliers != 2 {
+  panic("expected persisted supplier count after restart")
+}
+if persistedCatalog.json.catalog.store.authKeys != 2 {
+  panic("expected persisted auth key count after restart")
+}
+if persistedCatalog.json.catalog.store.settings != 4 {
+  panic("expected persisted setting count after restart")
+}
+if persistedCatalog.json.catalog.store.uiPrefs != 1 {
+  panic("expected persisted ui pref count after restart")
+}
+
+let persistedProxy = client.requestJSON({
+  url: restartedApp.server.url + "/v1/chat/completions",
+  method: "POST",
+  headers: {
+    Authorization: "Bearer demo-key"
+  },
+  json: {
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: "persisted alias"
+      }
+    ]
+  }
+})
+
+if persistedProxy.status != 200 {
+  panic("expected persisted catalog request to succeed after restart")
+}
+if persistedProxy.json.route != "chat-gpt-4o" {
+  panic("expected persisted alias route after restart")
 }
 
 proxy.stop(restartedApp)
 upstream.close()
-if fs.exists(historyPath) {
-  fs.remove(historyPath)
-}
+safeRemove(historyPath)
+safeRemove(catalogPath)
 
 io.println("== proxy smoke ==")
 io.println("proxy status:", okResp.status)
