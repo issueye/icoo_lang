@@ -125,6 +125,25 @@ func (p *Parser) atEnd() bool {
 	return p.current().Type == token.EOF
 }
 
+// skipToClassBodyEnd skips tokens until the matching closing brace of the
+// class body is reached. It accounts for nested brace pairs (method bodies,
+// object literals, etc.) so the caller can safely consume the class-closing `}`.
+func (p *Parser) skipToClassBodyEnd() {
+	depth := 1
+	for !p.atEnd() {
+		switch p.current().Type {
+		case token.LBrace:
+			depth++
+		case token.RBrace:
+			depth--
+			if depth <= 0 {
+				return
+			}
+		}
+		p.advance()
+	}
+}
+
 func (p *Parser) synchronize() {
 	for !p.atEnd() {
 		if p.previous().Type == token.Semicolon {

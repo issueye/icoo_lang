@@ -10,6 +10,11 @@ import (
 func (p *Parser) parseExpression(precedence Precedence) ast.Expr {
 	left := p.parsePrefix()
 	if left == nil {
+		// parsePrefix failed to match; advance past the problematic token
+		// to prevent infinite loops in callers like parseBlockStmt
+		if !p.atEnd() && !p.check(token.RBrace) {
+			p.advance()
+		}
 		return &ast.NullLiteral{Span_: p.current().Span}
 	}
 

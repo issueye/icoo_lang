@@ -112,6 +112,13 @@ func (p *Parser) parseParamList() []ast.Param {
 	}
 	for {
 		nameTok := p.expectIdentOrKeyword("parameter name")
+		if nameTok.Type == token.Illegal {
+			if p.atEnd() || p.check(token.RParen) {
+				break
+			}
+			p.advance()
+			continue
+		}
 		params = append(params, ast.Param{Name: nameTok.Lexeme, Span_: nameTok.Span})
 		if p.match(token.RParen) {
 			break
@@ -168,6 +175,14 @@ func (p *Parser) parseClassDecl() ast.Decl {
 			methodStart = startTok.Span.Start
 		}
 		methodNameTok := p.expectIdentOrKeyword("method name")
+		if !p.check(token.LParen) {
+			// Not actually a method declaration — the token consumed as "method
+			// name" is actually something else (e.g. the `fn` keyword inside a
+			// class body). Skip to the matching `}` at class level.
+			p.errorAtCurrent("expected '(' after method name")
+			p.skipToClassBodyEnd()
+			break
+		}
 		methodParams := p.parseParamList()
 		methodBody := p.parseBlockStmt()
 		if methodBody == nil {
