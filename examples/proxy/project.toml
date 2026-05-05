@@ -2,4 +2,4 @@
 name = "icoo_proxy"
 entry = "src/main.ic"
 entry_function = "main"
-root_alias = "app"
+root_alias = "@"

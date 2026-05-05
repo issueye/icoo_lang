@@ -358,6 +358,9 @@ func normalizeProjectRootAlias(alias string) (string, error) {
 	if alias == "" {
 		return "", nil
 	}
+	if alias == "@" {
+		return alias, nil
+	}
 	if alias == "std" {
 		return "", errors.New("project root alias cannot be std")
 	}

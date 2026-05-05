@@ -130,6 +130,39 @@ func TestParseInitArgsRejectsInvalidRootAlias(t *testing.T) {
 	}
 }
 
+func TestParseInitArgsAcceptsAtRootAlias(t *testing.T) {
+	opts, err := parseInitArgs([]string{"--root-alias", "@"})
+	if err != nil {
+		t.Fatalf("expected @ root alias to be accepted, got: %v", err)
+	}
+	if opts.RootAlias != "@" {
+		t.Fatalf("expected root alias %q, got %q", "@", opts.RootAlias)
+	}
+}
+
+func TestLoadProjectReadsAtRootAlias(t *testing.T) {
+	root := t.TempDir()
+	entryPath := filepath.Join(root, "src", "main.ic")
+	if err := os.MkdirAll(filepath.Dir(entryPath), 0o755); err != nil {
+		t.Fatalf("mkdir entry dir: %v", err)
+	}
+	if err := os.WriteFile(entryPath, []byte("fn main() {}\n"), 0o644); err != nil {
+		t.Fatalf("write entry file: %v", err)
+	}
+	config := "[project]\nname = \"demo\"\nentry = \"src/main.ic\"\nroot_alias = \"@\"\n"
+	if err := os.WriteFile(filepath.Join(root, projectConfigFileName), []byte(config), 0o644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+
+	project, err := loadProject(root)
+	if err != nil {
+		t.Fatalf("expected loadProject to succeed, got: %v", err)
+	}
+	if project.RootAlias != "@" {
+		t.Fatalf("expected root alias %q, got %q", "@", project.RootAlias)
+	}
+}
+
 func TestLoadProjectDefaultsEntryFunction(t *testing.T) {
 	root := t.TempDir()
 	entryPath := filepath.Join(root, "src", "main.ic")

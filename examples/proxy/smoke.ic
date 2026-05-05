@@ -277,6 +277,8 @@ let upstream = server.listen({
           anthropicStreamText = "anthropic-stream:" + model + ":" + anthropicSystem + ":" + anthropicUserContent
         }
 
+        // This branch simulates Anthropic tool-use SSE so the proxy smoke test
+        // covers the hardest translation path: tool_use -> tool_calls.
         if req.header("X-Proxy-Route") == "chat-gpt-4o-anthropic" && anthropicUserContent == "anthropic tool stream" {
           let toolMessageStart = json.encode({
             type: "message_start",

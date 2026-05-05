@@ -1,6 +1,6 @@
 import std.object as object
-import "../catalog.ic" as catalog
-import "../store/catalog_store.ic" as catalogStore
+import "@/lib/catalog.ic" as catalog
+import "@/lib/store/catalog_store.ic" as catalogStore
 
 const catalogServiceApi = fn() {
   fn suppliersByNameImpl(suppliers) {

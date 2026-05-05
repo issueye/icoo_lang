@@ -419,6 +419,8 @@ const streamApi = fn() {
     let requestOptions = buildRequestOptionsImpl(options)
     let stream = sseClient.connect(requestOptions)
     let status = stream.status
+    // Responses SSE can interleave text items and tool calls, so we keep
+    // explicit block state and emit Anthropic blocks in arrival order.
     let state = {
       messageStarted: false,
       messageStopped: false,
@@ -485,6 +487,8 @@ const streamApi = fn() {
       let itemID = object.get(payload, "item_id", "")
       let outputIndex = object.get(payload, "output_index", 0)
       let contentIndex = object.get(payload, "content_index", 0)
+      // Anthropic needs stable block indexes, so we derive one key per
+      // response item/content tuple and reuse it across delta/done events.
       let key = itemID + ":" + json.encode(outputIndex) + ":" + json.encode(contentIndex)
       let block = object.get(state.textBlocks, key)
       if block != null {
@@ -601,6 +605,8 @@ const streamApi = fn() {
         stopBlock(block)
       }
 
+      // Anthropic closes the message once and reports the final reason there,
+      // so tool-use streams must end as `tool_use` even if text blocks existed.
       let stopReason = "end_turn"
       if state.sawToolUse == true {
         stopReason = "tool_use"
@@ -804,6 +810,8 @@ const streamApi = fn() {
     let requestOptions = buildRequestOptionsImpl(options)
     let stream = sseClient.connect(requestOptions)
     let status = stream.status
+    // Anthropic splits assistant output into numbered content blocks, while
+    // Chat SSE expects role/content/tool_call deltas on one choice stream.
     let state = {
       responseId: "chatcmpl-proxy-stream",
       responseModel: object.get(options, "model", ""),
@@ -869,6 +877,8 @@ const streamApi = fn() {
         return existing
       }
 
+      // We synthesize a tool-call identity from the block index when the
+      // upstream event stream has not supplied enough metadata yet.
       let key = "anthropic:" + json.encode(block.index)
       let toolState = {
         index: state.nextToolIndex,
@@ -909,6 +919,8 @@ const streamApi = fn() {
         }
       }
 
+      // Chat chunks must always start with an assistant role before content or
+      // tool deltas, even if Anthropic only sent terminal events.
       ensureAssistantRole()
       let finishReason = anthropicStopToChatFinish(state.finishReason)
       if state.sawToolUse == true {
@@ -1039,6 +1051,8 @@ const streamApi = fn() {
           let index = object.get(payload, "index", 0)
           let block = ensureBlock(index)
           if object.get(block, "type") == "tool_use" && object.get(block, "toolState") != null {
+            // Some Anthropic tool blocks only carry the final JSON snapshot on
+            // start/stop, so flush that buffered input before finishing.
             if object.get(block, "inputSent", false) != true && object.get(block, "pendingInput", "") != "" {
               block.inputSent = true
               emitToolArguments(block.toolState, block.pendingInput)

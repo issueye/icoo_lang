@@ -894,6 +894,8 @@ const proxyHandlerApi = fn() {
     let headers = buildForwardHeaders(req, authResult, route)
     headers.Accept = "text/event-stream"
 
+    // This path keeps the connection streaming end-to-end while translating
+    // Anthropic SSE frames into Chat SSE chunks for the downstream client.
     mirrorUpstreamRequest(state, req, route, upstreamUrl, headers, bodyInfo.body)
     recordProxyEvent(state, "proxy.upstream.request", req, route, {
       upstream_url: upstreamUrl,

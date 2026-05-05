@@ -1,10 +1,10 @@
 import std.io as io
 import std.time as time
 import std.express as express
-import "../lib/config.ic" as config
-import "../lib/state.ic" as state
-import "../lib/admin.ic" as admin
-import "../lib/proxy_handler.ic" as proxy
+import "@/lib/config.ic" as config
+import "@/lib/state.ic" as state
+import "@/lib/admin.ic" as admin
+import "@/lib/proxy_handler.ic" as proxy
 
 const runtimeApi = fn() {
   fn startImpl(overrides) {
