@@ -14,6 +14,12 @@ import (
 	"github.com/alicebob/miniredis/v2"
 )
 
+func quoteICString(value string) string {
+	value = strings.ReplaceAll(value, "\\", "\\\\")
+	value = strings.ReplaceAll(value, "\"", "\\\"")
+	return value
+}
+
 func TestRuntimeRunFile_ImportsExportedModule(t *testing.T) {
 	dir := t.TempDir()
 	modPath := filepath.Join(dir, "math.ic")
@@ -326,8 +332,8 @@ func TestRuntimeRunSource_StdIOCopy(t *testing.T) {
 	src := `
 import std.io.fs as io
 
-let reader = io.openReader("` + srcPath + `")
-let writer = io.openWriter("` + dstPath + `")
+let reader = io.openReader("` + quoteICString(srcPath) + `")
+let writer = io.openWriter("` + quoteICString(dstPath) + `")
 let copied = io.copy(writer, reader)
 reader.close()
 writer.close()
@@ -336,7 +342,7 @@ if copied != 10 {
   panic("unexpected copied byte count")
 }
 
-let resultReader = io.openReader("` + dstPath + `")
+let resultReader = io.openReader("` + quoteICString(dstPath) + `")
 let text = io.readAll(resultReader)
 resultReader.close()
 
@@ -635,6 +641,13 @@ if str.join(["a", "b", "c"], ",") != "a,b,c" {
 let parts = str.split("a/b/c", "/")
 if len(parts) != 3 || parts[1] != "b" {
   panic("expected split")
+}
+let lines = str.lines("a\nb\r\nc")
+if len(lines) != 3 || lines[0] != "a" || lines[2] != "c" {
+  panic("expected lines")
+}
+if str.indexOf("repo-summary", "summary") != 5 {
+  panic("expected indexOf")
 }
 if str.replace("a-b-c", "-", "/", 1) != "a/b-c" {
   panic("expected replace")
@@ -987,8 +1000,8 @@ if plain[1][0] != "1" || plain[1][1] != "2" {
   panic("unexpected csv decode arrays")
 }
 
-csv.saveToFile("` + path + `", [{name: "ada", score: 10}])
-let fromFile = csv.fromFile("` + path + `")
+csv.saveToFile("` + quoteICString(path) + `", [{name: "ada", score: 10}])
+let fromFile = csv.fromFile("` + quoteICString(path) + `")
 if fromFile[0].score != "10" {
   panic("unexpected csv fromFile result")
 }
@@ -1940,7 +1953,7 @@ func TestRuntimeRunSource_ImportsStdFSModule(t *testing.T) {
 	src := `
 import std.io.fs as fs
 
-let root = "` + dir + `"
+let root = "` + quoteICString(dir) + `"
 let nested = fs.join(root, "nested")
 let filePath = fs.join(nested, "note.txt")
 let copyPath = fs.join(root, "copy.txt")
@@ -2181,12 +2194,12 @@ if typeOf(os.cwd()) != "string" {
 if typeOf(os.tempDir()) != "string" {
   panic("tempDir should be string")
 }
-os.mkdirAll("` + nested + `")
-if !fs.exists("` + nested + `") {
+os.mkdirAll("` + quoteICString(nested) + `")
+if !fs.exists("` + quoteICString(nested) + `") {
   panic("mkdirAll should create directories")
 }
-os.removeAll("` + dir + `")
-if fs.exists("` + dir + `") {
+os.removeAll("` + quoteICString(dir) + `")
+if fs.exists("` + quoteICString(dir) + `") {
   panic("removeAll should remove directory tree")
 }
 `
@@ -2194,6 +2207,30 @@ if fs.exists("` + dir + `") {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.os import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdOSArgsCanBeOverriddenByRuntime(t *testing.T) {
+	rt := NewRuntime()
+	rt.SetScriptArgs([]string{"--workspace", "demo", "--task", "inspect"})
+
+	src := `
+import std.sys.os as os
+
+let args = os.args()
+if len(args) != 5 {
+  panic("expected overridden args length")
+}
+if args[1] != "--workspace" || args[2] != "demo" {
+  panic("unexpected overridden args prefix")
+}
+if args[3] != "--task" || args[4] != "inspect" {
+  panic("unexpected overridden args tail")
+}
+`
+
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected overridden os.args to succeed, got: %v", err)
 	}
 }
 
@@ -2337,11 +2374,11 @@ func TestRuntimeRunSource_StdJSONFileRoundTrip(t *testing.T) {
 import std.io.fs as fs
 import std.data.json as json
 
-json.saveToFile("` + path + `", {name: "icoo", nums: [1, 2], ok: true})
-if !fs.exists("` + path + `") {
+json.saveToFile("` + quoteICString(path) + `", {name: "icoo", nums: [1, 2], ok: true})
+if !fs.exists("` + quoteICString(path) + `") {
   panic("expected json file to exist")
 }
-let value = json.fromFile("` + path + `")
+let value = json.fromFile("` + quoteICString(path) + `")
 if value.name != "icoo" {
   panic("unexpected json file object field")
 }
@@ -2421,11 +2458,11 @@ func TestRuntimeRunSource_StdYAMLFileRoundTrip(t *testing.T) {
 import std.io.fs as fs
 import std.data.yaml as yaml
 
-yaml.saveToFile("` + path + `", {name: "icoo", nums: [1, 2], ok: true})
-if !fs.exists("` + path + `") {
+yaml.saveToFile("` + quoteICString(path) + `", {name: "icoo", nums: [1, 2], ok: true})
+if !fs.exists("` + quoteICString(path) + `") {
   panic("expected yaml file to exist")
 }
-let value = yaml.fromFile("` + path + `")
+let value = yaml.fromFile("` + quoteICString(path) + `")
 if value.name != "icoo" {
   panic("unexpected yaml file object field")
 }
@@ -2505,11 +2542,11 @@ func TestRuntimeRunSource_StdTOMLFileRoundTrip(t *testing.T) {
 import std.io.fs as fs
 import std.data.toml as toml
 
-toml.saveToFile("` + path + `", {name: "icoo", port: 8080, ok: true})
-if !fs.exists("` + path + `") {
+toml.saveToFile("` + quoteICString(path) + `", {name: "icoo", port: 8080, ok: true})
+if !fs.exists("` + quoteICString(path) + `") {
   panic("expected toml file to exist")
 }
-let value = toml.fromFile("` + path + `")
+let value = toml.fromFile("` + quoteICString(path) + `")
 if value.name != "icoo" {
   panic("unexpected toml file object field")
 }
@@ -2599,17 +2636,17 @@ func TestRuntimeRunSource_StdXMLFileRoundTrip(t *testing.T) {
 import std.io.fs as fs
 import std.data.xml as xml
 
-xml.saveToFile("` + path + `", {
+xml.saveToFile("` + quoteICString(path) + `", {
   name: "root",
   attrs: {id: "7"},
   children: [
     {name: "item", text: "hello"}
   ]
 })
-if !fs.exists("` + path + `") {
+if !fs.exists("` + quoteICString(path) + `") {
   panic("expected xml file to exist")
 }
-let value = xml.fromFile("` + path + `")
+let value = xml.fromFile("` + quoteICString(path) + `")
 if value.name != "root" {
   panic("unexpected xml file root name")
 }
@@ -2706,14 +2743,14 @@ func TestRuntimeRunSource_StdHTTPDownload(t *testing.T) {
 import std.io.fs as fs
 import std.net.http.client as http
 
-let resp = http.download("` + server.URL + `", "` + path + `")
+let resp = http.download("` + server.URL + `", "` + quoteICString(path) + `")
 if !resp.ok {
   panic("expected http.download success")
 }
-if !fs.exists("` + path + `") {
+if !fs.exists("` + quoteICString(path) + `") {
   panic("expected downloaded file")
 }
-if fs.readFile("` + path + `") != "download-body" {
+if fs.readFile("` + quoteICString(path) + `") != "download-body" {
   panic("unexpected downloaded contents")
 }
 `

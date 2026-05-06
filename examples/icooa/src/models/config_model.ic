@@ -1,6 +1,7 @@
 import std.io.fs as fs
 import std.sys.os as os
 import std.core.object as object
+import std.core.string as str
 import std.math.basic as math
 import std.data.json as json
 
@@ -101,6 +102,70 @@ const configApi = fn() {
     return config
   }
 
+  fn applyArgs(config) {
+    let args = os.args()
+    let i = 0
+    for i < len(args) {
+      let current = args[i]
+      if current == "--workspace" && i + 1 < len(args) {
+        config.workspace = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--task" && i + 1 < len(args) {
+        config.task = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--command" && i + 1 < len(args) {
+        config.command = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--model" && i + 1 < len(args) {
+        config.model = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--base-url" && i + 1 < len(args) {
+        config.baseUrl = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--api-key" && i + 1 < len(args) {
+        config.apiKey = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--include-hidden" {
+        config.includeHidden = true
+        i = i + 1
+        continue
+      }
+      if current == "--max-entries" && i + 1 < len(args) {
+        config.maxEntries = parseConfigInt(args[i + 1], config.maxEntries)
+        i = i + 2
+        continue
+      }
+      if current == "--max-depth" && i + 1 < len(args) {
+        config.maxDepth = parseConfigInt(args[i + 1], config.maxDepth)
+        i = i + 2
+        continue
+      }
+      if current == "--max-file-bytes" && i + 1 < len(args) {
+        config.maxFileBytes = parseConfigInt(args[i + 1], config.maxFileBytes)
+        i = i + 2
+        continue
+      }
+      i = i + 1
+    }
+
+    if str.trimSpace(config.workspace) == "" {
+      config.workspace = os.cwd()
+    }
+    return config
+  }
+
   fn loadConfigImpl(overrides) {
     let config = defaultConfig()
 
@@ -110,6 +175,7 @@ const configApi = fn() {
     }
 
     config = applyEnv(config)
+    config = applyArgs(config)
 
     if overrides != null {
       config = object.merge(config, overrides)

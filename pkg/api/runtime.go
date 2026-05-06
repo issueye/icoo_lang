@@ -23,6 +23,7 @@ type Runtime struct {
 	bundledSources   map[string]string
 	projectRoot      string
 	projectRootAlias string
+	scriptArgs       []string
 }
 
 func NewRuntime() *Runtime {
@@ -43,6 +44,10 @@ func NewRuntime() *Runtime {
 func (r *Runtime) SetProjectRoot(root string, alias string) {
 	r.projectRoot = filepath.Clean(root)
 	r.projectRootAlias = strings.TrimSpace(alias)
+}
+
+func (r *Runtime) SetScriptArgs(args []string) {
+	r.scriptArgs = append([]string(nil), args...)
 }
 
 func (r *Runtime) CheckSource(src string) []error {
@@ -165,6 +170,9 @@ func isExpression(line string) bool {
 }
 
 func (r *Runtime) runModuleSource(path, src string) (runtime.Value, error) {
+	restoreArgs := r.applyScriptArgs()
+	defer restoreArgs()
+
 	tokens := lexer.LexAll(src)
 	p := parser.New(tokens)
 	program := p.ParseProgram()
@@ -192,6 +200,21 @@ func (r *Runtime) runModuleSource(path, src string) (runtime.Value, error) {
 		}
 	}
 	return result, nil
+}
+
+func (r *Runtime) applyScriptArgs() func() {
+	if r.scriptArgs == nil {
+		return func() {}
+	}
+	original := append([]string(nil), os.Args...)
+	execName := ""
+	if len(original) > 0 {
+		execName = original[0]
+	}
+	os.Args = append([]string{execName}, r.scriptArgs...)
+	return func() {
+		os.Args = original
+	}
 }
 
 func (r *Runtime) loadModule(importerPath, spec string) (*runtime.Module, error) {

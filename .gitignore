@@ -4,3 +4,6 @@ $null
 
 *.exe
 *.sqlite
+*.log
+*.json
+*.jsonl

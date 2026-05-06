@@ -13,12 +13,12 @@ import (
 const BundleVersion = 1
 
 type BundleArchive struct {
-	Version      int               `json:"version"`
-	Entry        string            `json:"entry"`
-	EntryFunction string           `json:"entry_function,omitempty"`
-	ProjectRoot  string            `json:"project_root,omitempty"`
-	RootAlias    string            `json:"root_alias,omitempty"`
-	Modules      map[string]string `json:"modules"`
+	Version       int               `json:"version"`
+	Entry         string            `json:"entry"`
+	EntryFunction string            `json:"entry_function,omitempty"`
+	ProjectRoot   string            `json:"project_root,omitempty"`
+	RootAlias     string            `json:"root_alias,omitempty"`
+	Modules       map[string]string `json:"modules"`
 }
 
 func LoadBundle(data []byte) (*BundleArchive, error) {
@@ -84,6 +84,9 @@ func (r *Runtime) RunBundleFile(path string) (runtime.Value, error) {
 }
 
 func (r *Runtime) RunBundleArchive(path string, archive *BundleArchive) (runtime.Value, error) {
+	restoreArgs := r.applyScriptArgs()
+	defer restoreArgs()
+
 	virtualBase := filepath.Join(filepath.Dir(path), "__bundle__")
 	sources := make(map[string]string, len(archive.Modules))
 	for relPath, src := range archive.Modules {

@@ -304,7 +304,7 @@ func TestRunProjectPathUsesProjectContextForFile(t *testing.T) {
 		t.Fatalf("write entry file: %v", err)
 	}
 
-	if err := runProjectPath(entryPath); err != nil {
+	if err := runProjectPath(entryPath, nil); err != nil {
 		t.Fatalf("expected runProjectPath to use project context for file, got: %v", err)
 	}
 }

@@ -55,6 +55,12 @@
 
 ## 运行
 
+也可以直接传脚本参数，不再只能依赖环境变量：
+
+```powershell
+go run ./cmd/icoo run examples/icooa -- --workspace E:/codes/icoo_lang --task "Review the runtime and propose the next step." --command "git status --short"
+```
+
 不带远端模型时，它会退化成“本地上下文采样 + fallback 提示”，仍然可以跑通：
 
 ```powershell

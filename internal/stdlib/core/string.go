@@ -17,7 +17,9 @@ func LoadStdCoreStringModule() *runtime.Module {
 			"contains":  &runtime.NativeFunction{Name: "contains", Arity: 2, Fn: stringContains},
 			"hasPrefix": &runtime.NativeFunction{Name: "hasPrefix", Arity: 2, Fn: stringHasPrefix},
 			"hasSuffix": &runtime.NativeFunction{Name: "hasSuffix", Arity: 2, Fn: stringHasSuffix},
+			"indexOf":   &runtime.NativeFunction{Name: "indexOf", Arity: 2, Fn: stringIndexOf},
 			"join":      &runtime.NativeFunction{Name: "join", Arity: 2, Fn: stringJoin},
+			"lines":     &runtime.NativeFunction{Name: "lines", Arity: 1, Fn: stringLines},
 			"replace":   &runtime.NativeFunction{Name: "replace", Arity: -1, Fn: stringReplace},
 			"split":     &runtime.NativeFunction{Name: "split", Arity: 2, Fn: stringSplit},
 			"trimSpace": &runtime.NativeFunction{Name: "trimSpace", Arity: 1, Fn: stringTrimSpace},
@@ -50,6 +52,14 @@ func stringHasSuffix(args []runtime.Value) (runtime.Value, error) {
 	return runtime.BoolValue{Value: strings.HasSuffix(text, suffix)}, nil
 }
 
+func stringIndexOf(args []runtime.Value) (runtime.Value, error) {
+	text, needle, err := requireTwoStrings("indexOf", args)
+	if err != nil {
+		return nil, err
+	}
+	return runtime.IntValue{Value: int64(strings.Index(text, needle))}, nil
+}
+
 func stringTrimSpace(args []runtime.Value) (runtime.Value, error) {
 	text, err := utils.RequireStringArg("trimSpace", args[0])
 	if err != nil {
@@ -64,6 +74,27 @@ func stringSplit(args []runtime.Value) (runtime.Value, error) {
 		return nil, err
 	}
 	parts := strings.Split(text, sep)
+	items := make([]runtime.Value, 0, len(parts))
+	for _, part := range parts {
+		items = append(items, runtime.StringValue{Value: part})
+	}
+	return &runtime.ArrayValue{Elements: items}, nil
+}
+
+func stringLines(args []runtime.Value) (runtime.Value, error) {
+	text, err := utils.RequireStringArg("lines", args[0])
+	if err != nil {
+		return nil, err
+	}
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	if strings.HasSuffix(text, "\n") {
+		text = strings.TrimSuffix(text, "\n")
+	}
+	if text == "" {
+		return &runtime.ArrayValue{Elements: []runtime.Value{}}, nil
+	}
+	parts := strings.Split(text, "\n")
 	items := make([]runtime.Value, 0, len(parts))
 	for _, part := range parts {
 		items = append(items, runtime.StringValue{Value: part})

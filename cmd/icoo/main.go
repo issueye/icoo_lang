@@ -85,10 +85,24 @@ func runCheck(args []string) error {
 }
 
 func runRun(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: icoo run <file|dir>")
+	if len(args) < 1 {
+		return fmt.Errorf("usage: icoo run <file|dir> [-- script args...]")
 	}
-	return runProjectPath(args[0])
+	split := len(args)
+	for i, arg := range args {
+		if arg == "--" {
+			split = i
+			break
+		}
+	}
+	if split != 1 {
+		return fmt.Errorf("usage: icoo run <file|dir> [-- script args...]")
+	}
+	scriptArgs := []string{}
+	if split < len(args) {
+		scriptArgs = args[split+1:]
+	}
+	return runProjectPath(args[0], scriptArgs)
 }
 
 func printUsage() {
@@ -104,7 +118,7 @@ func printUsage() {
 	fmt.Println("  icoo extract <bundle|executable> [output]              extract embedded bundle to an .icb file")
 	fmt.Println("  icoo inspect <bundle|executable>                       inspect bundled modules and entry metadata")
 	fmt.Println("  icoo check <file|dir>                                  check source file or project")
-	fmt.Println("  icoo run <file|dir>                                    run source file or project")
+	fmt.Println("  icoo run <file|dir> [-- script args...]               run source file or project")
 }
 
 func runRepl() {

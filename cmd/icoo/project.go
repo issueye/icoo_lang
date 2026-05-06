@@ -224,12 +224,13 @@ func runCheckPath(path string) error {
 	return nil
 }
 
-func runProjectPath(path string) error {
+func runProjectPath(path string, scriptArgs []string) error {
 	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
 		rt := api.NewRuntime()
 		defer func() {
 			_ = rt.Close()
 		}()
+		rt.SetScriptArgs(scriptArgs)
 		_, err := rt.RunBundleFile(path)
 		return err
 	}
@@ -243,6 +244,7 @@ func runProjectPath(path string) error {
 	defer func() {
 		_ = rt.Close()
 	}()
+	rt.SetScriptArgs(scriptArgs)
 	rt.SetProjectRoot(resolved.Root, resolved.RootAlias)
 	if _, err := rt.RunFile(resolved.EntryPath); err != nil {
 		return err
