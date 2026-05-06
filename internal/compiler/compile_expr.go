@@ -33,6 +33,7 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 			c.emitConstant(runtime.FloatValue{Value: v})
 		case *ast.StringLiteral:
 			raw := strings.Trim(e.Raw, "\"")
+			raw = unescapeStringLiteral(raw)
 			c.emitConstant(runtime.StringValue{Value: raw})
 		case *ast.BoolLiteral:
 			if e.Value {
@@ -130,6 +131,34 @@ func (c *Compiler) compileExpr(expr ast.Expr) {
 			c.emitNull()
 		}
 	})
+}
+
+func unescapeStringLiteral(raw string) string {
+	var b strings.Builder
+	for i := 0; i < len(raw); i++ {
+		ch := raw[i]
+		if ch != '\\' || i+1 >= len(raw) {
+			b.WriteByte(ch)
+			continue
+		}
+		i++
+		switch raw[i] {
+		case 'n':
+			b.WriteByte('\n')
+		case 'r':
+			b.WriteByte('\r')
+		case 't':
+			b.WriteByte('\t')
+		case '\\':
+			b.WriteByte('\\')
+		case '"':
+			b.WriteByte('"')
+		default:
+			b.WriteByte('\\')
+			b.WriteByte(raw[i])
+		}
+	}
+	return b.String()
 }
 
 func (c *Compiler) compileSuperMemberExpr(e *ast.MemberExpr) {
