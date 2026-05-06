@@ -4,17 +4,121 @@ import std.sys.os as os
 import std.time.basic as time
 
 const sessionApi = fn() {
+  fn normalizeSessionId(config) {
+    if config.sessionId != null && config.sessionId != "" {
+      return config.sessionId
+    }
+    return time.format(time.now(), "YYYYMMDD-HHmmss", "UTC")
+  }
+
+  fn sessionPath(config, sessionId) {
+    return fs.join(config.sessionDir, sessionId + ".json")
+  }
+
+  fn load(config, sessionId) {
+    let filePath = sessionPath(config, sessionId)
+    if fs.exists(filePath) != true {
+      return null
+    }
+    return json.fromFile(filePath)
+  }
+
+  fn appendMessages(previous, latestTurn) {
+    if typeOf(previous) != "array" || len(previous) == 0 {
+      return latestTurn
+    }
+    if typeOf(latestTurn) != "array" || len(latestTurn) == 0 {
+      return previous
+    }
+
+    if len(previous) == 1 {
+      return [
+        previous[0],
+        latestTurn[0],
+        latestTurn[1]
+      ]
+    }
+    if len(previous) == 2 {
+      return [
+        previous[0],
+        previous[1],
+        latestTurn[0],
+        latestTurn[1]
+      ]
+    }
+    if len(previous) == 3 {
+      return [
+        previous[0],
+        previous[1],
+        previous[2],
+        latestTurn[0],
+        latestTurn[1]
+      ]
+    }
+    if len(previous) == 4 {
+      return [
+        previous[0],
+        previous[1],
+        previous[2],
+        previous[3],
+        latestTurn[0],
+        latestTurn[1]
+      ]
+    }
+    if len(previous) == 5 {
+      return [
+        previous[0],
+        previous[1],
+        previous[2],
+        previous[3],
+        previous[4],
+        latestTurn[0],
+        latestTurn[1]
+      ]
+    }
+    if len(previous) == 6 {
+      return [
+        previous[0],
+        previous[1],
+        previous[2],
+        previous[3],
+        previous[4],
+        previous[5],
+        latestTurn[0],
+        latestTurn[1]
+      ]
+    }
+
+    return [
+      previous[len(previous) - 6],
+      previous[len(previous) - 5],
+      previous[len(previous) - 4],
+      previous[len(previous) - 3],
+      previous[len(previous) - 2],
+      previous[len(previous) - 1],
+      latestTurn[0],
+      latestTurn[1]
+    ]
+  }
+
   fn save(config, payload) {
     os.mkdirAll(config.sessionDir)
-    let stamp = time.format(time.now(), "YYYYMMDD-HHmmss", "UTC")
-    let filePath = fs.join(config.sessionDir, stamp + ".json")
+    let sessionId = normalizeSessionId(config)
+    payload.sessionId = sessionId
+    let filePath = sessionPath(config, sessionId)
     json.saveToFile(filePath, payload)
     return filePath
   }
 
   return {
+    appendMessages: appendMessages,
+    load: load,
+    normalizeSessionId: normalizeSessionId,
     save: save
   }
 }()
 
+export const appendMessages = sessionApi.appendMessages
+export const load = sessionApi.load
+export const normalizeSessionId = sessionApi.normalizeSessionId
 export const save = sessionApi.save

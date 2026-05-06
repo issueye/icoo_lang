@@ -1,0 +1,4 @@
+let arr = []
+arr[0] = 1
+println(len(arr))
+println(arr[0])

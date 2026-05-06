@@ -9,6 +9,10 @@ import "@/src/models/workspace_model.ic" as workspaceModel
 import "@/src/models/session_model.ic" as sessionModel
 
 const agentApi = fn() {
+  fn systemPrompt() {
+    return "You are a coding agent similar to Claude Code. Be concise, concrete, and repository-aware."
+  }
+
   fn runOptionalCommand(config, logger) {
     if config.command == null || config.command == "" {
       return null
@@ -45,6 +49,54 @@ const agentApi = fn() {
     }
 
     return prompt
+  }
+
+  fn buildHistoryMessages(history) {
+    if history == null {
+      return []
+    }
+
+    let prior = object.get(history, "messages", [])
+    if typeOf(prior) != "array" {
+      return []
+    }
+    return prior
+  }
+
+  fn buildRequestMessages(config, history, prompt) {
+    let historyMessages = buildHistoryMessages(history)
+    if len(historyMessages) == 0 {
+      return [
+        {
+          role: "system",
+          content: systemPrompt()
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ]
+    }
+
+    return historyMessages + [
+      {
+        role: "user",
+        content: prompt
+      }
+    ]
+  }
+
+  fn buildLatestTurn(prompt, assistantText) {
+    return [
+      {
+        role: "user",
+        content: prompt
+      },
+      {
+        role: "assistant",
+        content: assistantText
+      }
+    ]
   }
 
   fn extractAssistantText(response) {
@@ -87,7 +139,7 @@ const agentApi = fn() {
     }
   }
 
-  fn requestAssistant(config, prompt, logger) {
+  fn requestAssistant(config, history, prompt, logger) {
     if config.apiKey == null || config.apiKey == "" {
       logger.warn("api key missing, using local fallback", {})
       return localFallback(config, prompt)
@@ -108,16 +160,7 @@ const agentApi = fn() {
       json: {
         model: config.model,
         temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content: "You are a coding agent similar to Claude Code. Be concise, concrete, and repository-aware."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ]
+        messages: buildRequestMessages(config, history, prompt)
       }
     })
 
@@ -147,23 +190,37 @@ const agentApi = fn() {
       app: "icooa"
     })
 
+    let sessionId = sessionModel.normalizeSessionId(config)
+    config.sessionId = sessionId
+    let history = null
+    if config.continueSession == true {
+      history = sessionModel.load(config, sessionId)
+    }
+
     logger.info("starting task", {
       workspace: config.workspace,
-      model: config.model
+      model: config.model,
+      sessionId: sessionId,
+      continueSession: config.continueSession
     })
 
     let workspaceSnapshot = workspaceModel.scan(config)
     let commandResult = runOptionalCommand(config, logger)
     let prompt = buildPrompt(config, workspaceSnapshot, commandResult)
-    let result = requestAssistant(config, prompt, logger)
+    let result = requestAssistant(config, history, prompt, logger)
     let savedPath = sessionModel.save(config, {
       createdAt: time.now(),
+      updatedAt: time.now(),
+      sessionId: sessionId,
       workspace: config.workspace,
       task: config.task,
       command: config.command,
+      continueSession: config.continueSession,
       workspaceSnapshot: workspaceSnapshot,
       commandResult: commandResult,
-      assistant: result
+      assistant: result,
+      messages: buildLatestTurn(prompt, result.text),
+      previousMessages: object.get(history, "messages", [])
     })
 
     logger.info("session saved", {
@@ -174,10 +231,14 @@ const agentApi = fn() {
     io.println("== icooa ==")
     io.println("workspace:", config.workspace)
     io.println("task:", config.task)
+    io.println("session id:", sessionId)
     io.println("session:", savedPath)
     if commandResult != null {
       io.println("command ok:", commandResult.ok)
       io.println("command code:", commandResult.code)
+    }
+    if history != null {
+      io.println("history messages:", len(object.get(history, "messages", [])))
     }
     io.println("")
     io.println(result.mode + ":")

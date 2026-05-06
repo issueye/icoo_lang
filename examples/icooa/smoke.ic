@@ -3,6 +3,9 @@ import std.io.fs as fs
 import std.sys.os as os
 import std.net.http.server as server
 import std.time.basic as time
+import std.core.object as object
+import std.core.string as str
+import std.data.json as json
 import "@/src/main.ic" as icooa
 
 let root = fs.join(os.tempDir(), "icooa-smoke")
@@ -17,6 +20,12 @@ fs.writeFile(fs.join(workspace, "main.go"), "package main\n\nfunc main() {}\n")
 let mock = server.listen({
   addr: "127.0.0.1:0",
   handler: fn(req) {
+    let payload = object.get(req, "json", {})
+    let messages = object.get(payload, "messages", [])
+    let turnCount = 0
+    if typeOf(messages) == "array" {
+      turnCount = len(messages)
+    }
     return {
       json: {
         id: "chatcmpl-demo",
@@ -24,7 +33,7 @@ let mock = server.listen({
           {
             message: {
               role: "assistant",
-              content: "Summary\n- Demo workspace received.\n\nRisks\n- The scan is intentionally shallow.\n\nNext Steps\n- Open README.md.\n- Inspect main.go."
+              content: "Summary\n- Demo workspace received.\n- message count: " + json.encode(turnCount) + "\n\nRisks\n- The scan is intentionally shallow.\n\nNext Steps\n- Open README.md.\n- Inspect main.go."
             }
           }
         ]
@@ -33,11 +42,39 @@ let mock = server.listen({
   }
 })
 
-let result = icooa.run({
+let first = icooa.run({
   workspace: workspace,
   task: "Review this repository and propose next steps.",
   baseUrl: mock.url + "/v1",
   apiKey: "demo-key",
+  sessionId: "demo-session",
+  sessionDir: sessions,
+  logPath: fs.join(root, "icooa.log"),
+  includeHidden: true,
+  maxEntries: 8,
+  maxDepth: 2,
+  maxFileBytes: 2048
+})
+
+time.sleep(50)
+
+if first.result.mode != "remote" {
+  panic("expected remote mode")
+}
+if fs.exists(first.savedPath) != true {
+  panic("expected saved session")
+}
+if str.contains(first.result.text, "message count: 2") != true {
+  panic("expected first request to contain system and user messages")
+}
+
+let second = icooa.run({
+  workspace: workspace,
+  task: "Continue and focus on concrete file priorities.",
+  baseUrl: mock.url + "/v1",
+  apiKey: "demo-key",
+  sessionId: "demo-session",
+  continueSession: true,
   sessionDir: sessions,
   logPath: fs.join(root, "icooa.log"),
   includeHidden: true,
@@ -49,11 +86,14 @@ let result = icooa.run({
 mock.close()
 time.sleep(50)
 
-if result.result.mode != "remote" {
-  panic("expected remote mode")
+if second.result.mode != "remote" {
+  panic("expected second remote mode")
 }
-if fs.exists(result.savedPath) != true {
-  panic("expected saved session")
+if second.savedPath != first.savedPath {
+  panic("expected continued session to overwrite same session file")
+}
+if str.contains(second.result.text, "message count: 4") != true {
+  panic("expected second request to include prior turn history")
 }
 
 io.println("icooa smoke ok")

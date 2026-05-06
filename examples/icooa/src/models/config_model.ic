@@ -27,6 +27,8 @@ const configApi = fn() {
       maxDepth: 2,
       maxFileBytes: 4096,
       includeHidden: false,
+      sessionId: null,
+      continueSession: false,
       sessionDir: fs.join(stateDir, "sessions"),
       logPath: fs.join(stateDir, "icooa.log")
     }
@@ -69,6 +71,19 @@ const configApi = fn() {
     let sessionDir = os.getEnv("ICOOA_SESSION_DIR")
     if sessionDir != null {
       config.sessionDir = sessionDir
+    }
+
+    let sessionId = os.getEnv("ICOOA_SESSION_ID")
+    if sessionId != null {
+      config.sessionId = sessionId
+    }
+
+    let continueSession = os.getEnv("ICOOA_CONTINUE")
+    if continueSession == "1" || continueSession == "true" {
+      config.continueSession = true
+    }
+    if continueSession == "0" || continueSession == "false" {
+      config.continueSession = false
     }
 
     let logPath = os.getEnv("ICOOA_LOG_PATH")
@@ -135,6 +150,16 @@ const configApi = fn() {
       if current == "--api-key" && i + 1 < len(args) {
         config.apiKey = args[i + 1]
         i = i + 2
+        continue
+      }
+      if current == "--session" && i + 1 < len(args) {
+        config.sessionId = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--continue" {
+        config.continueSession = true
+        i = i + 1
         continue
       }
       if current == "--include-hidden" {

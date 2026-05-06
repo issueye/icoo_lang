@@ -9,6 +9,10 @@
 3. 调用 OpenAI 兼容 `/v1/chat/completions` 接口生成代码建议
 4. 把请求上下文、命令结果和模型输出保存成会话 JSON
 
+现在还额外支持“持久化多轮”模式：
+
+5. 使用固定 `sessionId` 连续运行时，把上一轮 user/assistant 消息继续带入下一轮请求
+
 ## 目录
 
 - `app.ic`
@@ -42,6 +46,10 @@
   - API Key
 - `ICOOA_SESSION_DIR`
   - 会话保存目录
+- `ICOOA_SESSION_ID`
+  - 指定会话 ID；相同 ID 会写入同一个会话文件
+- `ICOOA_CONTINUE`
+  - 为 `true/1` 时，继续读取并复用已有会话历史
 - `ICOOA_LOG_PATH`
   - 日志路径
 - `ICOOA_MAX_ENTRIES`
@@ -87,6 +95,27 @@ go run ./cmd/icoo run examples/icooa
 - 模型或 fallback 的代码建议
 
 默认还会把结构化日志写到 `.icooa/icooa.log`，并做基础日志切割。
+
+## 多轮继续
+
+第一轮：
+
+```powershell
+go run ./cmd/icoo run examples/icooa -- --session demo --workspace E:/codes/icoo_lang --task "Summarize the runtime."
+```
+
+继续同一个会话：
+
+```powershell
+go run ./cmd/icoo run examples/icooa -- --session demo --continue --workspace E:/codes/icoo_lang --task "Now focus on the most important files and concrete next edits."
+```
+
+继续模式下，`icooa` 会：
+
+- 读取 `sessions/demo.json`
+- 取回之前保存的 user / assistant 消息
+- 把这些历史消息拼进下一次 `/v1/chat/completions` 请求
+- 用同一个会话文件覆盖保存最新轮次
 
 ## 冒烟
 
