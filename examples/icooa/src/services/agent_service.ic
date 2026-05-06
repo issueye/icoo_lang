@@ -77,13 +77,7 @@ const agentApi = fn() {
         }
       ]
     }
-
-    return historyMessages + [
-      {
-        role: "user",
-        content: prompt
-      }
-    ]
+    return sessionModel.appendUserMessage(historyMessages, prompt)
   }
 
   fn buildLatestTurn(prompt, assistantText) {
@@ -208,6 +202,8 @@ const agentApi = fn() {
     let commandResult = runOptionalCommand(config, logger)
     let prompt = buildPrompt(config, workspaceSnapshot, commandResult)
     let result = requestAssistant(config, history, prompt, logger)
+    let latestTurn = buildLatestTurn(prompt, result.text)
+    let allMessages = sessionModel.appendMessages(object.get(history, "messages", []), latestTurn)
     let savedPath = sessionModel.save(config, {
       createdAt: time.now(),
       updatedAt: time.now(),
@@ -219,7 +215,7 @@ const agentApi = fn() {
       workspaceSnapshot: workspaceSnapshot,
       commandResult: commandResult,
       assistant: result,
-      messages: buildLatestTurn(prompt, result.text),
+      messages: allMessages,
       previousMessages: object.get(history, "messages", [])
     })
 

@@ -101,6 +101,72 @@ const sessionApi = fn() {
     ]
   }
 
+  fn appendUserMessage(previous, prompt) {
+    let latestTurn = [
+      {
+        role: "user",
+        content: prompt
+      },
+      {
+        role: "assistant",
+        content: ""
+      }
+    ]
+    let combined = appendMessages(previous, latestTurn)
+    if len(combined) == 2 {
+      return [
+        combined[0],
+        combined[1]
+      ]
+    }
+    if len(combined) == 3 {
+      return [
+        combined[0],
+        combined[1],
+        combined[2]
+      ]
+    }
+    if len(combined) == 4 {
+      return [
+        combined[0],
+        combined[1],
+        combined[2],
+        combined[3]
+      ]
+    }
+    if len(combined) == 5 {
+      return [
+        combined[0],
+        combined[1],
+        combined[2],
+        combined[3],
+        combined[4]
+      ]
+    }
+    if len(combined) == 6 {
+      return [
+        combined[0],
+        combined[1],
+        combined[2],
+        combined[3],
+        combined[4],
+        combined[5]
+      ]
+    }
+    if len(combined) == 7 {
+      return [
+        combined[0],
+        combined[1],
+        combined[2],
+        combined[3],
+        combined[4],
+        combined[5],
+        combined[6]
+      ]
+    }
+    return combined
+  }
+
   fn save(config, payload) {
     os.mkdirAll(config.sessionDir)
     let sessionId = normalizeSessionId(config)
@@ -112,6 +178,7 @@ const sessionApi = fn() {
 
   return {
     appendMessages: appendMessages,
+    appendUserMessage: appendUserMessage,
     load: load,
     normalizeSessionId: normalizeSessionId,
     save: save
@@ -119,6 +186,7 @@ const sessionApi = fn() {
 }()
 
 export const appendMessages = sessionApi.appendMessages
+export const appendUserMessage = sessionApi.appendUserMessage
 export const load = sessionApi.load
 export const normalizeSessionId = sessionApi.normalizeSessionId
 export const save = sessionApi.save
