@@ -1,12 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -402,6 +404,181 @@ if keys[0] != "name" || keys[1] != "nested" || keys[2] != "port" {
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
 		t.Fatalf("expected std.object import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdCoreLogLoggerOutputsStructuredText(t *testing.T) {
+	src := `
+import std.core.log as log
+
+let logger = log.create({
+  level: "debug",
+  format: "text",
+  output: "stdout"
+})
+
+logger.info("request complete", {
+  requestId: "req-1",
+  status: 200,
+  ok: true
+})
+`
+
+	output := captureStdout(t, func() {
+		rt := NewRuntime()
+		if _, err := rt.RunSource(src); err != nil {
+			t.Fatalf("expected std.core.log run to succeed, got: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "level=INFO") {
+		t.Fatalf("expected INFO level in output, got: %q", output)
+	}
+	if !strings.Contains(output, "msg=\"request complete\"") {
+		t.Fatalf("expected message in output, got: %q", output)
+	}
+	if !strings.Contains(output, "requestId=req-1") {
+		t.Fatalf("expected requestId field in output, got: %q", output)
+	}
+	if !strings.Contains(output, "status=200") {
+		t.Fatalf("expected status field in output, got: %q", output)
+	}
+}
+
+func TestRuntimeRunSource_StdCoreLogWithCarriesContext(t *testing.T) {
+	src := `
+import std.core.log as log
+
+let logger = log.create({
+  level: "info",
+  format: "text",
+  output: "stdout"
+}).with({
+  service: "catalog",
+  component: "sync"
+})
+
+logger.warn("degraded", {
+  retryable: true
+})
+`
+
+	output := captureStdout(t, func() {
+		rt := NewRuntime()
+		if _, err := rt.RunSource(src); err != nil {
+			t.Fatalf("expected std.core.log with run to succeed, got: %v", err)
+		}
+	})
+
+	if !strings.Contains(output, "level=WARN") {
+		t.Fatalf("expected WARN level in output, got: %q", output)
+	}
+	if !strings.Contains(output, "service=catalog") {
+		t.Fatalf("expected service context in output, got: %q", output)
+	}
+	if !strings.Contains(output, "component=sync") {
+		t.Fatalf("expected component context in output, got: %q", output)
+	}
+	if !strings.Contains(output, "retryable=true") {
+		t.Fatalf("expected retryable field in output, got: %q", output)
+	}
+}
+
+func TestRuntimeRunSource_StdCoreLogHonorsLevelFilter(t *testing.T) {
+	src := `
+import std.core.log as log
+
+let logger = log.create({
+  level: "warn",
+  format: "text",
+  output: "stdout"
+})
+
+logger.info("hidden")
+logger.error("visible")
+`
+
+	output := captureStdout(t, func() {
+		rt := NewRuntime()
+		if _, err := rt.RunSource(src); err != nil {
+			t.Fatalf("expected std.core.log level filter run to succeed, got: %v", err)
+		}
+	})
+
+	if strings.Contains(output, "hidden") {
+		t.Fatalf("expected info log to be filtered, got: %q", output)
+	}
+	if !strings.Contains(output, "visible") {
+		t.Fatalf("expected error log to be emitted, got: %q", output)
+	}
+}
+
+func TestRuntimeRunSource_StdCoreLogWritesToFile(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "app.log")
+
+	src := `
+import std.core.log as log
+
+let logger = log.create({
+  level: "info",
+  format: "json",
+  output: "file",
+  filePath: "` + filepath.ToSlash(logPath) + `",
+  rotation: {
+    maxSizeMB: 1,
+    maxBackups: 2,
+    maxAgeDays: 7,
+    compress: false
+  }
+})
+
+logger.info("persisted", {
+  requestId: "req-file",
+  status: 201
+})
+logger.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.core.log file output run to succeed, got: %v", err)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log file: %v", err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "\"msg\":\"persisted\"") {
+		t.Fatalf("expected message in log file, got: %q", text)
+	}
+	if !strings.Contains(text, "\"requestId\":\"req-file\"") {
+		t.Fatalf("expected requestId in log file, got: %q", text)
+	}
+	if !strings.Contains(text, "\"status\":201") {
+		t.Fatalf("expected status in log file, got: %q", text)
+	}
+}
+
+func TestRuntimeRunSource_StdCoreLogRejectsInvalidRotation(t *testing.T) {
+	src := `
+import std.core.log as log
+
+log.create({
+  output: "file",
+  filePath: "tmp.log",
+  rotation: {
+    maxSizeMB: 0
+  }
+})
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err == nil {
+		t.Fatal("expected std.core.log invalid rotation to fail")
+	} else if !strings.Contains(err.Error(), "maxSizeMB") {
+		t.Fatalf("expected maxSizeMB validation error, got: %v", err)
 	}
 }
 
@@ -4511,4 +4688,33 @@ export const answer = 42
 	if len(errs) > 0 {
 		t.Fatalf("expected no check errors, got %v", errs)
 	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	original := os.Stdout
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stdout pipe: %v", err)
+	}
+
+	os.Stdout = writer
+	defer func() {
+		os.Stdout = original
+	}()
+
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, reader)
+		done <- buf.String()
+	}()
+
+	fn()
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+	return <-done
 }

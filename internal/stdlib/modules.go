@@ -12,95 +12,67 @@ import (
 	stdweb "icoo_lang/internal/stdlib/web"
 )
 
+var moduleLoaders = map[string]func() *runtime.Module{
+	// std.core - 核心基础
+	"std.core.object":  stdcore.LoadStdCoreObjectModule,
+	"std.core.observe": stdcore.LoadStdCoreObserveModule,
+	"std.core.log":     stdcore.LoadStdCoreLogModule,
+	"std.core.service": stdcore.LoadStdCoreServiceModule,
+	"std.core.cache":   stdcore.LoadStdCoreCacheModule,
+
+	// std.io - 输入输出
+	"std.io.console":  stdio.LoadStdIOConsoleModule,
+	"std.io.fs":       stdio.LoadStdIOFSModule,
+	"std.io.template": stdio.LoadStdIOTemplateModule,
+
+	// std.time - 时间日期
+	"std.time.basic": stdcore.LoadStdTimeBasicModule,
+
+	// std.math - 数学计算
+	"std.math.basic": stdcore.LoadStdMathBasicModule,
+
+	// std.net - 网络通信
+	"std.net.http.client":      stdnet.LoadStdNetHTTPClientModule,
+	"std.net.http.server":      stdnet.LoadStdNetHTTPServerModule,
+	"std.net.websocket.client": stdnet.LoadStdNetWebSocketClientModule,
+	"std.net.websocket.server": stdnet.LoadStdNetWebSocketServerModule,
+	"std.net.sse.client":       stdnet.LoadStdNetSSEClientModule,
+	"std.net.sse.server":       stdnet.LoadStdNetSSEServerModule,
+	"std.net.socket.client":    stdnet.LoadStdNetSocketClientModule,
+	"std.net.socket.server":    stdnet.LoadStdNetSocketServerModule,
+
+	// std.web - Web开发
+	"std.web.express": stdweb.LoadStdWebExpressModule,
+
+	// std.db - 数据库
+	"std.db.sql":   stddb.LoadStdDBSQLModule,
+	"std.db.orm":   stddb.LoadStdDBORMModule,
+	"std.db.redis": stddb.LoadStdDBRedisModule,
+
+	// std.data - 数据处理
+	"std.data.json":     stdformat.LoadStdJSONModule,
+	"std.data.yaml":     stdformat.LoadStdYAMLModule,
+	"std.data.toml":     stdformat.LoadStdTOMLModule,
+	"std.data.xml":      stdformat.LoadStdXMLModule,
+	"std.data.csv":      stdformat.LoadStdCSVModule,
+	"std.data.compress": stddata.LoadStdDataCompressModule,
+
+	// std.crypto - 加密安全
+	"std.crypto.hash": stddata.LoadStdCryptoHashModule,
+	"std.crypto.uuid": stddata.LoadStdCryptoUUIDModule,
+
+	// std.sys - 系统信息
+	"std.sys.os":   stdsystem.LoadStdSysOSModule,
+	"std.sys.host": stdsystem.LoadStdSysHostModule,
+	"std.sys.exec": stdsystem.LoadStdSysExecModule,
+}
+
 // LoadModule 根据模块路径加载标准库模块
 // 采用三级命名规范：std.<领域>.<子领域>.<功能>
 func LoadModule(spec string) (*runtime.Module, bool) {
-	switch spec {
-	// ==================== std.core - 核心基础 ====================
-	case "std.core.object":
-		return stdcore.LoadStdCoreObjectModule(), true
-	case "std.core.observe":
-		return stdcore.LoadStdCoreObserveModule(), true
-	case "std.core.service":
-		return stdcore.LoadStdCoreServiceModule(), true
-	case "std.core.cache":
-		return stdcore.LoadStdCoreCacheModule(), true
-
-	// ==================== std.io - 输入输出 ====================
-	case "std.io.console":
-		return stdio.LoadStdIOConsoleModule(), true
-	case "std.io.fs":
-		return stdio.LoadStdIOFSModule(), true
-	case "std.io.template":
-		return stdio.LoadStdIOTemplateModule(), true
-
-	// ==================== std.time - 时间日期 ====================
-	case "std.time.basic":
-		return stdcore.LoadStdTimeBasicModule(), true
-
-	// ==================== std.math - 数学计算 ====================
-	case "std.math.basic":
-		return stdcore.LoadStdMathBasicModule(), true
-
-	// ==================== std.net - 网络通信 ====================
-	case "std.net.http.client":
-		return stdnet.LoadStdNetHTTPClientModule(), true
-	case "std.net.http.server":
-		return stdnet.LoadStdNetHTTPServerModule(), true
-	case "std.net.websocket.client":
-		return stdnet.LoadStdNetWebSocketClientModule(), true
-	case "std.net.websocket.server":
-		return stdnet.LoadStdNetWebSocketServerModule(), true
-	case "std.net.sse.client":
-		return stdnet.LoadStdNetSSEClientModule(), true
-	case "std.net.sse.server":
-		return stdnet.LoadStdNetSSEServerModule(), true
-	case "std.net.socket.client":
-		return stdnet.LoadStdNetSocketClientModule(), true
-	case "std.net.socket.server":
-		return stdnet.LoadStdNetSocketServerModule(), true
-
-	// ==================== std.web - Web开发 ====================
-	case "std.web.express":
-		return stdweb.LoadStdWebExpressModule(), true
-
-	// ==================== std.db - 数据库 ====================
-	case "std.db.sql":
-		return stddb.LoadStdDBSQLModule(), true
-	case "std.db.orm":
-		return stddb.LoadStdDBORMModule(), true
-	case "std.db.redis":
-		return stddb.LoadStdDBRedisModule(), true
-
-	// ==================== std.data - 数据处理 ====================
-	case "std.data.json":
-		return stdformat.LoadStdJSONModule(), true
-	case "std.data.yaml":
-		return stdformat.LoadStdYAMLModule(), true
-	case "std.data.toml":
-		return stdformat.LoadStdTOMLModule(), true
-	case "std.data.xml":
-		return stdformat.LoadStdXMLModule(), true
-	case "std.data.csv":
-		return stdformat.LoadStdCSVModule(), true
-	case "std.data.compress":
-		return stddata.LoadStdDataCompressModule(), true
-
-	// ==================== std.crypto - 加密安全 ====================
-	case "std.crypto.hash":
-		return stddata.LoadStdCryptoHashModule(), true
-	case "std.crypto.uuid":
-		return stddata.LoadStdCryptoUUIDModule(), true
-
-	// ==================== std.sys - 系统信息 ====================
-	case "std.sys.os":
-		return stdsystem.LoadStdSysOSModule(), true
-	case "std.sys.host":
-		return stdsystem.LoadStdSysHostModule(), true
-	case "std.sys.exec":
-		return stdsystem.LoadStdSysExecModule(), true
-
-	default:
+	loader, ok := moduleLoaders[spec]
+	if !ok {
 		return nil, false
 	}
+	return loader(), true
 }
