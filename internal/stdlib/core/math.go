@@ -9,10 +9,10 @@ import (
 	"icoo_lang/internal/runtime"
 )
 
-func LoadStdMathModule() *runtime.Module {
+func LoadStdMathBasicModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.math",
-		Path: "std.math",
+		Name: "std.math.basic",
+		Path: "std.math.basic",
 		Exports: map[string]runtime.Value{
 			"abs":   &runtime.NativeFunction{Name: "abs", Arity: 1, Fn: mathAbs},
 			"max":   &runtime.NativeFunction{Name: "max", Arity: 2, Fn: mathMax},

@@ -1,7 +1,7 @@
-import std.json as json
-import std.object as object
+import std.data.json as json
+import std.core.object as object
 import std.net.sse.client as sseClient
-import std.time as time
+import std.time.basic as time
 
 const streamApi = fn() {
   fn buildRequestOptionsImpl(options) {

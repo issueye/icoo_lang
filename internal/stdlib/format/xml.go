@@ -21,8 +21,8 @@ type xmlNode struct {
 
 func LoadStdXMLModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.xml",
-		Path: "std.xml",
+		Name: "std.data.xml",
+	Path: "std.data.xml",
 		Exports: map[string]runtime.Value{
 			"encode":     &runtime.NativeFunction{Name: "encode", Arity: 1, Fn: xmlEncode},
 			"decode":     &runtime.NativeFunction{Name: "decode", Arity: 1, Fn: xmlDecode},

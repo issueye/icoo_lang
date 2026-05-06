@@ -1,7 +1,7 @@
-import std.io as io
-import std.os as os
-import std.host as host
-import std.exec as exec
+import std.io.console as io
+import std.sys.os as os
+import std.sys.host as host
+import std.sys.exec as exec
 
 let command = "go"
 let args = ["env", "GOOS"]

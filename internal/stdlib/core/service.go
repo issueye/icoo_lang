@@ -8,6 +8,7 @@ import (
 	"icoo_lang/internal/runtime"
 )
 
+// serviceBinding 服务绑定结构
 type serviceBinding struct {
 	mu          sync.RWMutex
 	name        string
@@ -23,16 +24,18 @@ type serviceBinding struct {
 	suppliers   map[string]runtime.Value
 }
 
+// serviceLatencyStats 延迟统计结构
 type serviceLatencyStats struct {
 	count   int64
 	totalMs int64
 	maxMs   int64
 }
 
-func LoadStdServiceModule() *runtime.Module {
+// LoadStdCoreServiceModule 加载 std.core.service 模块
+func LoadStdCoreServiceModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.service",
-		Path: "std.service",
+		Name: "std.core.service",
+		Path: "std.core.service",
 		Exports: map[string]runtime.Value{
 			"create": &runtime.NativeFunction{Name: "create", Arity: 1, Fn: serviceCreate},
 		},
@@ -40,6 +43,7 @@ func LoadStdServiceModule() *runtime.Module {
 	}
 }
 
+// serviceCreate 创建服务对象
 func serviceCreate(args []runtime.Value) (runtime.Value, error) {
 	options, ok := args[0].(*runtime.ObjectValue)
 	if !ok {
@@ -102,6 +106,7 @@ func serviceCreate(args []runtime.Value) (runtime.Value, error) {
 	return binding.object(), nil
 }
 
+// object 返回服务对象
 func (binding *serviceBinding) object() *runtime.ObjectValue {
 	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
 		"name":              runtime.StringValue{Value: binding.name},
@@ -133,6 +138,7 @@ func (binding *serviceBinding) object() *runtime.ObjectValue {
 	}}
 }
 
+// health 返回健康状态
 func (binding *serviceBinding) health(args []runtime.Value) (runtime.Value, error) {
 	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
 		"ok":        runtime.BoolValue{Value: true},
@@ -142,6 +148,7 @@ func (binding *serviceBinding) health(args []runtime.Value) (runtime.Value, erro
 	}}, nil
 }
 
+// readyStatus 返回就绪状态
 func (binding *serviceBinding) readyStatus(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.RLock()
 	ready := binding.ready
@@ -161,6 +168,7 @@ func (binding *serviceBinding) readyStatus(args []runtime.Value) (runtime.Value,
 	}}, nil
 }
 
+// markReady 标记为就绪
 func (binding *serviceBinding) markReady(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -169,6 +177,7 @@ func (binding *serviceBinding) markReady(args []runtime.Value) (runtime.Value, e
 	return runtime.NullValue{}, nil
 }
 
+// markNotReady 标记为未就绪
 func (binding *serviceBinding) markNotReady(args []runtime.Value) (runtime.Value, error) {
 	if len(args) > 1 {
 		return nil, fmt.Errorf("markNotReady expects 0 or 1 arguments")
@@ -188,6 +197,7 @@ func (binding *serviceBinding) markNotReady(args []runtime.Value) (runtime.Value
 	return runtime.NullValue{}, nil
 }
 
+// increment 增加计数器
 func (binding *serviceBinding) increment(args []runtime.Value) (runtime.Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return nil, fmt.Errorf("increment expects name and optional delta")
@@ -213,6 +223,7 @@ func (binding *serviceBinding) increment(args []runtime.Value) (runtime.Value, e
 	return runtime.IntValue{Value: binding.incrementCounter(nameValue.Value, delta)}, nil
 }
 
+// counter 获取计数器值
 func (binding *serviceBinding) counter(args []runtime.Value) (runtime.Value, error) {
 	nameValue, ok := args[0].(runtime.StringValue)
 	if !ok || nameValue.Value == "" {
@@ -221,10 +232,12 @@ func (binding *serviceBinding) counter(args []runtime.Value) (runtime.Value, err
 	return runtime.IntValue{Value: binding.counterValue(nameValue.Value)}, nil
 }
 
+// countersSnapshot 获取所有计数器快照
 func (binding *serviceBinding) countersSnapshot(args []runtime.Value) (runtime.Value, error) {
 	return binding.countersObject(), nil
 }
 
+// setLogger 设置日志处理器
 func (binding *serviceBinding) setLogger(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -239,6 +252,7 @@ func (binding *serviceBinding) setLogger(args []runtime.Value) (runtime.Value, e
 	return runtime.NullValue{}, nil
 }
 
+// log 记录日志
 func (binding *serviceBinding) log(ctx *runtime.NativeContext, args []runtime.Value) (runtime.Value, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return nil, fmt.Errorf("log expects level, message, and optional fields")
@@ -279,6 +293,7 @@ func (binding *serviceBinding) log(ctx *runtime.NativeContext, args []runtime.Va
 	return event, nil
 }
 
+// recordEvent 记录事件
 func (binding *serviceBinding) recordEvent(args []runtime.Value) (runtime.Value, error) {
 	eventValue, err := binding.normalizeEventRecord(args[0])
 	if err != nil {
@@ -287,18 +302,22 @@ func (binding *serviceBinding) recordEvent(args []runtime.Value) (runtime.Value,
 	return binding.events.add([]runtime.Value{eventValue})
 }
 
+// clearEvents 清空事件
 func (binding *serviceBinding) clearEvents(args []runtime.Value) (runtime.Value, error) {
 	return binding.events.clear(args)
 }
 
+// eventCount 获取事件数量
 func (binding *serviceBinding) eventCount(args []runtime.Value) (runtime.Value, error) {
 	return binding.events.totalCount(args)
 }
 
+// recentEvents 获取最近事件
 func (binding *serviceBinding) recentEvents(args []runtime.Value) (runtime.Value, error) {
 	return binding.events.list(args)
 }
 
+// setReload 设置重载处理器
 func (binding *serviceBinding) setReload(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -313,6 +332,7 @@ func (binding *serviceBinding) setReload(args []runtime.Value) (runtime.Value, e
 	return runtime.NullValue{}, nil
 }
 
+// reload 执行重载
 func (binding *serviceBinding) reload(ctx *runtime.NativeContext, args []runtime.Value) (runtime.Value, error) {
 	binding.mu.RLock()
 	reloader := binding.reloader
@@ -342,6 +362,7 @@ func (binding *serviceBinding) reload(ctx *runtime.NativeContext, args []runtime
 	return result, nil
 }
 
+// setSupplierHealth 设置供应商健康状态
 func (binding *serviceBinding) setSupplierHealth(args []runtime.Value) (runtime.Value, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return nil, fmt.Errorf("setSupplierHealth expects name, status, and optional detail")
@@ -360,6 +381,7 @@ func (binding *serviceBinding) setSupplierHealth(args []runtime.Value) (runtime.
 	return status, nil
 }
 
+// supplierHealth 获取供应商健康状态
 func (binding *serviceBinding) supplierHealth(args []runtime.Value) (runtime.Value, error) {
 	name, err := requireServiceStringArg("supplierHealth", args[0])
 	if err != nil {
@@ -373,6 +395,7 @@ func (binding *serviceBinding) supplierHealth(args []runtime.Value) (runtime.Val
 	return runtime.NullValue{}, nil
 }
 
+// suppliersHealth 获取所有供应商健康状态
 func (binding *serviceBinding) suppliersHealth(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.RLock()
 	defer binding.mu.RUnlock()
@@ -383,6 +406,7 @@ func (binding *serviceBinding) suppliersHealth(args []runtime.Value) (runtime.Va
 	return &runtime.ObjectValue{Fields: fields}, nil
 }
 
+// recordRequest 记录请求
 func (binding *serviceBinding) recordRequest(args []runtime.Value) (runtime.Value, error) {
 	recordValue, statusCode, durationMs, err := binding.normalizeRequestRecord(args[0])
 	if err != nil {
@@ -403,18 +427,22 @@ func (binding *serviceBinding) recordRequest(args []runtime.Value) (runtime.Valu
 	return runtime.NullValue{}, nil
 }
 
+// clearRequests 清空请求记录
 func (binding *serviceBinding) clearRequests(args []runtime.Value) (runtime.Value, error) {
 	return binding.recent.clear(args)
 }
 
+// requestCount 获取请求数量
 func (binding *serviceBinding) requestCount(args []runtime.Value) (runtime.Value, error) {
 	return binding.recent.totalCount(args)
 }
 
+// recentRequests 获取最近请求
 func (binding *serviceBinding) recentRequests(args []runtime.Value) (runtime.Value, error) {
 	return binding.recent.list(args)
 }
 
+// latencySnapshot 获取延迟统计快照
 func (binding *serviceBinding) latencySnapshot(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.RLock()
 	stats := binding.latency
@@ -432,6 +460,7 @@ func (binding *serviceBinding) latencySnapshot(args []runtime.Value) (runtime.Va
 	}}, nil
 }
 
+// snapshot 获取完整快照
 func (binding *serviceBinding) snapshot(args []runtime.Value) (runtime.Value, error) {
 	healthValue, err := binding.health(nil)
 	if err != nil {
@@ -485,6 +514,7 @@ func (binding *serviceBinding) snapshot(args []runtime.Value) (runtime.Value, er
 	}}, nil
 }
 
+// uptimeMs 获取运行时间（毫秒）
 func (binding *serviceBinding) uptimeMs() int64 {
 	now := time.Now().UnixMilli()
 	if now < binding.startedAt {
@@ -493,6 +523,7 @@ func (binding *serviceBinding) uptimeMs() int64 {
 	return now - binding.startedAt
 }
 
+// normalizeRequestRecord 规范化请求记录
 func (binding *serviceBinding) normalizeRequestRecord(value runtime.Value) (runtime.Value, int64, int64, error) {
 	objectValue, ok := value.(*runtime.ObjectValue)
 	if !ok {
@@ -532,6 +563,7 @@ func (binding *serviceBinding) normalizeRequestRecord(value runtime.Value) (runt
 	return &runtime.ObjectValue{Fields: fields}, statusCode, durationMs, nil
 }
 
+// normalizeEventRecord 规范化事件记录
 func (binding *serviceBinding) normalizeEventRecord(value runtime.Value) (runtime.Value, error) {
 	objectValue, ok := value.(*runtime.ObjectValue)
 	if !ok {
@@ -558,6 +590,7 @@ func (binding *serviceBinding) normalizeEventRecord(value runtime.Value) (runtim
 	return &runtime.ObjectValue{Fields: fields}, nil
 }
 
+// normalizeSupplierHealth 规范化供应商健康状态
 func (binding *serviceBinding) normalizeSupplierHealth(name string, status runtime.Value, extra []runtime.Value) (runtime.Value, error) {
 	fields := map[string]runtime.Value{
 		"name":      runtime.StringValue{Value: name},
@@ -593,6 +626,7 @@ func (binding *serviceBinding) normalizeSupplierHealth(name string, status runti
 	return &runtime.ObjectValue{Fields: fields}, nil
 }
 
+// observeLatency 记录延迟观测
 func (binding *serviceBinding) observeLatency(durationMs int64) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -603,6 +637,7 @@ func (binding *serviceBinding) observeLatency(durationMs int64) {
 	}
 }
 
+// incrementCounter 增加计数器
 func (binding *serviceBinding) incrementCounter(name string, delta int64) int64 {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -610,12 +645,14 @@ func (binding *serviceBinding) incrementCounter(name string, delta int64) int64 
 	return binding.counters[name]
 }
 
+// counterValue 获取计数器值
 func (binding *serviceBinding) counterValue(name string) int64 {
 	binding.mu.RLock()
 	defer binding.mu.RUnlock()
 	return binding.counters[name]
 }
 
+// countersObject 获取计数器对象
 func (binding *serviceBinding) countersObject() *runtime.ObjectValue {
 	binding.mu.RLock()
 	defer binding.mu.RUnlock()
@@ -627,6 +664,7 @@ func (binding *serviceBinding) countersObject() *runtime.ObjectValue {
 	return &runtime.ObjectValue{Fields: fields}
 }
 
+// requireServiceStringArg 要求服务字符串参数
 func requireServiceStringArg(name string, value runtime.Value) (string, error) {
 	text, ok := value.(runtime.StringValue)
 	if !ok || text.Value == "" {

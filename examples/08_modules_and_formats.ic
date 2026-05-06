@@ -1,6 +1,6 @@
-import std.io as io
-import std.json as json
-import std.yaml as yaml
+import std.io.console as io
+import std.data.json as json
+import std.data.yaml as yaml
 import "./lib/math_helpers.ic" as math
 
 let profile = {

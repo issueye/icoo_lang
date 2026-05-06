@@ -8,10 +8,10 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdORMModule() *runtime.Module {
+func LoadStdDBORMModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.orm",
-		Path: "std.orm",
+		Name: "std.db.orm",
+		Path: "std.db.orm",
 		Exports: map[string]runtime.Value{
 			"model": &runtime.NativeFunction{Name: "model", Arity: 2, Fn: ormModel},
 		},

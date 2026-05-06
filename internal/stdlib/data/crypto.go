@@ -16,10 +16,10 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdCryptoModule() *runtime.Module {
+func LoadStdCryptoHashModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.crypto",
-		Path: "std.crypto",
+		Name: "std.crypto.hash",
+		Path: "std.crypto.hash",
 		Exports: map[string]runtime.Value{
 			"aesGCMDecrypt": &runtime.NativeFunction{Name: "aesGCMDecrypt", Arity: 3, Fn: cryptoAESGCMDecrypt},
 			"aesGCMEncrypt": &runtime.NativeFunction{Name: "aesGCMEncrypt", Arity: 2, Fn: cryptoAESGCMEncrypt},

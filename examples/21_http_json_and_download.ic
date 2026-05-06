@@ -1,9 +1,9 @@
-import std.io as io
+import std.io.console as io
 import std.net.http.client as client
 import std.net.http.server as server
-import std.fs as fs
-import std.os as os
-import std.uuid as uuid
+import std.io.fs as fs
+import std.sys.os as os
+import std.crypto.uuid as uuid
 
 let app = server.listen({
   addr: "127.0.0.1:0",

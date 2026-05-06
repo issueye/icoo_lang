@@ -1,4 +1,4 @@
-import std.io as io
+import std.io.console as io
 
 let nums = [3, 5, 8]
 let total = 0

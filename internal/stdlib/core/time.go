@@ -13,10 +13,10 @@ import (
 
 const defaultTimeLayout = "YYYY-MM-DDTHH:mm:ss.SSSZ"
 
-func LoadStdTimeModule() *runtime.Module {
+func LoadStdTimeBasicModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.time",
-		Path: "std.time",
+		Name: "std.time.basic",
+		Path: "std.time.basic",
 		Exports: map[string]runtime.Value{
 			"add":      &runtime.NativeFunction{Name: "add", Arity: 2, Fn: timeAdd},
 			"diff":     &runtime.NativeFunction{Name: "diff", Arity: 2, Fn: timeDiff},

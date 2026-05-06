@@ -1,5 +1,5 @@
-import std.io as io
-import std.crypto as crypto
+import std.io.console as io
+import std.crypto.hash as crypto
 
 let text = "icoo"
 let key = "secret-key"

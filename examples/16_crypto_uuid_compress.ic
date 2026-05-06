@@ -1,7 +1,7 @@
-import std.io as io
-import std.crypto as crypto
-import std.uuid as uuid
-import std.compress as compress
+import std.io.console as io
+import std.crypto.hash as crypto
+import std.crypto.uuid as uuid
+import std.data.compress as compress
 
 let text = "icoo-native-libs"
 let key = "0123456789abcdef"

@@ -11,8 +11,8 @@ import (
 
 func LoadStdJSONModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.json",
-		Path: "std.json",
+		Name: "std.data.json",
+	Path: "std.data.json",
 		Exports: map[string]runtime.Value{
 			"encode":     &runtime.NativeFunction{Name: "encode", Arity: 1, Fn: jsonEncode},
 			"decode":     &runtime.NativeFunction{Name: "decode", Arity: 1, Fn: jsonDecode},

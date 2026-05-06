@@ -9,10 +9,11 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdExecModule() *runtime.Module {
+// LoadStdSysExecModule 加载 std.sys.exec 模块
+func LoadStdSysExecModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.exec",
-		Path: "std.exec",
+		Name: "std.sys.exec",
+		Path: "std.sys.exec",
 		Exports: map[string]runtime.Value{
 			"run": &runtime.NativeFunction{Name: "run", Arity: -1, Fn: execRun},
 		},

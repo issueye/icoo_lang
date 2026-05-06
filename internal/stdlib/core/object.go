@@ -7,10 +7,11 @@ import (
 	"icoo_lang/internal/runtime"
 )
 
-func LoadStdObjectModule() *runtime.Module {
+// LoadStdCoreObjectModule 加载 std.core.object 模块
+func LoadStdCoreObjectModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.object",
-		Path: "std.object",
+		Name: "std.core.object",
+		Path: "std.core.object",
 		Exports: map[string]runtime.Value{
 			"get":   &runtime.NativeFunction{Name: "get", Arity: -1, Fn: objectGet},
 			"has":   &runtime.NativeFunction{Name: "has", Arity: 2, Fn: objectHas},
@@ -21,6 +22,7 @@ func LoadStdObjectModule() *runtime.Module {
 	}
 }
 
+// objectGet 获取对象属性值
 func objectGet(args []runtime.Value) (runtime.Value, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return nil, fmt.Errorf("get expects object, key, and optional fallback")
@@ -48,6 +50,7 @@ func objectGet(args []runtime.Value) (runtime.Value, error) {
 	return runtime.NullValue{}, nil
 }
 
+// objectHas 检查对象是否有指定属性
 func objectHas(args []runtime.Value) (runtime.Value, error) {
 	obj, err := requireObjectLike("has", args[0])
 	if err != nil {
@@ -64,6 +67,7 @@ func objectHas(args []runtime.Value) (runtime.Value, error) {
 	return runtime.BoolValue{Value: ok}, nil
 }
 
+// objectKeys 获取对象所有键
 func objectKeys(args []runtime.Value) (runtime.Value, error) {
 	obj, err := requireObjectLike("keys", args[0])
 	if err != nil {
@@ -84,6 +88,7 @@ func objectKeys(args []runtime.Value) (runtime.Value, error) {
 	return &runtime.ArrayValue{Elements: values}, nil
 }
 
+// objectMerge 合并多个对象
 func objectMerge(args []runtime.Value) (runtime.Value, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("merge expects at least one argument")
@@ -104,6 +109,7 @@ func objectMerge(args []runtime.Value) (runtime.Value, error) {
 	return &runtime.ObjectValue{Fields: fields}, nil
 }
 
+// requireObjectLike 要求参数为对象或null
 func requireObjectLike(name string, value runtime.Value) (*runtime.ObjectValue, error) {
 	switch v := value.(type) {
 	case runtime.NullValue:
@@ -115,6 +121,7 @@ func requireObjectLike(name string, value runtime.Value) (*runtime.ObjectValue, 
 	}
 }
 
+// requireObjectKey 要求参数为字符串键
 func requireObjectKey(name string, value runtime.Value) (string, error) {
 	key, ok := value.(runtime.StringValue)
 	if !ok {

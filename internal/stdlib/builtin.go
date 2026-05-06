@@ -5,7 +5,7 @@ import (
 	"reflect"
 
 	"icoo_lang/internal/runtime"
-	stdcore "icoo_lang/internal/stdlib/core"
+	stdio "icoo_lang/internal/stdlib/io"
 	"icoo_lang/internal/vm"
 )
 
@@ -27,11 +27,11 @@ func RegisterBuiltins(machine *vm.VM) {
 }
 
 func builtinPrint(args []runtime.Value) (runtime.Value, error) {
-	return stdcore.Print(args)
+	return stdio.Print(args)
 }
 
 func builtinPrintln(args []runtime.Value) (runtime.Value, error) {
-	return stdcore.Println(args)
+	return stdio.Println(args)
 }
 
 func builtinLen(args []runtime.Value) (runtime.Value, error) {

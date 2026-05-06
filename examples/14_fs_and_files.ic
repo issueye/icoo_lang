@@ -1,7 +1,7 @@
-import std.io as io
-import std.fs as fs
-import std.os as os
-import std.uuid as uuid
+import std.io.console as io
+import std.io.fs as fs
+import std.sys.os as os
+import std.crypto.uuid as uuid
 
 let root = fs.join(os.tempDir(), "icoo-fs-" + uuid.v4())
 let copied = fs.join(root, "copied.txt")

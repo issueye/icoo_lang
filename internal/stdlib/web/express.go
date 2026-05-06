@@ -1,4 +1,4 @@
-package express
+package web
 
 import (
 	"bytes"
@@ -19,10 +19,11 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdExpressModule() *runtime.Module {
+// LoadStdWebExpressModule 加载 std.web.express 模块
+func LoadStdWebExpressModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.express",
-		Path: "std.express",
+		Name: "std.web.express",
+		Path: "std.web.express",
 		Exports: map[string]runtime.Value{
 			"create":   &runtime.NativeFunction{Name: "create", Arity: 0, Fn: expressCreate},
 			"json":     &runtime.NativeFunction{Name: "json", Arity: 1, Fn: expressJSON},

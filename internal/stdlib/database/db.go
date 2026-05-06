@@ -45,10 +45,10 @@ func (v *dbHandleValue) String() string {
 	return "<db>"
 }
 
-func LoadStdDBModule() *runtime.Module {
+func LoadStdDBSQLModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.db",
-		Path: "std.db",
+		Name: "std.db.sql",
+		Path: "std.db.sql",
 		Exports: map[string]runtime.Value{
 			"mysql":    &runtime.NativeFunction{Name: "mysql", Arity: 1, Fn: dbOpenMySQL},
 			"open":     &runtime.NativeFunction{Name: "open", Arity: 2, Fn: dbOpen},

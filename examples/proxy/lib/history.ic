@@ -1,9 +1,9 @@
-import std.db as db
-import std.fs as fs
-import std.json as json
-import std.object as object
-import std.orm as orm
-import std.time as time
+import std.db.sql as db
+import std.io.fs as fs
+import std.data.json as json
+import std.core.object as object
+import std.db.orm as orm
+import std.time.basic as time
 
 const historyApi = fn() {
   fn newHistoryImpl(config) {

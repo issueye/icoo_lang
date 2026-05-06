@@ -1,7 +1,7 @@
-import std.json as json
-import std.fs as fs
-import std.object as object
-import std.os as os
+import std.data.json as json
+import std.io.fs as fs
+import std.core.object as object
+import std.sys.os as os
 
 const configApi = fn() {
   fn defaultConfig() {

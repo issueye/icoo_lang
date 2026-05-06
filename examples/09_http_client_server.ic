@@ -1,4 +1,4 @@
-import std.io as io
+import std.io.console as io
 import std.net.http.client as client
 import std.net.http.server as server
 

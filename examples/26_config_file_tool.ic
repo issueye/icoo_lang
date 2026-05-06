@@ -1,9 +1,9 @@
-import std.io as io
-import std.fs as fs
-import std.os as os
-import std.uuid as uuid
-import std.json as json
-import std.yaml as yaml
+import std.io.console as io
+import std.io.fs as fs
+import std.sys.os as os
+import std.crypto.uuid as uuid
+import std.data.json as json
+import std.data.yaml as yaml
 
 let root = fs.join(os.tempDir(), "icoo-config-" + uuid.v4())
 os.mkdirAll(root)

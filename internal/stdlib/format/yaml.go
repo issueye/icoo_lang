@@ -12,8 +12,8 @@ import (
 
 func LoadStdYAMLModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.yaml",
-		Path: "std.yaml",
+		Name: "std.data.yaml",
+	Path: "std.data.yaml",
 		Exports: map[string]runtime.Value{
 			"encode":     &runtime.NativeFunction{Name: "encode", Arity: 1, Fn: yamlEncode},
 			"decode":     &runtime.NativeFunction{Name: "decode", Arity: 1, Fn: yamlDecode},

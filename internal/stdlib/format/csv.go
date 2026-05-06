@@ -14,8 +14,8 @@ import (
 
 func LoadStdCSVModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.csv",
-		Path: "std.csv",
+		Name: "std.data.csv",
+	Path: "std.data.csv",
 		Exports: map[string]runtime.Value{
 			"decode":     &runtime.NativeFunction{Name: "decode", Arity: -1, Fn: csvDecode},
 			"encode":     &runtime.NativeFunction{Name: "encode", Arity: -1, Fn: csvEncode},

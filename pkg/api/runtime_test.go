@@ -58,7 +58,7 @@ func TestRuntimeInvokeGlobal_CallsProjectEntryFunction(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "main.ic")
 	marker := filepath.Join(dir, "marker.txt")
-	if err := os.WriteFile(path, []byte(`import std.fs as fs
+	if err := os.WriteFile(path, []byte(`import std.io.fs as fs
 
 fn main() {
   fs.writeFile("`+filepath.ToSlash(marker)+`", "ok")

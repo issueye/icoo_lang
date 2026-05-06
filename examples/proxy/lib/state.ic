@@ -1,7 +1,7 @@
 import std.net.http.client as client
-import std.object as object
-import std.service as service
-import std.time as time
+import std.core.object as object
+import std.core.service as service
+import std.time.basic as time
 import "./history.ic" as history
 import "./services/catalog_service.ic" as catalogService
 

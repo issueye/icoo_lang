@@ -11,10 +11,10 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdCompressModule() *runtime.Module {
+func LoadStdDataCompressModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.compress",
-		Path: "std.compress",
+		Name: "std.data.compress",
+		Path: "std.data.compress",
 		Exports: map[string]runtime.Value{
 			"gzipCompress":   &runtime.NativeFunction{Name: "gzipCompress", Arity: 1, Fn: compressGzipCompress},
 			"gzipDecompress": &runtime.NativeFunction{Name: "gzipDecompress", Arity: 1, Fn: compressGzipDecompress},

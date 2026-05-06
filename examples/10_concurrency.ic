@@ -1,4 +1,4 @@
-import std.io as io
+import std.io.console as io
 
 let jobs = chan(2)
 let done = chan(1)

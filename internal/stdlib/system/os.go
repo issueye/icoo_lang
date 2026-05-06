@@ -10,10 +10,11 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdOSModule() *runtime.Module {
+// LoadStdSysOSModule 加载 std.sys.os 模块
+func LoadStdSysOSModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.os",
-		Path: "std.os",
+		Name: "std.sys.os",
+		Path: "std.sys.os",
 		Exports: map[string]runtime.Value{
 			"args":      &runtime.NativeFunction{Name: "args", Arity: 0, Fn: osArgs},
 			"cwd":       &runtime.NativeFunction{Name: "cwd", Arity: 0, Fn: osCwd},

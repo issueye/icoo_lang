@@ -1,5 +1,5 @@
-import std.io as io
-import std.express as express
+import std.io.console as io
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()

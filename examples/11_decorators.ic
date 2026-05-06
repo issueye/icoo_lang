@@ -1,4 +1,4 @@
-import std.io as io
+import std.io.console as io
 
 fn prefix(text) {
   return fn(target) {

@@ -10,6 +10,7 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
+// cacheBinding 缓存绑定结构
 type cacheBinding struct {
 	mu         sync.Mutex
 	defaultTTL time.Duration
@@ -22,16 +23,18 @@ type cacheBinding struct {
 	items      map[string]cacheEntry
 }
 
+// cacheEntry 缓存条目结构
 type cacheEntry struct {
 	value     runtime.Value
 	expiresAt time.Time
 	order     int64
 }
 
-func LoadStdCacheModule() *runtime.Module {
+// LoadStdCoreCacheModule 加载 std.core.cache 模块
+func LoadStdCoreCacheModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.cache",
-		Path: "std.cache",
+		Name: "std.core.cache",
+		Path: "std.core.cache",
 		Exports: map[string]runtime.Value{
 			"create": &runtime.NativeFunction{Name: "create", Arity: -1, Fn: cacheCreate},
 		},
@@ -39,6 +42,7 @@ func LoadStdCacheModule() *runtime.Module {
 	}
 }
 
+// cacheCreate 创建缓存对象
 func cacheCreate(args []runtime.Value) (runtime.Value, error) {
 	binding := &cacheBinding{
 		items: map[string]cacheEntry{},
@@ -64,6 +68,7 @@ func cacheCreate(args []runtime.Value) (runtime.Value, error) {
 	return binding.object(), nil
 }
 
+// applyOptions 应用配置选项
 func (binding *cacheBinding) applyOptions(options *runtime.ObjectValue) error {
 	if ttlValue, ok := options.Fields["defaultTTL"]; ok {
 		ms, err := requireCacheIntArg("create", ttlValue)
@@ -95,6 +100,7 @@ func (binding *cacheBinding) applyOptions(options *runtime.ObjectValue) error {
 	return nil
 }
 
+// object 返回缓存对象
 func (binding *cacheBinding) object() *runtime.ObjectValue {
 	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
 		"clear": &runtime.NativeFunction{Name: "cache.clear", Arity: 0, Fn: binding.clear},
@@ -108,6 +114,7 @@ func (binding *cacheBinding) object() *runtime.ObjectValue {
 	}}
 }
 
+// set 设置缓存值
 func (binding *cacheBinding) set(args []runtime.Value) (runtime.Value, error) {
 	if len(args) < 2 || len(args) > 3 {
 		return nil, fmt.Errorf("set expects key, value, and optional ttl")
@@ -145,6 +152,7 @@ func (binding *cacheBinding) set(args []runtime.Value) (runtime.Value, error) {
 	return binding.object(), nil
 }
 
+// get 获取缓存值
 func (binding *cacheBinding) get(args []runtime.Value) (runtime.Value, error) {
 	if len(args) < 1 || len(args) > 2 {
 		return nil, fmt.Errorf("get expects key and optional fallback")
@@ -174,6 +182,7 @@ func (binding *cacheBinding) get(args []runtime.Value) (runtime.Value, error) {
 	return entry.value, nil
 }
 
+// has 检查缓存是否存在
 func (binding *cacheBinding) has(args []runtime.Value) (runtime.Value, error) {
 	key, err := utils.RequireStringArg("has", args[0])
 	if err != nil {
@@ -186,6 +195,7 @@ func (binding *cacheBinding) has(args []runtime.Value) (runtime.Value, error) {
 	return runtime.BoolValue{Value: ok}, nil
 }
 
+// del 删除缓存
 func (binding *cacheBinding) del(args []runtime.Value) (runtime.Value, error) {
 	key, err := utils.RequireStringArg("del", args[0])
 	if err != nil {
@@ -199,6 +209,7 @@ func (binding *cacheBinding) del(args []runtime.Value) (runtime.Value, error) {
 	return runtime.BoolValue{Value: ok}, nil
 }
 
+// clear 清空缓存
 func (binding *cacheBinding) clear(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -206,6 +217,7 @@ func (binding *cacheBinding) clear(args []runtime.Value) (runtime.Value, error) 
 	return runtime.NullValue{}, nil
 }
 
+// size 获取缓存大小
 func (binding *cacheBinding) size(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -213,6 +225,7 @@ func (binding *cacheBinding) size(args []runtime.Value) (runtime.Value, error) {
 	return runtime.IntValue{Value: int64(len(binding.items))}, nil
 }
 
+// keys 获取所有键
 func (binding *cacheBinding) keys(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -229,6 +242,7 @@ func (binding *cacheBinding) keys(args []runtime.Value) (runtime.Value, error) {
 	return &runtime.ArrayValue{Elements: values}, nil
 }
 
+// stats 获取统计信息
 func (binding *cacheBinding) stats(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -243,6 +257,7 @@ func (binding *cacheBinding) stats(args []runtime.Value) (runtime.Value, error) 
 	}}, nil
 }
 
+// purgeExpiredLocked 清理过期条目（需持有锁）
 func (binding *cacheBinding) purgeExpiredLocked() {
 	if len(binding.items) == 0 {
 		return
@@ -255,6 +270,7 @@ func (binding *cacheBinding) purgeExpiredLocked() {
 	}
 }
 
+// enforceLimitLocked 强制执行条目限制（需持有锁）
 func (binding *cacheBinding) enforceLimitLocked() {
 	if binding.maxEntries <= 0 || len(binding.items) <= binding.maxEntries {
 		return
@@ -275,6 +291,7 @@ func (binding *cacheBinding) enforceLimitLocked() {
 	}
 }
 
+// requireCacheIntArg 要求缓存整数参数
 func requireCacheIntArg(name string, value runtime.Value) (int64, error) {
 	intValue, ok := value.(runtime.IntValue)
 	if !ok {
@@ -283,6 +300,7 @@ func requireCacheIntArg(name string, value runtime.Value) (int64, error) {
 	return intValue.Value, nil
 }
 
+// cloneCacheValue 克隆缓存值
 func cloneCacheValue(value runtime.Value) (runtime.Value, error) {
 	plain, err := utils.RuntimeToPlainValue(value)
 	if err != nil {

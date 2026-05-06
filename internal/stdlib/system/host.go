@@ -7,10 +7,11 @@ import (
 	langruntime "icoo_lang/internal/runtime"
 )
 
-func LoadStdHostModule() *langruntime.Module {
+// LoadStdSysHostModule 加载 std.sys.host 模块
+func LoadStdSysHostModule() *langruntime.Module {
 	return &langruntime.Module{
-		Name: "std.host",
-		Path: "std.host",
+		Name: "std.sys.host",
+		Path: "std.sys.host",
 		Exports: map[string]langruntime.Value{
 			"arch":       &langruntime.NativeFunction{Name: "arch", Arity: 0, Fn: hostArch},
 			"goos":       &langruntime.NativeFunction{Name: "goos", Arity: 0, Fn: hostGOOS},

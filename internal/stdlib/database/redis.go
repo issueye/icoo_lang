@@ -44,10 +44,10 @@ func (v *redisHandleValue) String() string {
 	return "<redis>"
 }
 
-func LoadStdRedisModule() *runtime.Module {
+func LoadStdDBRedisModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.redis",
-		Path: "std.redis",
+		Name: "std.db.redis",
+		Path: "std.db.redis",
 		Exports: map[string]runtime.Value{
 			"connect": &runtime.NativeFunction{Name: "connect", Arity: 1, Fn: redisConnect},
 			"open":    &runtime.NativeFunction{Name: "open", Arity: 1, Fn: redisOpen},

@@ -9,10 +9,10 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdUUIDModule() *runtime.Module {
+func LoadStdCryptoUUIDModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.uuid",
-		Path: "std.uuid",
+		Name: "std.crypto.uuid",
+		Path: "std.crypto.uuid",
 		Exports: map[string]runtime.Value{
 			"isValid": &runtime.NativeFunction{Name: "isValid", Arity: 1, Fn: uuidIsValid},
 			"v4":      &runtime.NativeFunction{Name: "v4", Arity: 0, Fn: uuidV4},

@@ -1,4 +1,4 @@
-import std.object as object
+import std.core.object as object
 
 const catalogApi = fn() {
   fn buildCatalogImpl(config) {

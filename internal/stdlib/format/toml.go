@@ -12,8 +12,8 @@ import (
 
 func LoadStdTOMLModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.toml",
-		Path: "std.toml",
+		Name: "std.data.toml",
+	Path: "std.data.toml",
 		Exports: map[string]runtime.Value{
 			"encode":     &runtime.NativeFunction{Name: "encode", Arity: 1, Fn: tomlEncode},
 			"decode":     &runtime.NativeFunction{Name: "decode", Arity: 1, Fn: tomlDecode},

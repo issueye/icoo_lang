@@ -1,4 +1,4 @@
-import std.io as io
+import std.io.console as io
 import std.net.websocket.server as wsServer
 import std.net.websocket.client as wsClient
 

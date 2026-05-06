@@ -1,4 +1,4 @@
-import std.io as io
+import std.io.console as io
 
 type UserID = int
 

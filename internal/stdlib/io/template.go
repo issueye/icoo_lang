@@ -1,4 +1,4 @@
-package core
+package io
 
 import (
 	"encoding/json"
@@ -10,10 +10,11 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
-func LoadStdTemplateModule() *runtime.Module {
+// LoadStdIOTemplateModule 加载 std.io.template 模块
+func LoadStdIOTemplateModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.template",
-		Path: "std.template",
+		Name: "std.io.template",
+		Path: "std.io.template",
 		Exports: map[string]runtime.Value{
 			"compile": &runtime.NativeFunction{Name: "compile", Arity: 1, Fn: templateCompile},
 			"render":  &runtime.NativeFunction{Name: "render", Arity: 2, Fn: templateRender},
@@ -22,6 +23,7 @@ func LoadStdTemplateModule() *runtime.Module {
 	}
 }
 
+// templateCompile 编译模板
 func templateCompile(args []runtime.Value) (runtime.Value, error) {
 	text, err := utils.RequireStringArg("compile", args[0])
 	if err != nil {
@@ -35,6 +37,7 @@ func templateCompile(args []runtime.Value) (runtime.Value, error) {
 	}}, nil
 }
 
+// templateRender 渲染模板
 func templateRender(args []runtime.Value) (runtime.Value, error) {
 	text, err := utils.RequireStringArg("render", args[0])
 	if err != nil {
@@ -43,6 +46,7 @@ func templateRender(args []runtime.Value) (runtime.Value, error) {
 	return renderTemplate(text, args[1])
 }
 
+// renderTemplate 渲染模板字符串
 func renderTemplate(text string, data runtime.Value) (runtime.Value, error) {
 	plain, err := utils.RuntimeToPlainValue(data)
 	if err != nil {
@@ -55,6 +59,7 @@ func renderTemplate(text string, data runtime.Value) (runtime.Value, error) {
 	return runtime.StringValue{Value: rendered}, nil
 }
 
+// renderTemplateSegment 渲染模板片段
 func renderTemplateSegment(text string, root any, current any) (string, error) {
 	var out strings.Builder
 	for {
@@ -113,6 +118,7 @@ func renderTemplateSegment(text string, root any, current any) (string, error) {
 	}
 }
 
+// templateSectionBody 提取模板区块体
 func templateSectionBody(text string, section string) (string, string, error) {
 	depth := 1
 	index := 0
@@ -141,6 +147,7 @@ func templateSectionBody(text string, section string) (string, string, error) {
 	return "", "", fmt.Errorf("template section %s is not closed", section)
 }
 
+// templateResolve 解析模板变量
 func templateResolve(path string, root any, current any) (any, bool) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -158,6 +165,7 @@ func templateResolve(path string, root any, current any) (any, bool) {
 	return templateLookupPath(root, path)
 }
 
+// templateLookupPath 按路径查找值
 func templateLookupPath(value any, path string) (any, bool) {
 	if path == "" {
 		return value, true
@@ -185,6 +193,7 @@ func templateLookupPath(value any, path string) (any, bool) {
 	return current, true
 }
 
+// templateTruthy 判断值是否为真
 func templateTruthy(value any) bool {
 	switch typed := value.(type) {
 	case nil:
@@ -210,6 +219,7 @@ func templateTruthy(value any) bool {
 	}
 }
 
+// templateSlice 将值转换为切片
 func templateSlice(value any) []any {
 	switch typed := value.(type) {
 	case nil:
@@ -221,6 +231,7 @@ func templateSlice(value any) []any {
 	}
 }
 
+// templateString 将值转换为字符串
 func templateString(value any) string {
 	switch typed := value.(type) {
 	case nil:

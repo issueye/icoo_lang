@@ -1,8 +1,8 @@
-import std.io as io
-import std.time as time
-import std.math as math
-import std.json as json
-import std.fs as fs
+import std.io.console as io
+import std.time.basic as time
+import std.math.basic as math
+import std.data.json as json
+import std.io.fs as fs
 
 let now1 = time.now()
 time.sleep(0)

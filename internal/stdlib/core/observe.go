@@ -8,6 +8,7 @@ import (
 	"icoo_lang/internal/stdlib/utils"
 )
 
+// observeRecentBinding 观测最近值的绑定结构
 type observeRecentBinding struct {
 	mu    sync.RWMutex
 	limit int
@@ -15,10 +16,11 @@ type observeRecentBinding struct {
 	items []runtime.Value
 }
 
-func LoadStdObserveModule() *runtime.Module {
+// LoadStdCoreObserveModule 加载 std.core.observe 模块
+func LoadStdCoreObserveModule() *runtime.Module {
 	return &runtime.Module{
-		Name: "std.observe",
-		Path: "std.observe",
+		Name: "std.core.observe",
+		Path: "std.core.observe",
 		Exports: map[string]runtime.Value{
 			"recent": &runtime.NativeFunction{Name: "recent", Arity: 1, Fn: observeRecent},
 		},
@@ -26,6 +28,7 @@ func LoadStdObserveModule() *runtime.Module {
 	}
 }
 
+// observeRecent 创建最近值观测器
 func observeRecent(args []runtime.Value) (runtime.Value, error) {
 	limitValue, ok := args[0].(runtime.IntValue)
 	if !ok {
@@ -42,16 +45,18 @@ func observeRecent(args []runtime.Value) (runtime.Value, error) {
 	return binding.object(), nil
 }
 
+// object 返回观测器对象
 func (binding *observeRecentBinding) object() *runtime.ObjectValue {
 	return &runtime.ObjectValue{Fields: map[string]runtime.Value{
-		"add": &runtime.NativeFunction{Name: "observe.recent.add", Arity: 1, Fn: binding.add},
+		"add":   &runtime.NativeFunction{Name: "observe.recent.add", Arity: 1, Fn: binding.add},
 		"clear": &runtime.NativeFunction{Name: "observe.recent.clear", Arity: 0, Fn: binding.clear},
 		"count": &runtime.NativeFunction{Name: "observe.recent.count", Arity: 0, Fn: binding.count},
-		"list": &runtime.NativeFunction{Name: "observe.recent.list", Arity: 0, Fn: binding.list},
+		"list":  &runtime.NativeFunction{Name: "observe.recent.list", Arity: 0, Fn: binding.list},
 		"total": &runtime.NativeFunction{Name: "observe.recent.total", Arity: 0, Fn: binding.totalCount},
 	}}
 }
 
+// add 添加值到观测器
 func (binding *observeRecentBinding) add(args []runtime.Value) (runtime.Value, error) {
 	snapshot, err := observeSnapshotValue(args[0])
 	if err != nil {
@@ -73,6 +78,7 @@ func (binding *observeRecentBinding) add(args []runtime.Value) (runtime.Value, e
 	return runtime.NullValue{}, nil
 }
 
+// clear 清空观测器
 func (binding *observeRecentBinding) clear(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.Lock()
 	defer binding.mu.Unlock()
@@ -80,12 +86,14 @@ func (binding *observeRecentBinding) clear(args []runtime.Value) (runtime.Value,
 	return runtime.NullValue{}, nil
 }
 
+// count 获取当前数量
 func (binding *observeRecentBinding) count(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.RLock()
 	defer binding.mu.RUnlock()
 	return runtime.IntValue{Value: int64(len(binding.items))}, nil
 }
 
+// list 获取所有值列表
 func (binding *observeRecentBinding) list(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.RLock()
 	defer binding.mu.RUnlock()
@@ -101,12 +109,14 @@ func (binding *observeRecentBinding) list(args []runtime.Value) (runtime.Value, 
 	return &runtime.ArrayValue{Elements: items}, nil
 }
 
+// totalCount 获取总计数
 func (binding *observeRecentBinding) totalCount(args []runtime.Value) (runtime.Value, error) {
 	binding.mu.RLock()
 	defer binding.mu.RUnlock()
 	return runtime.IntValue{Value: binding.total}, nil
 }
 
+// observeSnapshotValue 创建值的快照
 func observeSnapshotValue(value runtime.Value) (runtime.Value, error) {
 	plain, err := utils.RuntimeToPlainValue(value)
 	if err != nil {

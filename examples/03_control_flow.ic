@@ -1,4 +1,4 @@
-import std.io as io
+import std.io.console as io
 
 let age = 18
 let label = age >= 18 ? "adult" : "minor"

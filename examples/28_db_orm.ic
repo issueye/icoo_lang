@@ -1,5 +1,5 @@
-import std.io as io
-import std.db as db
+import std.io.console as io
+import std.db.sql as db
 
 let conn = db.sqlite(":memory:")
 conn.exec("create table users (id integer primary key, name text, score integer, note text)")

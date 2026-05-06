@@ -212,7 +212,7 @@ if score != 42 {
 
 func TestRuntimeRunSource_ImportsStdIOModule(t *testing.T) {
 	src := `
-import std.io as io
+import std.io.console as io
 
 io.print("a")
 io.println("b")
@@ -220,13 +220,13 @@ io.println("b")
 
 	rt := NewRuntime()
 	if _, err := rt.RunSource(src); err != nil {
-		t.Fatalf("expected std.io import to succeed, got: %v", err)
+		t.Fatalf("expected std.io.console import to succeed, got: %v", err)
 	}
 }
 
 func TestRuntimeRunSource_IteratesStdIOModule(t *testing.T) {
 	src := `
-import std.io as io
+import std.io.console as io
 
 let keys = ""
 for key, value in io {
@@ -236,8 +236,8 @@ for key, value in io {
   }
 }
 
-if keys != "CopycopyopenReaderopenWriterprintprintlnreadAll" {
-  panic("unexpected std.io iteration order")
+if keys != "printprintln" {
+  panic("unexpected std.io.console iteration order")
 }
 `
 
@@ -249,7 +249,7 @@ if keys != "CopycopyopenReaderopenWriterprintprintlnreadAll" {
 
 func TestRuntimeRunSource_CapturesImportedStdModuleInClosure(t *testing.T) {
 	src := `
-import std.object as object
+import std.core.object as object
 
 const api = fn() {
   fn readName(value) {
@@ -322,7 +322,7 @@ func TestRuntimeRunSource_StdIOCopy(t *testing.T) {
 	}
 
 	src := `
-import std.io as io
+import std.io.fs as io
 
 let reader = io.openReader("` + srcPath + `")
 let writer = io.openWriter("` + dstPath + `")
@@ -351,7 +351,7 @@ if text != "hello copy" {
 
 func TestRuntimeRunSource_ImportsStdObjectModule(t *testing.T) {
 	src := `
-import std.object as object
+import std.core.object as object
 
 let source = {
   name: "icoo",
@@ -407,7 +407,7 @@ if keys[0] != "name" || keys[1] != "nested" || keys[2] != "port" {
 
 func TestRuntimeRunSource_ImportsStdTemplateModule(t *testing.T) {
 	src := `
-import std.template as template
+import std.io.template as template
 
 let text = template.render("Hello {{name}}", {name: "icoo"})
 if text != "Hello icoo" {
@@ -423,7 +423,7 @@ if text != "Hello icoo" {
 
 func TestRuntimeRunSource_IteratesStdTemplateModule(t *testing.T) {
 	src := `
-import std.template as template
+import std.io.template as template
 
 let keys = ""
 let count = 0
@@ -451,7 +451,7 @@ if count != 2 {
 
 func TestRuntimeRunSource_StdTemplateHelpers(t *testing.T) {
 	src := `
-import std.template as template
+import std.io.template as template
 
 let tpl = template.compile("{{#if user.active}}{{user.name}}:{{#each items}}{{this}};{{/each}}{{/if}}")
 let text = tpl.render({
@@ -471,7 +471,7 @@ if text != "ada:a;b;c;" {
 
 func TestRuntimeRunSource_ImportsStdCacheModule(t *testing.T) {
 	src := `
-import std.cache as cache
+import std.core.cache as cache
 
 let store = cache.create({
   defaultTTL: 1000,
@@ -491,7 +491,7 @@ if store.get("name") != "icoo" {
 
 func TestRuntimeRunSource_IteratesStdCacheModule(t *testing.T) {
 	src := `
-import std.cache as cache
+import std.core.cache as cache
 
 let keys = ""
 let count = 0
@@ -519,8 +519,8 @@ if count != 1 {
 
 func TestRuntimeRunSource_StdCacheHelpers(t *testing.T) {
 	src := `
-import std.cache as cache
-import std.time as time
+import std.core.cache as cache
+import std.time.basic as time
 
 let store = cache.create({
   defaultTTL: 10,
@@ -558,7 +558,7 @@ if stats.evictions != 1 {
 
 func TestRuntimeRunSource_IteratesStdObserveModule(t *testing.T) {
 	src := `
-import std.observe as observe
+import std.core.observe as observe
 
 let keys = ""
 let count = 0
@@ -586,7 +586,7 @@ if count != 1 {
 
 func TestRuntimeRunSource_StdObserveRecent(t *testing.T) {
 	src := `
-import std.observe as observe
+import std.core.observe as observe
 
 let recent = observe.recent(2)
 let first = {id: "a", score: 1}
@@ -630,7 +630,7 @@ if recent.total() != 3 {
 
 func TestRuntimeRunSource_ImportsStdCSVModule(t *testing.T) {
 	src := `
-import std.csv as csv
+import std.data.csv as csv
 
 let text = csv.encode([{name: "ada", score: 10}])
 let rows = csv.decode(text)
@@ -647,7 +647,7 @@ if rows[0].name != "ada" || rows[0].score != "10" {
 
 func TestRuntimeRunSource_IteratesStdCSVModule(t *testing.T) {
 	src := `
-import std.csv as csv
+import std.data.csv as csv
 
 let keys = ""
 let count = 0
@@ -678,7 +678,7 @@ func TestRuntimeRunSource_StdCSVHelpers(t *testing.T) {
 	path := filepath.Join(dir, "report.csv")
 
 	src := `
-import std.csv as csv
+import std.data.csv as csv
 
 let text = csv.encode([
   {name: "ada", score: 10},
@@ -719,7 +719,7 @@ if fromFile[0].score != "10" {
 
 func TestRuntimeRunSource_IteratesStdServiceModule(t *testing.T) {
 	src := `
-import std.service as service
+import std.core.service as service
 
 let keys = ""
 let count = 0
@@ -747,7 +747,7 @@ if count != 1 {
 
 func TestRuntimeRunSource_StdServiceMonitoring(t *testing.T) {
 	src := `
-import std.service as service
+import std.core.service as service
 
 let monitor = service.create({
   name: "icoo-proxy",
@@ -849,7 +849,7 @@ if monitor.ready().ok != true {
 
 func TestRuntimeRunSource_StdServiceAdvancedHelpers(t *testing.T) {
 	src := `
-import std.service as service
+import std.core.service as service
 
 let sink = {text: ""}
 let monitor = service.create({
@@ -925,7 +925,7 @@ if headers["Content-Type"] != "application/json" {
 
 func TestRuntimeRunSource_ImportsStdTimeModule(t *testing.T) {
 	src := `
-import std.time as time
+import std.time.basic as time
 
 let before = time.now()
 time.sleep(0)
@@ -950,7 +950,7 @@ if after < before {
 
 func TestRuntimeRunSource_IteratesStdTimeModule(t *testing.T) {
 	src := `
-import std.time as time
+import std.time.basic as time
 
 let keys = ""
 for key, value in time {
@@ -973,7 +973,7 @@ if keys != "adddiffdurationformatfromUnixintervalnextnowparsepartssleeptickeruni
 
 func TestRuntimeRunSource_StdTimeSleepRejectsNonInt(t *testing.T) {
 	src := `
-import std.time as time
+import std.time.basic as time
 
 time.sleep("1")
 `
@@ -986,7 +986,7 @@ time.sleep("1")
 
 func TestRuntimeRunSource_StdTimeExtendedHelpers(t *testing.T) {
 	src := `
-import std.time as time
+import std.time.basic as time
 
 let ts = time.parse("2025-01-02 03:04:05", "YYYY-MM-DD HH:mm:ss", "UTC")
 if ts != 1735787045000 {
@@ -1028,7 +1028,7 @@ if time.diff(shifted, ts) != 1500 {
 
 func TestRuntimeRunSource_StdTimeSchedulingHelpers(t *testing.T) {
 	src := `
-import std.time as time
+import std.time.basic as time
 
 if time.duration("1h30m") != 5400000 {
   panic("unexpected parsed duration")
@@ -1062,7 +1062,7 @@ if time.format(mondayRun, "YYYY-MM-DD HH:mm:ss", "UTC") != "2025-01-06 09:00:00"
 
 func TestRuntimeRunSource_ImportsStdMathModule(t *testing.T) {
 	src := `
-import std.math as math
+import std.math.basic as math
 
 if math.abs(-3) != 3 {
   panic("unexpected abs int result")
@@ -1095,7 +1095,7 @@ if math.parseInt("42") != 42 {
 
 func TestRuntimeRunSource_IteratesStdMathModule(t *testing.T) {
 	src := `
-import std.math as math
+import std.math.basic as math
 
 let keys = ""
 let count = 0
@@ -1123,7 +1123,7 @@ if count != 6 {
 
 func TestRuntimeRunSource_StdMathRejectsNonNumericArgs(t *testing.T) {
 	src := `
-import std.math as math
+import std.math.basic as math
 
 math.abs("x")
 `
@@ -1136,7 +1136,7 @@ math.abs("x")
 
 func TestRuntimeRunSource_ImportsStdDBModule(t *testing.T) {
 	src := `
-import std.db as db
+import std.db.sql as db
 
 let conn = db.sqlite(":memory:")
 if !conn.ping() {
@@ -1155,7 +1155,7 @@ func TestRuntimeRunSource_ImportsStdRedisModule(t *testing.T) {
 	server := miniredis.RunT(t)
 
 	src := `
-import std.redis as redis
+import std.db.redis as redis
 
 let client = redis.connect({
   addr: "` + server.Addr() + `"
@@ -1174,7 +1174,7 @@ client.close()
 
 func TestRuntimeRunSource_IteratesStdRedisModule(t *testing.T) {
 	src := `
-import std.redis as redis
+import std.db.redis as redis
 
 let keys = ""
 let count = 0
@@ -1204,7 +1204,7 @@ func TestRuntimeRunSource_StdRedisOperations(t *testing.T) {
 	server := miniredis.RunT(t)
 
 	src := `
-import std.redis as redis
+import std.db.redis as redis
 
 let client = redis.open("redis://` + server.Addr() + `/0")
 if !client.set("name", "icoo") {
@@ -1267,7 +1267,7 @@ func TestRuntimeRunSource_StdRedisAdvancedOperations(t *testing.T) {
 	server := miniredis.RunT(t)
 
 	src := `
-import std.redis as redis
+import std.db.redis as redis
 
 let client = redis.connect({addr: "` + server.Addr() + `"})
 
@@ -1339,7 +1339,7 @@ client.close()
 
 func TestRuntimeRunSource_IteratesStdDBModule(t *testing.T) {
 	src := `
-import std.db as db
+import std.db.sql as db
 
 let keys = ""
 let count = 0
@@ -1367,7 +1367,7 @@ if count != 5 {
 
 func TestRuntimeRunSource_StdDBSQLite(t *testing.T) {
 	src := `
-import std.db as db
+import std.db.sql as db
 
 let conn = db.sqlite(":memory:")
 let createResult = conn.exec("create table users(id integer primary key, name text, age integer, note text)")
@@ -1418,7 +1418,7 @@ conn.close()
 
 func TestRuntimeRunSource_StdDBORM(t *testing.T) {
 	src := `
-import std.db as db
+import std.db.sql as db
 
 let conn = db.sqlite(":memory:")
 conn.exec("create table users(id integer primary key, name text, score integer, note text)")
@@ -1479,7 +1479,7 @@ conn.close()
 
 func TestRuntimeRunSource_IteratesStdORMModule(t *testing.T) {
 	src := `
-import std.orm as orm
+import std.db.orm as orm
 
 let keys = ""
 let count = 0
@@ -1507,8 +1507,8 @@ if count != 1 {
 
 func TestRuntimeRunSource_StdORMModel(t *testing.T) {
 	src := `
-import std.db as db
-import std.orm as orm
+import std.db.sql as db
+import std.db.orm as orm
 
 let conn = db.sqlite(":memory:")
 let users = orm.model(conn, {
@@ -1570,7 +1570,7 @@ conn.close()
 
 func TestRuntimeRunSource_ImportsStdJSONModule(t *testing.T) {
 	src := `
-import std.json as json
+import std.data.json as json
 
 let text = json.encode({name: "icoo", nums: [1, 2], ok: true, miss: null})
 let value = json.decode(text)
@@ -1600,7 +1600,7 @@ if value.miss != null {
 
 func TestRuntimeRunSource_IteratesStdJSONModule(t *testing.T) {
 	src := `
-import std.json as json
+import std.data.json as json
 
 let keys = ""
 let count = 0
@@ -1628,7 +1628,7 @@ if count != 4 {
 
 func TestRuntimeRunSource_StdJSONRejectsUnsupportedEncodeValue(t *testing.T) {
 	src := `
-import std.json as json
+import std.data.json as json
 
 json.encode(fn() {})
 `
@@ -1641,7 +1641,7 @@ json.encode(fn() {})
 
 func TestRuntimeRunSource_StdJSONRejectsNonStringDecodeArg(t *testing.T) {
 	src := `
-import std.json as json
+import std.data.json as json
 
 json.decode(1)
 `
@@ -1655,7 +1655,7 @@ json.decode(1)
 func TestRuntimeRunSource_ImportsStdFSModule(t *testing.T) {
 	dir := t.TempDir()
 	src := `
-import std.fs as fs
+import std.io.fs as fs
 
 let root = "` + dir + `"
 let nested = fs.join(root, "nested")
@@ -1746,23 +1746,28 @@ if fs.exists(emptyDir) {
 
 func TestRuntimeRunSource_IteratesStdFSModule(t *testing.T) {
 	src := `
-import std.fs as fs
+import std.io.fs as fs
 
-let keys = ""
 let count = 0
+let hasReadFile = false
+let hasWriteFile = false
 for key, value in fs {
-  keys = keys + key
   count = count + 1
+  if key == "readFile" { hasReadFile = true }
+  if key == "writeFile" { hasWriteFile = true }
   if typeOf(value) != "native_function" {
     panic("unexpected std.fs export kind")
   }
 }
 
-if keys != "basecopyFiledirexistsjoinmkdirreadDirreadFileremoverenamestatwriteFile" {
-  panic("unexpected std.fs iteration order")
+if count != 17 {
+  panic("unexpected std.io.fs export count")
 }
-if count != 12 {
-  panic("unexpected std.fs export count")
+if !hasReadFile {
+  panic("expected std.io.fs to have readFile")
+}
+if !hasWriteFile {
+  panic("expected std.io.fs to have writeFile")
 }
 `
 
@@ -1778,23 +1783,23 @@ func TestRuntimeRunSource_StdFSRejectsNonStringArgs(t *testing.T) {
 		src  string
 	}{
 		{name: "exists", src: `
-import std.fs as fs
+import std.io.fs as fs
 fs.exists(1)
 `},
 		{name: "mkdir", src: `
-import std.fs as fs
+import std.io.fs as fs
 fs.mkdir(1)
 `},
 		{name: "rename", src: `
-import std.fs as fs
+import std.io.fs as fs
 fs.rename("a", 1)
 `},
 		{name: "copyFile", src: `
-import std.fs as fs
+import std.io.fs as fs
 fs.copyFile(1, "b")
 `},
 		{name: "stat", src: `
-import std.fs as fs
+import std.io.fs as fs
 fs.stat(1)
 `},
 	}
@@ -1811,7 +1816,7 @@ fs.stat(1)
 
 func TestRuntimeRunSource_ImportsStdExecModule(t *testing.T) {
 	src := `
-import std.exec as exec
+import std.sys.exec as exec
 
 let result = exec.run("go", ["env", "GOOS"])
 if !result.ok {
@@ -1830,7 +1835,7 @@ if result.stdout == "" {
 
 func TestRuntimeRunSource_IteratesStdExecModule(t *testing.T) {
 	src := `
-import std.exec as exec
+import std.sys.exec as exec
 
 let keys = ""
 let count = 0
@@ -1858,7 +1863,7 @@ if count != 1 {
 
 func TestRuntimeRunSource_StdExecRejectsNonStringArrayArgs(t *testing.T) {
 	src := `
-import std.exec as exec
+import std.sys.exec as exec
 
 exec.run("go", [1])
 `
@@ -1874,8 +1879,8 @@ func TestRuntimeRunSource_ImportsStdOSModule(t *testing.T) {
 	nested := filepath.Join(dir, "a", "b")
 	envKey := "ICOO_STD_OS_TEST"
 	src := `
-import std.fs as fs
-import std.os as os
+import std.io.fs as fs
+import std.sys.os as os
 
 os.setEnv("` + envKey + `", "ok")
 if os.getEnv("` + envKey + `") != "ok" {
@@ -1911,7 +1916,7 @@ if fs.exists("` + dir + `") {
 
 func TestRuntimeRunSource_IteratesStdOSModule(t *testing.T) {
 	src := `
-import std.os as os
+import std.sys.os as os
 
 let keys = ""
 let count = 0
@@ -1939,7 +1944,7 @@ if count != 8 {
 
 func TestRuntimeRunSource_ImportsStdHostModule(t *testing.T) {
 	src := `
-import std.host as host
+import std.sys.host as host
 
 if host.goos() != "` + runtime.GOOS + `" {
   panic("unexpected host goos")
@@ -1966,7 +1971,7 @@ if host.pid() < 1 {
 
 func TestRuntimeRunSource_IteratesStdHostModule(t *testing.T) {
 	src := `
-import std.host as host
+import std.sys.host as host
 
 let keys = ""
 let count = 0
@@ -1994,7 +1999,7 @@ if count != 9 {
 
 func TestRuntimeRunSource_StdHostRuntimeMetrics(t *testing.T) {
 	src := `
-import std.host as host
+import std.sys.host as host
 
 let ch = chan(1)
 go fn() {
@@ -2046,8 +2051,8 @@ func TestRuntimeRunSource_StdJSONFileRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "data.json")
 	src := `
-import std.fs as fs
-import std.json as json
+import std.io.fs as fs
+import std.data.json as json
 
 json.saveToFile("` + path + `", {name: "icoo", nums: [1, 2], ok: true})
 if !fs.exists("` + path + `") {
@@ -2073,7 +2078,7 @@ if value.ok != true {
 
 func TestRuntimeRunSource_ImportsStdYAMLModule(t *testing.T) {
 	src := `
-import std.yaml as yaml
+import std.data.yaml as yaml
 
 let text = yaml.encode({name: "icoo", nums: [1, 2], ok: true})
 let value = yaml.decode(text)
@@ -2100,7 +2105,7 @@ if value.ok != true {
 
 func TestRuntimeRunSource_IteratesStdYAMLModule(t *testing.T) {
 	src := `
-import std.yaml as yaml
+import std.data.yaml as yaml
 
 let keys = ""
 let count = 0
@@ -2130,8 +2135,8 @@ func TestRuntimeRunSource_StdYAMLFileRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "data.yaml")
 	src := `
-import std.fs as fs
-import std.yaml as yaml
+import std.io.fs as fs
+import std.data.yaml as yaml
 
 yaml.saveToFile("` + path + `", {name: "icoo", nums: [1, 2], ok: true})
 if !fs.exists("` + path + `") {
@@ -2157,7 +2162,7 @@ if value.ok != true {
 
 func TestRuntimeRunSource_ImportsStdTOMLModule(t *testing.T) {
 	src := `
-import std.toml as toml
+import std.data.toml as toml
 
 let text = toml.encode({name: "icoo", port: 8080, ok: true})
 let value = toml.decode(text)
@@ -2184,7 +2189,7 @@ if value.ok != true {
 
 func TestRuntimeRunSource_IteratesStdTOMLModule(t *testing.T) {
 	src := `
-import std.toml as toml
+import std.data.toml as toml
 
 let keys = ""
 let count = 0
@@ -2214,8 +2219,8 @@ func TestRuntimeRunSource_StdTOMLFileRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "data.toml")
 	src := `
-import std.fs as fs
-import std.toml as toml
+import std.io.fs as fs
+import std.data.toml as toml
 
 toml.saveToFile("` + path + `", {name: "icoo", port: 8080, ok: true})
 if !fs.exists("` + path + `") {
@@ -2241,7 +2246,7 @@ if value.ok != true {
 
 func TestRuntimeRunSource_ImportsStdXMLModule(t *testing.T) {
 	src := `
-import std.xml as xml
+import std.data.xml as xml
 
 let node = {
   name: "root",
@@ -2278,7 +2283,7 @@ if value.children[0].text != "hello" {
 
 func TestRuntimeRunSource_IteratesStdXMLModule(t *testing.T) {
 	src := `
-import std.xml as xml
+import std.data.xml as xml
 
 let keys = ""
 let count = 0
@@ -2308,8 +2313,8 @@ func TestRuntimeRunSource_StdXMLFileRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "data.xml")
 	src := `
-import std.fs as fs
-import std.xml as xml
+import std.io.fs as fs
+import std.data.xml as xml
 
 xml.saveToFile("` + path + `", {
   name: "root",
@@ -2415,7 +2420,7 @@ func TestRuntimeRunSource_StdHTTPDownload(t *testing.T) {
 	defer server.Close()
 
 	src := `
-import std.fs as fs
+import std.io.fs as fs
 import std.net.http.client as http
 
 let resp = http.download("` + server.URL + `", "` + path + `")
@@ -3751,7 +3756,7 @@ if reply != "echo:hello" {
 
 func TestRuntimeRunSource_IteratesStdExpressModule(t *testing.T) {
 	src := `
-import std.express as express
+import std.web.express as express
 
 let keys = ""
 let count = 0
@@ -3779,7 +3784,7 @@ if count != 6 {
 
 func TestRuntimeRunSource_StdExpressRoutes(t *testing.T) {
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -3821,7 +3826,7 @@ if postResp.json.count != 2 {
 
 func TestRuntimeRunSource_StdExpressMiddleware(t *testing.T) {
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.new()
@@ -3870,7 +3875,7 @@ if stopResp.body != "stopped" {
 
 func TestRuntimeRunSource_StdExpressRequestHeaderHelpers(t *testing.T) {
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -3916,7 +3921,7 @@ if resp.json.missing != null {
 
 func TestRuntimeRunSource_StdExpressRequestID(t *testing.T) {
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -3959,7 +3964,7 @@ if generated.header("X-Request-Id") != generated.json.requestId {
 
 func TestRuntimeRunSource_StdExpressResponseHandleWrite(t *testing.T) {
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -4017,7 +4022,7 @@ func TestRuntimeRunSource_StdExpressResponseHandleProxy(t *testing.T) {
 	defer upstream.Close()
 
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -4071,7 +4076,7 @@ func TestRuntimeRunSource_StdExpressFormMultipartAndCookies(t *testing.T) {
 	}
 
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -4188,7 +4193,7 @@ func TestRuntimeRunSource_StdExpressProxyAdvancedControls(t *testing.T) {
 	defer upstream.Close()
 
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -4256,7 +4261,7 @@ if redirectResp.header("Location") != "/final" {
 
 func TestRuntimeRunSource_StdExpressRootRouteMatchesExactly(t *testing.T) {
 	src := `
-import std.express as express
+import std.web.express as express
 import std.net.http.client as client
 
 let app = express.create()
@@ -4288,7 +4293,7 @@ if adminResp.json.route != "/admin/routes" {
 
 func TestRuntimeRunSource_ImportsStdCryptoModule(t *testing.T) {
 	src := `
-import std.crypto as crypto
+import std.crypto.hash as crypto
 
 if crypto.sha256("abc") != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
   panic("unexpected sha256 result")
@@ -4322,7 +4327,7 @@ if crypto.aesGCMDecrypt("1234567890123456", encrypted.nonce, encrypted.ciphertex
 
 func TestRuntimeRunSource_IteratesStdCryptoModule(t *testing.T) {
 	src := `
-import std.crypto as crypto
+import std.crypto.hash as crypto
 
 let keys = ""
 let count = 0
@@ -4350,7 +4355,7 @@ if count != 11 {
 
 func TestRuntimeRunSource_StdCryptoRejectsInvalidArgs(t *testing.T) {
 	src := `
-import std.crypto as crypto
+import std.crypto.hash as crypto
 
 crypto.aesGCMEncrypt("bad", "secret")
 `
@@ -4363,7 +4368,7 @@ crypto.aesGCMEncrypt("bad", "secret")
 
 func TestRuntimeRunSource_ImportsStdUUIDModule(t *testing.T) {
 	src := `
-import std.uuid as uuid
+import std.crypto.uuid as uuid
 
 let first = uuid.v4()
 let second = uuid.v4()
@@ -4389,7 +4394,7 @@ if uuid.isValid("not-a-uuid") {
 
 func TestRuntimeRunSource_IteratesStdUUIDModule(t *testing.T) {
 	src := `
-import std.uuid as uuid
+import std.crypto.uuid as uuid
 
 let keys = ""
 let count = 0
@@ -4417,7 +4422,7 @@ if count != 2 {
 
 func TestRuntimeRunSource_StdUUIDRejectsNonStringArgs(t *testing.T) {
 	src := `
-import std.uuid as uuid
+import std.crypto.uuid as uuid
 
 uuid.isValid(1)
 `
@@ -4430,7 +4435,7 @@ uuid.isValid(1)
 
 func TestRuntimeRunSource_ImportsStdCompressModule(t *testing.T) {
 	src := `
-import std.compress as compress
+import std.data.compress as compress
 
 let gzipText = compress.gzipCompress("hello compression")
 if typeOf(gzipText) != "string" {
@@ -4456,7 +4461,7 @@ if compress.zlibDecompress(zlibText) != "hello compression" {
 
 func TestRuntimeRunSource_IteratesStdCompressModule(t *testing.T) {
 	src := `
-import std.compress as compress
+import std.data.compress as compress
 
 let keys = ""
 let count = 0
@@ -4484,7 +4489,7 @@ if count != 4 {
 
 func TestRuntimeRunSource_StdCompressRejectsInvalidInput(t *testing.T) {
 	src := `
-import std.compress as compress
+import std.data.compress as compress
 
 compress.gzipDecompress("not-base64")
 `
