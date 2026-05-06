@@ -2,15 +2,17 @@ import std.data.json as json
 import std.net.http.server as server
 import std.core.object as object
 import std.time.basic as time
-import "./auth.ic" as auth
-import "./catalog.ic" as catalog
-import "./history.ic" as history
-import "./redaction.ic" as redaction
-import "./services/catalog_service.ic" as catalogService
-import "./stream.ic" as stream
-import "./translate.ic" as translate
+import "@/src/models/auth_model.ic" as auth
+import "@/src/models/catalog_model.ic" as catalog
+import "@/src/models/history_model.ic" as history
+import "@/src/models/redaction_model.ic" as redaction
+import "@/src/services/catalog_service.ic" as catalogService
+import "@/src/models/stream_model.ic" as stream
+import "@/src/models/translation_model.ic" as translate
+import "@/src/views/proxy_view.ic" as proxyView
 
 const proxyHandlerApi = fn() {
+  // Proxy 服务统一负责请求管线，包括协议转换、审计镜像和流式分支处理。
   fn authConfig(state) {
     return object.merge(state.config, {
       apiKeys: catalogService.listAuthKeyValues(state.catalogService)
@@ -225,6 +227,7 @@ const proxyHandlerApi = fn() {
   }
 
   fn recordOutcome(state, req, route, routeNameValue, requestedModel, resolvedModel, authVia, status, upstreamUrl, note, durationMs, usageMetrics) {
+    // 所有代理出口都汇总到同一个记录器，确保 monitor/history 在不同协议下保持一致。
     let downstreamProtocol = null
     let upstreamProtocol = null
     if route != null {
@@ -348,14 +351,7 @@ const proxyHandlerApi = fn() {
       return translated
     } catch err {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      let errorResponse = proxyView.upstreamError(err.message)
 
       state.monitor.increment("proxy.upstream_error")
       state.monitor.setSupplierHealth(routeSupplierName(route), {
@@ -490,14 +486,7 @@ const proxyHandlerApi = fn() {
       return translated
     } catch err {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      let errorResponse = proxyView.upstreamError(err.message)
 
       state.monitor.increment("proxy.upstream_error")
       state.monitor.setSupplierHealth(routeSupplierName(route), {
@@ -656,14 +645,7 @@ const proxyHandlerApi = fn() {
       return null
     } catch err {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      let errorResponse = proxyView.upstreamError(err.message)
 
       state.monitor.increment("proxy.upstream_error")
       state.monitor.setSupplierHealth(routeSupplierName(route), {
@@ -703,14 +685,7 @@ const proxyHandlerApi = fn() {
         durationMs,
         null
       )
-      return {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      return proxyView.upstreamError(err.message)
     }
   }
 
@@ -830,14 +805,7 @@ const proxyHandlerApi = fn() {
       return null
     } catch err {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      let errorResponse = proxyView.upstreamError(err.message)
 
       state.monitor.increment("proxy.upstream_error")
       state.monitor.setSupplierHealth(routeSupplierName(route), {
@@ -877,14 +845,7 @@ const proxyHandlerApi = fn() {
         durationMs,
         null
       )
-      return {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      return proxyView.upstreamError(err.message)
     }
   }
 
@@ -894,8 +855,8 @@ const proxyHandlerApi = fn() {
     let headers = buildForwardHeaders(req, authResult, route)
     headers.Accept = "text/event-stream"
 
-    // This path keeps the connection streaming end-to-end while translating
-    // Anthropic SSE frames into Chat SSE chunks for the downstream client.
+    // 这条路径保持端到端流式连接，
+    // 同时把 Anthropic 的 SSE 事件翻译成下游 Chat 所需的 SSE chunk。
     mirrorUpstreamRequest(state, req, route, upstreamUrl, headers, bodyInfo.body)
     recordProxyEvent(state, "proxy.upstream.request", req, route, {
       upstream_url: upstreamUrl,
@@ -1006,14 +967,7 @@ const proxyHandlerApi = fn() {
       return null
     } catch err {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      let errorResponse = proxyView.upstreamError(err.message)
 
       state.monitor.increment("proxy.upstream_error")
       state.monitor.setSupplierHealth(routeSupplierName(route), {
@@ -1053,14 +1007,7 @@ const proxyHandlerApi = fn() {
         durationMs,
         null
       )
-      return {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      return proxyView.upstreamError(err.message)
     }
   }
 
@@ -1143,14 +1090,7 @@ const proxyHandlerApi = fn() {
       return proxied
     } catch err {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      let errorResponse = proxyView.upstreamError(err.message)
 
       state.monitor.increment("proxy.upstream_error")
       state.monitor.setSupplierHealth(routeSupplierName(route), {
@@ -1195,6 +1135,8 @@ const proxyHandlerApi = fn() {
   }
 
   fn handleProxyImpl(req, state) {
+    // 非流式请求和需要聚合后再返回的翻译请求都汇聚到这里处理；
+    // 只有必须持有响应句柄的直通流式场景才交给 handleProxyDirect。
     let startedAt = time.now()
     let requestedModel = requestedModelFromReq(req)
 
@@ -1230,15 +1172,7 @@ const proxyHandlerApi = fn() {
     let route = catalog.resolveRoute(activeCatalog(state), req.path, requestedModel)
     if route == null {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 404,
-        json: {
-          ok: false,
-          error: "route_not_found",
-          path: req.path,
-          requestedModel: requestedModel
-        }
-      }
+      let errorResponse = proxyView.routeNotFound(req.path, requestedModel)
 
       state.monitor.increment("proxy.route_not_found")
       mirrorResponsePart(
@@ -1269,14 +1203,7 @@ const proxyHandlerApi = fn() {
       if bodyInfo.wantsStream == true {
         if translate.downstreamProtocol(route) == "openai" && translate.upstreamProtocol(route) == "openai-responses" {
           let durationMs = elapsedMs(startedAt)
-          let errorResponse = {
-            status: 501,
-            json: {
-              ok: false,
-              error: "stream_not_supported",
-              message: "stream translation requires direct response handle"
-            }
-          }
+          let errorResponse = proxyView.streamNotSupported("stream translation requires direct response handle")
 
           state.monitor.increment("proxy.stream_direct_not_available")
           mirrorResponsePart(
@@ -1313,14 +1240,7 @@ const proxyHandlerApi = fn() {
         }
 
         let durationMs = elapsedMs(startedAt)
-        let errorResponse = {
-          status: 501,
-          json: {
-            ok: false,
-            error: "stream_not_supported",
-            message: "downstream streaming translation not implemented"
-          }
-        }
+        let errorResponse = proxyView.streamNotSupported("downstream streaming translation not implemented")
 
         state.monitor.increment("proxy.stream_not_supported")
         mirrorResponsePart(
@@ -1435,14 +1355,7 @@ const proxyHandlerApi = fn() {
       return resp
     } catch err {
       let durationMs = elapsedMs(startedAt)
-      let errorResponse = {
-        status: 502,
-        json: {
-          ok: false,
-          error: "upstream_error",
-          message: err.message
-        }
-      }
+      let errorResponse = proxyView.upstreamError(err.message)
 
       state.monitor.increment("proxy.upstream_error")
       state.monitor.setSupplierHealth(routeSupplierName(route), {
@@ -1487,6 +1400,7 @@ const proxyHandlerApi = fn() {
   }
 
   fn handleProxyDirectImpl(req, res, state) {
+    // 流式翻译必须持有实时响应句柄，因此 direct 路径只负责这类场景。
     let requestedModel = requestedModelFromReq(req)
     let route = catalog.resolveRoute(activeCatalog(state), req.path, requestedModel)
     if route == null {

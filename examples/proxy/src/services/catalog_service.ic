@@ -1,8 +1,9 @@
 import std.core.object as object
-import "@/lib/catalog.ic" as catalog
-import "@/lib/store/catalog_store.ic" as catalogStore
+import "@/src/models/catalog_model.ic" as catalog
+import "@/src/models/store/catalog_store.ic" as catalogStore
 
 const catalogServiceApi = fn() {
+  // Catalog 服务负责把持久化数据行转换成控制器和服务层使用的内存路由目录。
   fn suppliersByNameImpl(suppliers) {
     let index = {}
     for i, supplier in suppliers {

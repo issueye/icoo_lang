@@ -419,8 +419,8 @@ const streamApi = fn() {
     let requestOptions = buildRequestOptionsImpl(options)
     let stream = sseClient.connect(requestOptions)
     let status = stream.status
-    // Responses SSE can interleave text items and tool calls, so we keep
-    // explicit block state and emit Anthropic blocks in arrival order.
+    // Responses SSE 里文本块和工具调用可能交错出现，
+    // 所以这里显式维护 block 状态，并按到达顺序输出 Anthropic block。
     let state = {
       messageStarted: false,
       messageStopped: false,
@@ -487,8 +487,8 @@ const streamApi = fn() {
       let itemID = object.get(payload, "item_id", "")
       let outputIndex = object.get(payload, "output_index", 0)
       let contentIndex = object.get(payload, "content_index", 0)
-      // Anthropic needs stable block indexes, so we derive one key per
-      // response item/content tuple and reuse it across delta/done events.
+      // Anthropic 要求稳定的 block 索引，
+      // 因此这里为每个 response item/content 组合生成固定 key，并在 delta/done 间复用。
       let key = itemID + ":" + json.encode(outputIndex) + ":" + json.encode(contentIndex)
       let block = object.get(state.textBlocks, key)
       if block != null {
@@ -605,8 +605,8 @@ const streamApi = fn() {
         stopBlock(block)
       }
 
-      // Anthropic closes the message once and reports the final reason there,
-      // so tool-use streams must end as `tool_use` even if text blocks existed.
+      // Anthropic 只在 message 结束时给出最终 stop reason，
+      // 因此即使前面出现过文本块，tool-use 流最终也必须以 `tool_use` 结束。
       let stopReason = "end_turn"
       if state.sawToolUse == true {
         stopReason = "tool_use"
@@ -810,8 +810,8 @@ const streamApi = fn() {
     let requestOptions = buildRequestOptionsImpl(options)
     let stream = sseClient.connect(requestOptions)
     let status = stream.status
-    // Anthropic splits assistant output into numbered content blocks, while
-    // Chat SSE expects role/content/tool_call deltas on one choice stream.
+    // Anthropic 会把 assistant 输出拆成编号 content block，
+    // 而 Chat SSE 需要在单个 choice 流里接收 role/content/tool_call 的连续 delta。
     let state = {
       responseId: "chatcmpl-proxy-stream",
       responseModel: object.get(options, "model", ""),
@@ -877,8 +877,8 @@ const streamApi = fn() {
         return existing
       }
 
-      // We synthesize a tool-call identity from the block index when the
-      // upstream event stream has not supplied enough metadata yet.
+      // 当上游事件暂时没有给出足够的工具调用元数据时，
+      // 这里先基于 block 索引合成一个临时 tool-call 标识。
       let key = "anthropic:" + json.encode(block.index)
       let toolState = {
         index: state.nextToolIndex,
@@ -919,8 +919,8 @@ const streamApi = fn() {
         }
       }
 
-      // Chat chunks must always start with an assistant role before content or
-      // tool deltas, even if Anthropic only sent terminal events.
+      // Chat chunk 必须先发 assistant role，之后才能跟内容或工具调用 delta，
+      // 即使 Anthropic 只发了终止事件也要补齐这个顺序。
       ensureAssistantRole()
       let finishReason = anthropicStopToChatFinish(state.finishReason)
       if state.sawToolUse == true {
@@ -1051,8 +1051,8 @@ const streamApi = fn() {
           let index = object.get(payload, "index", 0)
           let block = ensureBlock(index)
           if object.get(block, "type") == "tool_use" && object.get(block, "toolState") != null {
-            // Some Anthropic tool blocks only carry the final JSON snapshot on
-            // start/stop, so flush that buffered input before finishing.
+            // 某些 Anthropic 工具块只会在 start/stop 里给最终 JSON 快照，
+            // 所以结束前需要把缓存的输入片段强制刷出。
             if object.get(block, "inputSent", false) != true && object.get(block, "pendingInput", "") != "" {
               block.inputSent = true
               emitToolArguments(block.toolState, block.pendingInput)

@@ -1,0 +1,604 @@
+import std.math.basic as math
+import std.core.object as object
+import "@/src/models/catalog_model.ic" as catalog
+import "@/src/models/history_model.ic" as history
+import "@/src/services/catalog_service.ic" as catalogService
+import "@/src/models/runtime_state_model.ic" as runtimeState
+import "@/src/views/http_view.ic" as httpView
+import "@/src/views/traffic_view.ic" as trafficView
+import "@/src/views/catalog_view.ic" as catalogView
+
+const adminServiceApi = fn() {
+  // Admin 服务集中处理查询解析和控制面写操作，让控制器保持声明式路由风格。
+  fn queryText(req, name) {
+    let value = object.get(req.query, name)
+    if typeOf(value) == "array" {
+      if len(value) == 0 {
+        return null
+      }
+      return value[0]
+    }
+    return value
+  }
+
+  fn queryInt(req, name, fallback) {
+    let value = queryText(req, name)
+    if value == null || value == "" {
+      return fallback
+    }
+    try {
+      return math.parseInt(value)
+    } catch err {
+      return fallback
+    }
+  }
+
+  fn queryBool(req, name, fallback) {
+    let value = queryText(req, name)
+    if value == null || value == "" {
+      return fallback
+    }
+    return value == "1" || value == "true"
+  }
+
+  fn bodyPayloadImpl(req) {
+    return object.get(req, "json", {})
+  }
+
+  fn payloadOrQueryText(req, name) {
+    let payloadValue = object.get(bodyPayloadImpl(req), name)
+    if payloadValue != null && payloadValue != "" {
+      return payloadValue
+    }
+    return queryText(req, name)
+  }
+
+  fn deleteMissingImpl() {
+    return httpView.badRequest("delete requires id or resource identity")
+  }
+
+  fn historyFilters(req, state) {
+    // 流量查询统一走一个解析器，确保 admin 与 api 两套入口的行为完全一致。
+    let limit = queryInt(req, "limit", state.config.historyLimit)
+    if limit <= 0 {
+      limit = state.config.historyLimit
+    }
+    if limit > 200 {
+      limit = 200
+    }
+
+    let page = queryInt(req, "page", 1)
+    if page <= 0 {
+      page = 1
+    }
+
+    return {
+      request_id: queryText(req, "request_id"),
+      route_name: queryText(req, "route_name"),
+      method: queryText(req, "method"),
+      path: queryText(req, "path"),
+      downstream_protocol: queryText(req, "downstream_protocol"),
+      upstream_protocol: queryText(req, "upstream_protocol"),
+      status: queryInt(req, "status", null),
+      limit: limit,
+      offset: (page - 1) * limit
+    }
+  }
+
+  fn trafficSnapshotImpl(req, state) {
+    let filters = historyFilters(req, state)
+    let mirror = null
+    if filters.request_id != null && filters.request_id != "" {
+      mirror = history.mirror(state.history, filters.request_id)
+    }
+
+    return trafficView.snapshotPayload(
+      queryInt(req, "page", 1),
+      filters,
+      history.count(state.history, filters),
+      history.list(state.history, filters),
+      state.monitor.counters(),
+      state.monitor.latency(),
+      history.trafficStats(state.history, filters),
+      state.monitor.eventCount(),
+      state.monitor.recentEvents(),
+      history.snapshot(state.history),
+      mirror
+    )
+  }
+
+  fn trafficMirrorPayloadImpl(req, state) {
+    let requestID = queryText(req, "request_id")
+    if requestID == null || requestID == "" {
+      return httpView.badRequest("request_id is required")
+    }
+
+    return trafficView.mirrorPayload(requestID, history.mirror(state.history, requestID))
+  }
+
+  fn trafficEventsPayloadImpl(state) {
+    return trafficView.eventsPayload(state.monitor.eventCount(), state.monitor.recentEvents())
+  }
+
+  fn controlOverviewImpl(state) {
+    let snapshot = catalogService.snapshot(state.catalogService)
+    return catalogView.overviewPayload(
+      state,
+      runtimeState.runtimeSnapshot(state),
+      history.snapshot(state.history),
+      snapshot
+    )
+  }
+
+  fn controlStateImpl(state) {
+    return catalogView.statePayload(
+      state,
+      catalogService.snapshot(state.catalogService),
+      history.snapshot(state.history),
+      runtimeState.runtimeSnapshot(state)
+    )
+  }
+
+  fn reloadPayloadImpl(state) {
+    return runtimeState.reload(state)
+  }
+
+  fn supplierHealthCheckPayloadImpl(req, state) {
+    let supplierName = payloadOrQueryText(req, "name")
+    let result = runtimeState.checkSuppliers(state, supplierName)
+    if result.ok != true && object.get(result, "error") == "supplier_not_found" {
+      return {
+        status: 404,
+        json: result
+      }
+    }
+    return result
+  }
+
+  fn routesPayloadImpl(state) {
+    let currentCatalog = catalogService.currentCatalog(state.catalogService)
+    return catalogView.routesPayload(catalog.snapshot(currentCatalog))
+  }
+
+  fn modelsPayloadImpl(state) {
+    let currentCatalog = catalogService.currentCatalog(state.catalogService)
+    return catalogView.modelsPayload(catalog.modelsSnapshot(currentCatalog))
+  }
+
+  fn requestsPayloadImpl(state) {
+    return object.merge({
+      ok: true,
+      total: state.monitor.requestCount(),
+      requests: state.monitor.recentRequests(),
+      counters: state.monitor.counters(),
+      latency: state.monitor.latency()
+    }, {
+      service: state.monitor.name,
+      startedAt: state.monitor.startedAt
+    })
+  }
+
+  fn suppliersHealthPayloadImpl(state) {
+    return {
+      ok: true,
+      suppliers: state.monitor.suppliersHealth()
+    }
+  }
+
+  fn catalogPayloadImpl(state) {
+    return catalogView.catalogPayload(catalogService.snapshot(state.catalogService))
+  }
+
+  fn authKeysPayloadImpl(state, req) {
+    let revealSecret = queryBool(req, "reveal", false)
+    let items = catalogService.listAuthKeys(state.catalogService)
+    if revealSecret == true {
+      items = catalogService.revealAuthKeys(state.catalogService)
+    }
+    return catalogView.authKeysPayload(items, revealSecret)
+  }
+
+  fn historyClearPayloadImpl(req, state) {
+    let result = history.clear(state.history)
+    state.monitor.increment("admin.history_cleared")
+    state.monitor.recordEvent({
+      kind: "admin.history.clear",
+      request_id: req.requestId
+    })
+
+    return trafficView.clearPayload(result, history.snapshot(state.history))
+  }
+
+  fn trafficClearPayloadImpl(state) {
+    return {
+      ok: true,
+      result: history.clear(state.history)
+    }
+  }
+
+  fn requireSupplierPayload(payload) {
+    if object.get(payload, "id") != null {
+      return null
+    }
+    if object.get(payload, "name") == null || object.get(payload, "name") == "" {
+      return "supplier name is required"
+    }
+    if object.get(payload, "baseUrl") == null || object.get(payload, "baseUrl") == "" {
+      return "supplier baseUrl is required"
+    }
+    return null
+  }
+
+  fn requireEndpointPayload(payload) {
+    if object.get(payload, "id") != null {
+      return null
+    }
+    if object.get(payload, "name") == null || object.get(payload, "name") == "" {
+      return "endpoint name is required"
+    }
+    if object.get(payload, "endpoint") == null || object.get(payload, "endpoint") == "" {
+      return "endpoint path is required"
+    }
+    if object.get(payload, "upstreamPath") == null || object.get(payload, "upstreamPath") == "" {
+      return "upstreamPath is required"
+    }
+    if object.get(payload, "upstreamModel") == null || object.get(payload, "upstreamModel") == "" {
+      return "upstreamModel is required"
+    }
+    if object.get(payload, "protocol") == null || object.get(payload, "protocol") == "" {
+      return "protocol is required"
+    }
+    return null
+  }
+
+  fn requireAliasPayload(payload) {
+    if object.get(payload, "id") != null {
+      return null
+    }
+    if object.get(payload, "alias") == null || object.get(payload, "alias") == "" {
+      return "alias is required"
+    }
+    return requireEndpointPayload(payload)
+  }
+
+  fn requireAuthKeyPayload(payload) {
+    if object.get(payload, "id") != null {
+      return null
+    }
+    if object.get(payload, "name") == null || object.get(payload, "name") == "" {
+      return "auth key name is required"
+    }
+    if object.get(payload, "keyValue") == null || object.get(payload, "keyValue") == "" {
+      return "auth key keyValue is required"
+    }
+    return null
+  }
+
+  fn requireRoutePolicyPayload(payload) {
+    if object.get(payload, "id") != null {
+      return null
+    }
+    if object.get(payload, "name") == null || object.get(payload, "name") == "" {
+      return "route policy name is required"
+    }
+    if object.get(payload, "endpoint") == null || object.get(payload, "endpoint") == "" {
+      return "route policy endpoint is required"
+    }
+    return null
+  }
+
+  fn requireNamedValuePayload(payload) {
+    if object.get(payload, "id") != null {
+      return null
+    }
+    if object.get(payload, "name") == null || object.get(payload, "name") == "" {
+      return "name is required"
+    }
+    return null
+  }
+
+  fn deletedByNameOrID(payload, firstField, secondField) {
+    if object.get(payload, "id") != null {
+      return true
+    }
+    if firstField != null && object.get(payload, firstField) != null && object.get(payload, firstField) != "" {
+      return true
+    }
+    if secondField != null && object.get(payload, secondField) != null && object.get(payload, secondField) != "" {
+      return true
+    }
+    return false
+  }
+
+  fn writeResource(state, validator, writeFn, payload) {
+    // 每次管理面写操作后立刻触发运行时 reload，保证基于 catalog 的路由立即同步。
+    let error = validator(payload)
+    if error != null {
+      return httpView.badRequest(error)
+    }
+
+    let item = writeFn(state.catalogService, payload)
+    let reloadResult = runtimeState.reload(state)
+    return {
+      ok: true,
+      item: item,
+      reload: reloadResult
+    }
+  }
+
+  fn deleteResource(state, deleteFn, payload) {
+    let result = deleteFn(state.catalogService, payload)
+    let reloadResult = runtimeState.reload(state)
+    return {
+      ok: true,
+      result: result,
+      reload: reloadResult
+    }
+  }
+
+  fn resourceList(items) {
+    return httpView.resourceList(items)
+  }
+
+  fn parsedResourceID(id) {
+    if id == null || id == "" {
+      return null
+    }
+    try {
+      return math.parseInt(id)
+    } catch err {
+      return id
+    }
+  }
+
+  fn resourceItemPayload(items, id, resourceName) {
+    let resolvedID = parsedResourceID(id)
+    for i, item in items {
+      if item.id == resolvedID {
+        return {
+          ok: true,
+          item: item
+        }
+      }
+    }
+
+    return {
+      status: 404,
+      json: {
+        ok: false,
+        error: "not_found",
+        resource: resourceName,
+        id: resolvedID
+      }
+    }
+  }
+
+  fn listSuppliersPayloadImpl(state) {
+    return resourceList(catalogService.listSuppliers(state.catalogService))
+  }
+
+  fn getSupplierPayloadImpl(state, id) {
+    return resourceItemPayload(catalogService.listSuppliers(state.catalogService), id, "supplier")
+  }
+
+  fn listEndpointsPayloadImpl(state) {
+    return resourceList(catalogService.listEndpoints(state.catalogService))
+  }
+
+  fn getEndpointPayloadImpl(state, id) {
+    return resourceItemPayload(catalogService.listEndpoints(state.catalogService), id, "endpoint")
+  }
+
+  fn listModelAliasesPayloadImpl(state) {
+    return resourceList(catalogService.listModelAliases(state.catalogService))
+  }
+
+  fn getModelAliasPayloadImpl(state, id) {
+    return resourceItemPayload(catalogService.listModelAliases(state.catalogService), id, "model_alias")
+  }
+
+  fn getAuthKeyPayloadImpl(state, req, id) {
+    let revealSecret = queryBool(req, "reveal", false)
+    let items = catalogService.listAuthKeys(state.catalogService)
+    if revealSecret == true {
+      items = catalogService.revealAuthKeys(state.catalogService)
+    }
+    return resourceItemPayload(items, id, "auth_key")
+  }
+
+  fn listRoutePoliciesPayloadImpl(state) {
+    return resourceList(catalogService.listRoutePolicies(state.catalogService))
+  }
+
+  fn getRoutePolicyPayloadImpl(state, id) {
+    return resourceItemPayload(catalogService.listRoutePolicies(state.catalogService), id, "route_policy")
+  }
+
+  fn listSettingsPayloadImpl(state) {
+    return resourceList(catalogService.listSettings(state.catalogService))
+  }
+
+  fn getSettingPayloadImpl(state, id) {
+    return resourceItemPayload(catalogService.listSettings(state.catalogService), id, "setting")
+  }
+
+  fn listUIPrefsPayloadImpl(state) {
+    return resourceList(catalogService.listUIPrefs(state.catalogService))
+  }
+
+  fn getUIPrefPayloadImpl(state, id) {
+    return resourceItemPayload(catalogService.listUIPrefs(state.catalogService), id, "ui_pref")
+  }
+
+  fn writeSupplierPayloadImpl(state, req) {
+    return writeResource(state, requireSupplierPayload, catalogService.upsertSupplier, bodyPayloadImpl(req))
+  }
+
+  fn deleteSupplierPayloadImpl(state, req) {
+    let payload = bodyPayloadImpl(req)
+    if deletedByNameOrID(payload, "name", null) != true {
+      return deleteMissingImpl()
+    }
+    return deleteResource(state, catalogService.deleteSupplier, payload)
+  }
+
+  fn writeEndpointPayloadImpl(state, req) {
+    return writeResource(state, requireEndpointPayload, catalogService.upsertEndpoint, bodyPayloadImpl(req))
+  }
+
+  fn deleteEndpointPayloadImpl(state, req) {
+    let payload = bodyPayloadImpl(req)
+    if deletedByNameOrID(payload, "name", "endpoint") != true {
+      return deleteMissingImpl()
+    }
+    return deleteResource(state, catalogService.deleteEndpoint, payload)
+  }
+
+  fn writeModelAliasPayloadImpl(state, req) {
+    return writeResource(state, requireAliasPayload, catalogService.upsertModelAlias, bodyPayloadImpl(req))
+  }
+
+  fn deleteModelAliasPayloadImpl(state, req) {
+    let payload = bodyPayloadImpl(req)
+    if deletedByNameOrID(payload, "alias", null) != true {
+      return deleteMissingImpl()
+    }
+    return deleteResource(state, catalogService.deleteModelAlias, payload)
+  }
+
+  fn writeAuthKeyPayloadImpl(state, req) {
+    return writeResource(state, requireAuthKeyPayload, catalogService.upsertAuthKey, bodyPayloadImpl(req))
+  }
+
+  fn deleteAuthKeyPayloadImpl(state, req) {
+    let payload = bodyPayloadImpl(req)
+    if deletedByNameOrID(payload, "name", null) != true {
+      return deleteMissingImpl()
+    }
+    return deleteResource(state, catalogService.deleteAuthKey, payload)
+  }
+
+  fn writeRoutePolicyPayloadImpl(state, req) {
+    return writeResource(state, requireRoutePolicyPayload, catalogService.upsertRoutePolicy, bodyPayloadImpl(req))
+  }
+
+  fn deleteRoutePolicyPayloadImpl(state, req) {
+    let payload = bodyPayloadImpl(req)
+    if deletedByNameOrID(payload, "name", null) != true {
+      return deleteMissingImpl()
+    }
+    return deleteResource(state, catalogService.deleteRoutePolicy, payload)
+  }
+
+  fn writeSettingPayloadImpl(state, req) {
+    return writeResource(state, requireNamedValuePayload, catalogService.upsertSetting, bodyPayloadImpl(req))
+  }
+
+  fn deleteSettingPayloadImpl(state, req) {
+    let payload = bodyPayloadImpl(req)
+    if deletedByNameOrID(payload, "name", null) != true {
+      return deleteMissingImpl()
+    }
+    return deleteResource(state, catalogService.deleteSetting, payload)
+  }
+
+  fn writeUIPrefPayloadImpl(state, req) {
+    return writeResource(state, requireNamedValuePayload, catalogService.upsertUIPref, bodyPayloadImpl(req))
+  }
+
+  fn deleteUIPrefPayloadImpl(state, req) {
+    let payload = bodyPayloadImpl(req)
+    if deletedByNameOrID(payload, "name", null) != true {
+      return deleteMissingImpl()
+    }
+    return deleteResource(state, catalogService.deleteUIPref, payload)
+  }
+
+  return {
+    routesPayload: routesPayloadImpl,
+    modelsPayload: modelsPayloadImpl,
+    requestsPayload: requestsPayloadImpl,
+    suppliersHealthPayload: suppliersHealthPayloadImpl,
+    catalogPayload: catalogPayloadImpl,
+    authKeysPayload: authKeysPayloadImpl,
+    trafficSnapshot: trafficSnapshotImpl,
+    trafficMirrorPayload: trafficMirrorPayloadImpl,
+    trafficEventsPayload: trafficEventsPayloadImpl,
+    controlOverview: controlOverviewImpl,
+    controlState: controlStateImpl,
+    reloadPayload: reloadPayloadImpl,
+    supplierHealthCheckPayload: supplierHealthCheckPayloadImpl,
+    historyClearPayload: historyClearPayloadImpl,
+    trafficClearPayload: trafficClearPayloadImpl,
+    listSuppliersPayload: listSuppliersPayloadImpl,
+    getSupplierPayload: getSupplierPayloadImpl,
+    listEndpointsPayload: listEndpointsPayloadImpl,
+    getEndpointPayload: getEndpointPayloadImpl,
+    listModelAliasesPayload: listModelAliasesPayloadImpl,
+    getModelAliasPayload: getModelAliasPayloadImpl,
+    getAuthKeyPayload: getAuthKeyPayloadImpl,
+    listRoutePoliciesPayload: listRoutePoliciesPayloadImpl,
+    getRoutePolicyPayload: getRoutePolicyPayloadImpl,
+    listSettingsPayload: listSettingsPayloadImpl,
+    getSettingPayload: getSettingPayloadImpl,
+    listUIPrefsPayload: listUIPrefsPayloadImpl,
+    getUIPrefPayload: getUIPrefPayloadImpl,
+    writeSupplierPayload: writeSupplierPayloadImpl,
+    deleteSupplierPayload: deleteSupplierPayloadImpl,
+    writeEndpointPayload: writeEndpointPayloadImpl,
+    deleteEndpointPayload: deleteEndpointPayloadImpl,
+    writeModelAliasPayload: writeModelAliasPayloadImpl,
+    deleteModelAliasPayload: deleteModelAliasPayloadImpl,
+    writeAuthKeyPayload: writeAuthKeyPayloadImpl,
+    deleteAuthKeyPayload: deleteAuthKeyPayloadImpl,
+    writeRoutePolicyPayload: writeRoutePolicyPayloadImpl,
+    deleteRoutePolicyPayload: deleteRoutePolicyPayloadImpl,
+    writeSettingPayload: writeSettingPayloadImpl,
+    deleteSettingPayload: deleteSettingPayloadImpl,
+    writeUIPrefPayload: writeUIPrefPayloadImpl,
+    deleteUIPrefPayload: deleteUIPrefPayloadImpl
+  }
+}()
+
+export const routesPayload = adminServiceApi.routesPayload
+export const modelsPayload = adminServiceApi.modelsPayload
+export const requestsPayload = adminServiceApi.requestsPayload
+export const suppliersHealthPayload = adminServiceApi.suppliersHealthPayload
+export const catalogPayload = adminServiceApi.catalogPayload
+export const authKeysPayload = adminServiceApi.authKeysPayload
+export const trafficSnapshot = adminServiceApi.trafficSnapshot
+export const trafficMirrorPayload = adminServiceApi.trafficMirrorPayload
+export const trafficEventsPayload = adminServiceApi.trafficEventsPayload
+export const controlOverview = adminServiceApi.controlOverview
+export const controlState = adminServiceApi.controlState
+export const reloadPayload = adminServiceApi.reloadPayload
+export const supplierHealthCheckPayload = adminServiceApi.supplierHealthCheckPayload
+export const historyClearPayload = adminServiceApi.historyClearPayload
+export const trafficClearPayload = adminServiceApi.trafficClearPayload
+export const listSuppliersPayload = adminServiceApi.listSuppliersPayload
+export const getSupplierPayload = adminServiceApi.getSupplierPayload
+export const listEndpointsPayload = adminServiceApi.listEndpointsPayload
+export const getEndpointPayload = adminServiceApi.getEndpointPayload
+export const listModelAliasesPayload = adminServiceApi.listModelAliasesPayload
+export const getModelAliasPayload = adminServiceApi.getModelAliasPayload
+export const getAuthKeyPayload = adminServiceApi.getAuthKeyPayload
+export const listRoutePoliciesPayload = adminServiceApi.listRoutePoliciesPayload
+export const getRoutePolicyPayload = adminServiceApi.getRoutePolicyPayload
+export const listSettingsPayload = adminServiceApi.listSettingsPayload
+export const getSettingPayload = adminServiceApi.getSettingPayload
+export const listUIPrefsPayload = adminServiceApi.listUIPrefsPayload
+export const getUIPrefPayload = adminServiceApi.getUIPrefPayload
+export const writeSupplierPayload = adminServiceApi.writeSupplierPayload
+export const deleteSupplierPayload = adminServiceApi.deleteSupplierPayload
+export const writeEndpointPayload = adminServiceApi.writeEndpointPayload
+export const deleteEndpointPayload = adminServiceApi.deleteEndpointPayload
+export const writeModelAliasPayload = adminServiceApi.writeModelAliasPayload
+export const deleteModelAliasPayload = adminServiceApi.deleteModelAliasPayload
+export const writeAuthKeyPayload = adminServiceApi.writeAuthKeyPayload
+export const deleteAuthKeyPayload = adminServiceApi.deleteAuthKeyPayload
+export const writeRoutePolicyPayload = adminServiceApi.writeRoutePolicyPayload
+export const deleteRoutePolicyPayload = adminServiceApi.deleteRoutePolicyPayload
+export const writeSettingPayload = adminServiceApi.writeSettingPayload
+export const deleteSettingPayload = adminServiceApi.deleteSettingPayload
+export const writeUIPrefPayload = adminServiceApi.writeUIPrefPayload
+export const deleteUIPrefPayload = adminServiceApi.deleteUIPrefPayload

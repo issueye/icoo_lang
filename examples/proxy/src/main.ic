@@ -1,31 +1,15 @@
 import std.io.console as io
 import std.time.basic as time
-import std.web.express as express
-import "@/lib/config.ic" as config
-import "@/lib/state.ic" as state
-import "@/lib/admin.ic" as admin
-import "@/lib/proxy_handler.ic" as proxy
+import "@/src/models/config_model.ic" as config
+import "@/src/models/runtime_state_model.ic" as state
+import "@/src/controllers/app_controller.ic" as appController
 
 const runtimeApi = fn() {
   fn startImpl(overrides) {
+    // 运行时启动层保持最薄，只负责构建配置与状态，再把 HTTP 组装交给应用控制器。
     let cfg = config.loadConfig(overrides)
     let runtimeState = state.newState(cfg)
-    let app = express.create()
-
-    app.get("/", fn(req) {
-      return express.json({
-        ok: true,
-        service: "icoo-proxy",
-        listenAddr: cfg.listenAddr,
-        upstreamBaseUrl: cfg.upstreamBaseUrl
-      })
-    })
-
-    admin.registerRoutes(app, runtimeState)
-
-    app.post("*", fn(req, res) {
-      return proxy.handleProxyDirect(req, res, runtimeState)
-    })
+    let app = appController.buildApp(cfg, runtimeState)
 
     let server = app.listen({addr: cfg.listenAddr})
     return {
@@ -39,6 +23,7 @@ const runtimeApi = fn() {
     if runtimeApp == null {
       return null
     }
+    // 停机顺序先关 HTTP 服务器，再释放运行时状态持有的模型层资源。
     runtimeApp.server.close()
     state.close(runtimeApp.state)
     return null

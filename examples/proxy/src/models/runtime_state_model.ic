@@ -2,8 +2,8 @@ import std.net.http.client as client
 import std.core.object as object
 import std.core.service as service
 import std.time.basic as time
-import "./history.ic" as history
-import "./services/catalog_service.ic" as catalogService
+import "@/src/models/history_model.ic" as history
+import "@/src/services/catalog_service.ic" as catalogService
 
 const stateApi = fn() {
   fn recentEventByKind(state, kind) {
@@ -16,6 +16,7 @@ const stateApi = fn() {
   }
 
   fn applyCatalogImpl(state) {
+    // 运行时 reload 后，统一在这里把持久化 catalog 回写到内存配置与路由快照。
     state.config.apiKeys = catalogService.listAuthKeyValues(state.catalogService)
     state.config.defaultRoutes = catalogService.listEndpoints(state.catalogService)
     state.config.aliases = catalogService.listModelAliases(state.catalogService)
@@ -43,6 +44,7 @@ const stateApi = fn() {
   }
 
   fn syncSupplierHealthImpl(state) {
+    // 启动或 reload 后先同步一份供应商健康初始状态，避免监控面为空。
     let suppliers = catalogService.listSuppliers(state.catalogService)
     if len(suppliers) == 0 {
       state.monitor.setSupplierHealth("default-upstream", {
@@ -89,6 +91,7 @@ const stateApi = fn() {
   }
 
   fn checkSingleSupplierImpl(state, supplier) {
+    // 单个 supplier 健康检查既更新缓存，也写入事件流，便于 admin/api 两侧直接读取。
     let checkedAt = time.now()
     let result = {
       name: supplier.name,
@@ -211,6 +214,7 @@ const stateApi = fn() {
   }
 
   fn newStateImpl(config) {
+    // 运行时状态统一汇总配置、catalog、history 与 monitor，是控制器共享的核心上下文。
     let proxyCatalog = catalogService.newCatalogService(config)
 
     let runtimeState = {
@@ -232,6 +236,7 @@ const stateApi = fn() {
   }
 
   fn reloadImpl(state) {
+    // reload 是控制面的关键动作：先重建 catalog，再刷新监控里的 reload 元数据。
     catalogService.reload(state.catalogService)
     applyCatalogImpl(state)
     syncSupplierHealthImpl(state)

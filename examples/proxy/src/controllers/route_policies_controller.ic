@@ -1,0 +1,59 @@
+import std.core.object as object
+import "@/src/services/admin_service.ic" as adminService
+import "@/src/views/http_view.ic" as httpView
+
+const routePoliciesControllerApi = fn() {
+  fn withIDPayload(req, id) {
+    let payload = object.get(req, "json")
+    if payload == null {
+      payload = {}
+    }
+    if id != null {
+      payload.id = id
+    }
+    req.json = payload
+    return req
+  }
+
+  fn pathID(req) {
+    let params = object.get(req, "params")
+    return object.get(params, "id")
+  }
+
+  // 路由策略控制器提供资源化入口，便于后续继续细化策略校验。
+  fn listImpl(req, state) {
+    return httpView.respondJSON(adminService.listRoutePoliciesPayload(state))
+  }
+
+  fn getByIDImpl(req, state) {
+    return httpView.respondJSON(adminService.getRoutePolicyPayload(state, pathID(req)))
+  }
+
+  fn createImpl(req, state) {
+    return httpView.respondJSON(adminService.writeRoutePolicyPayload(state, req))
+  }
+
+  fn updateImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.writeRoutePolicyPayload(state, req))
+  }
+
+  fn deleteImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.deleteRoutePolicyPayload(state, req))
+  }
+
+  return {
+    list: listImpl,
+    getById: getByIDImpl,
+    create: createImpl,
+    update: updateImpl,
+    delete: deleteImpl
+  }
+}()
+
+export const list = routePoliciesControllerApi.list
+export const getById = routePoliciesControllerApi.getById
+export const create = routePoliciesControllerApi.create
+export const update = routePoliciesControllerApi.update
+export const delete = routePoliciesControllerApi.delete

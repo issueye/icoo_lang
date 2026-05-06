@@ -1,0 +1,17 @@
+import "@/src/controllers/proxy_controller.ic" as proxyController
+
+const proxyRoutesApi = fn() {
+  fn registerImpl(app, runtimeState) {
+    // 代理路由层只负责挂载入口，把请求转交给代理控制器。
+    app.post("*", fn(req, res) {
+      return proxyController.handleProxyDirect(req, res, runtimeState)
+    })
+    return app
+  }
+
+  return {
+    register: registerImpl
+  }
+}()
+
+export const register = proxyRoutesApi.register

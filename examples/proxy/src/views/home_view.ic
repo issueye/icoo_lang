@@ -1,0 +1,16 @@
+const homeViewApi = fn() {
+  fn indexPayloadImpl(config) {
+    return {
+      ok: true,
+      service: "icoo-proxy",
+      listenAddr: config.listenAddr,
+      upstreamBaseUrl: config.upstreamBaseUrl
+    }
+  }
+
+  return {
+    indexPayload: indexPayloadImpl
+  }
+}()
+
+export const indexPayload = homeViewApi.indexPayload

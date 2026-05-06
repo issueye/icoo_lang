@@ -1,0 +1,122 @@
+import "@/src/services/admin_service.ic" as adminService
+import "@/src/views/http_view.ic" as httpView
+
+const adminControllerApi = fn() {
+  // 管理控制器只保留非资源型控制面 handler，路由注册统一下沉到 routes 层。
+  fn healthImpl(req, state) {
+    return httpView.respondJSON(state.monitor.health())
+  }
+
+  fn readyImpl(req, state) {
+    return httpView.respondJSON({
+      ok: true,
+      service: state.monitor.name,
+      upstreamBaseUrl: state.config.upstreamBaseUrl,
+      requestCount: state.monitor.requestCount()
+    })
+  }
+
+  fn routesImpl(req, state) {
+    return httpView.respondJSON(adminService.routesPayload(state))
+  }
+
+  fn modelsImpl(req, state) {
+    return httpView.respondJSON(adminService.modelsPayload(state))
+  }
+
+  fn requestsImpl(req, state) {
+    return httpView.respondJSON(adminService.requestsPayload(state))
+  }
+
+  fn monitorImpl(req, state) {
+    return httpView.respondJSON(state.monitor.snapshot())
+  }
+
+  fn catalogImpl(req, state) {
+    return httpView.respondJSON(adminService.catalogPayload(state))
+  }
+
+  fn historyImpl(req, state) {
+    return httpView.respondJSON(adminService.trafficSnapshot(req, state))
+  }
+
+  fn historyMirrorImpl(req, state) {
+    return httpView.respondJSON(adminService.trafficMirrorPayload(req, state))
+  }
+
+  fn historyEventsImpl(req, state) {
+    return httpView.respondJSON(adminService.trafficEventsPayload(state))
+  }
+
+  fn historyClearImpl(req, state) {
+    return httpView.respondJSON(adminService.historyClearPayload(req, state))
+  }
+
+  fn overviewImpl(req, state) {
+    return httpView.respondJSON(adminService.controlOverview(state))
+  }
+
+  fn stateImpl(req, state) {
+    return httpView.respondJSON(adminService.controlState(state))
+  }
+
+  fn reloadImpl(req, state) {
+    return httpView.respondJSON(adminService.reloadPayload(state))
+  }
+
+  fn trafficImpl(req, state) {
+    return httpView.respondJSON(adminService.trafficSnapshot(req, state))
+  }
+
+  fn trafficMirrorImpl(req, state) {
+    return httpView.respondJSON(adminService.trafficMirrorPayload(req, state))
+  }
+
+  fn trafficEventsImpl(req, state) {
+    return httpView.respondJSON(adminService.trafficEventsPayload(state))
+  }
+
+  fn trafficClearImpl(req, state) {
+    return httpView.respondJSON(adminService.trafficClearPayload(state))
+  }
+
+  return {
+    health: healthImpl,
+    ready: readyImpl,
+    routes: routesImpl,
+    models: modelsImpl,
+    requests: requestsImpl,
+    monitor: monitorImpl,
+    catalog: catalogImpl,
+    history: historyImpl,
+    historyMirror: historyMirrorImpl,
+    historyEvents: historyEventsImpl,
+    historyClear: historyClearImpl,
+    overview: overviewImpl,
+    state: stateImpl,
+    reload: reloadImpl,
+    traffic: trafficImpl,
+    trafficMirror: trafficMirrorImpl,
+    trafficEvents: trafficEventsImpl,
+    trafficClear: trafficClearImpl
+  }
+}()
+
+export const health = adminControllerApi.health
+export const ready = adminControllerApi.ready
+export const routes = adminControllerApi.routes
+export const models = adminControllerApi.models
+export const requests = adminControllerApi.requests
+export const monitor = adminControllerApi.monitor
+export const catalog = adminControllerApi.catalog
+export const history = adminControllerApi.history
+export const historyMirror = adminControllerApi.historyMirror
+export const historyEvents = adminControllerApi.historyEvents
+export const historyClear = adminControllerApi.historyClear
+export const overview = adminControllerApi.overview
+export const state = adminControllerApi.state
+export const reload = adminControllerApi.reload
+export const traffic = adminControllerApi.traffic
+export const trafficMirror = adminControllerApi.trafficMirror
+export const trafficEvents = adminControllerApi.trafficEvents
+export const trafficClear = adminControllerApi.trafficClear

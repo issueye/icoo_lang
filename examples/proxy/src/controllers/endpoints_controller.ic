@@ -1,0 +1,59 @@
+import std.core.object as object
+import "@/src/services/admin_service.ic" as adminService
+import "@/src/views/http_view.ic" as httpView
+
+const endpointsControllerApi = fn() {
+  fn withIDPayload(req, id) {
+    let payload = object.get(req, "json")
+    if payload == null {
+      payload = {}
+    }
+    if id != null {
+      payload.id = id
+    }
+    req.json = payload
+    return req
+  }
+
+  fn pathID(req) {
+    let params = object.get(req, "params")
+    return object.get(params, "id")
+  }
+
+  // 端点资源控制器保持薄层，只做请求转发和 path 参数装配。
+  fn listImpl(req, state) {
+    return httpView.respondJSON(adminService.listEndpointsPayload(state))
+  }
+
+  fn getByIDImpl(req, state) {
+    return httpView.respondJSON(adminService.getEndpointPayload(state, pathID(req)))
+  }
+
+  fn createImpl(req, state) {
+    return httpView.respondJSON(adminService.writeEndpointPayload(state, req))
+  }
+
+  fn updateImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.writeEndpointPayload(state, req))
+  }
+
+  fn deleteImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.deleteEndpointPayload(state, req))
+  }
+
+  return {
+    list: listImpl,
+    getById: getByIDImpl,
+    create: createImpl,
+    update: updateImpl,
+    delete: deleteImpl
+  }
+}()
+
+export const list = endpointsControllerApi.list
+export const getById = endpointsControllerApi.getById
+export const create = endpointsControllerApi.create
+export const update = endpointsControllerApi.update
+export const delete = endpointsControllerApi.delete

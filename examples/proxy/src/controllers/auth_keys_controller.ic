@@ -1,0 +1,59 @@
+import std.core.object as object
+import "@/src/services/admin_service.ic" as adminService
+import "@/src/views/http_view.ic" as httpView
+
+const authKeysControllerApi = fn() {
+  fn withIDPayload(req, id) {
+    let payload = object.get(req, "json")
+    if payload == null {
+      payload = {}
+    }
+    if id != null {
+      payload.id = id
+    }
+    req.json = payload
+    return req
+  }
+
+  fn pathID(req) {
+    let params = object.get(req, "params")
+    return object.get(params, "id")
+  }
+
+  // 鉴权密钥控制器保留 reveal 查询参数能力，便于管理面按需查看明文密钥。
+  fn listImpl(req, state) {
+    return httpView.respondJSON(adminService.authKeysPayload(state, req))
+  }
+
+  fn getByIDImpl(req, state) {
+    return httpView.respondJSON(adminService.getAuthKeyPayload(state, req, pathID(req)))
+  }
+
+  fn createImpl(req, state) {
+    return httpView.respondJSON(adminService.writeAuthKeyPayload(state, req))
+  }
+
+  fn updateImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.writeAuthKeyPayload(state, req))
+  }
+
+  fn deleteImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.deleteAuthKeyPayload(state, req))
+  }
+
+  return {
+    list: listImpl,
+    getById: getByIDImpl,
+    create: createImpl,
+    update: updateImpl,
+    delete: deleteImpl
+  }
+}()
+
+export const list = authKeysControllerApi.list
+export const getById = authKeysControllerApi.getById
+export const create = authKeysControllerApi.create
+export const update = authKeysControllerApi.update
+export const delete = authKeysControllerApi.delete

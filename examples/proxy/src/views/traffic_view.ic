@@ -1,0 +1,73 @@
+const trafficViewApi = fn() {
+  fn snapshotPayloadImpl(page, filters, total, items, counters, latency, stats, eventCount, recentEvents, store, mirror) {
+    let snapshot = {
+      ok: true,
+      total: total,
+      items: items,
+      page: page,
+      limit: filters.limit,
+      filters: {
+        request_id: filters.request_id,
+        route_name: filters.route_name,
+        method: filters.method,
+        path: filters.path,
+        downstream_protocol: filters.downstream_protocol,
+        upstream_protocol: filters.upstream_protocol,
+        status: filters.status
+      },
+      counters: counters,
+      latency: latency,
+      stats: stats,
+      eventCount: eventCount,
+      recentEvents: recentEvents,
+      store: store,
+      protocols: {
+        downstream: ["openai", "anthropic", "openai-responses"],
+        upstream: ["openai", "anthropic", "openai-responses"]
+      }
+    }
+
+    if mirror != null {
+      snapshot.mirror = mirror
+    }
+
+    return snapshot
+  }
+
+  fn mirrorPayloadImpl(requestID, mirror) {
+    return {
+      ok: true,
+      request_id: requestID,
+      mirror: mirror
+    }
+  }
+
+  fn eventsPayloadImpl(eventCount, items) {
+    return {
+      ok: true,
+      eventCount: eventCount,
+      items: items
+    }
+  }
+
+  fn clearPayloadImpl(result, store) {
+    return {
+      ok: true,
+      cleared: true,
+      result: result,
+      store: store
+    }
+  }
+
+  return {
+    snapshotPayload: snapshotPayloadImpl,
+    mirrorPayload: mirrorPayloadImpl,
+    eventsPayload: eventsPayloadImpl,
+    clearPayload: clearPayloadImpl
+  }
+}()
+
+export const snapshotPayload = trafficViewApi.snapshotPayload
+export const mirrorPayload = trafficViewApi.mirrorPayload
+export const eventsPayload = trafficViewApi.eventsPayload
+export const clearPayload = trafficViewApi.clearPayload

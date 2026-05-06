@@ -1,0 +1,72 @@
+import std.core.object as object
+import "@/src/services/admin_service.ic" as adminService
+import "@/src/views/http_view.ic" as httpView
+
+const suppliersControllerApi = fn() {
+  fn withIDPayload(req, id) {
+    let payload = object.get(req, "json")
+    if payload == null {
+      payload = {}
+    }
+    if id != null {
+      payload.id = id
+    }
+    req.json = payload
+    return req
+  }
+
+  fn pathID(req) {
+    let params = object.get(req, "params")
+    return object.get(params, "id")
+  }
+
+  // 供应商控制器只负责资源型 HTTP 入口，具体查询和写操作统一委派给 admin_service。
+  fn healthImpl(req, state) {
+    return httpView.respondJSON(adminService.suppliersHealthPayload(state))
+  }
+
+  fn healthCheckImpl(req, state) {
+    return httpView.respondJSON(adminService.supplierHealthCheckPayload(req, state))
+  }
+
+  fn listImpl(req, state) {
+    return httpView.respondJSON(adminService.listSuppliersPayload(state))
+  }
+
+  fn getByIDImpl(req, state) {
+    return httpView.respondJSON(adminService.getSupplierPayload(state, pathID(req)))
+  }
+
+  fn createImpl(req, state) {
+    return httpView.respondJSON(adminService.writeSupplierPayload(state, req))
+  }
+
+  fn updateImpl(req, state) {
+    // 资源化更新统一通过 path id 覆盖请求体中的 id，避免调用方传入冲突主键。
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.writeSupplierPayload(state, req))
+  }
+
+  fn deleteImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.deleteSupplierPayload(state, req))
+  }
+
+  return {
+    health: healthImpl,
+    healthCheck: healthCheckImpl,
+    list: listImpl,
+    getById: getByIDImpl,
+    create: createImpl,
+    update: updateImpl,
+    delete: deleteImpl
+  }
+}()
+
+export const health = suppliersControllerApi.health
+export const healthCheck = suppliersControllerApi.healthCheck
+export const list = suppliersControllerApi.list
+export const getById = suppliersControllerApi.getById
+export const create = suppliersControllerApi.create
+export const update = suppliersControllerApi.update
+export const delete = suppliersControllerApi.delete

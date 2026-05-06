@@ -19,8 +19,16 @@
   - 项目入口，直接调用 `src/main.ic` 的 `main()`
 - `src/main.ic`
   - 对外暴露 `start` / `stop` / `main`
-- `lib/`
-  - proxy 的配置、鉴权、路由、请求改写、管理接口和监控逻辑
+- `src/controllers/`
+  - HTTP 请求控制器，只负责把请求转发到服务层
+- `src/models/`
+  - 配置、运行时状态、catalog、history、协议转换与持久化 store
+- `src/routes/`
+  - 路由声明层，负责把 URL/HTTP 方法映射到控制器
+- `src/services/`
+  - 控制面、catalog 装配与代理请求管线等服务层
+- `src/views/`
+  - HTTP/JSON 响应包装、traffic/catalog/proxy 输出等视图层输出
 - `smoke.ic`
   - proxy 可用交付的冒烟验收脚本
 - `project.toml`

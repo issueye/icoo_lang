@@ -1,0 +1,22 @@
+import std.web.express as express
+import "@/src/routes/root_routes.ic" as rootRoutes
+import "@/src/routes/admin_routes.ic" as adminRoutes
+import "@/src/routes/proxy_routes.ic" as proxyRoutes
+
+const appControllerApi = fn() {
+  // 应用控制器是这个 proxy 示例的 MVC 组装根，只负责拼装各层，不承载业务逻辑。
+  fn buildAppImpl(config, runtimeState) {
+    // MVC 组合集中在这里，避免 main.ic 直接感知具体路由和控制器细节。
+    let app = express.create()
+    rootRoutes.register(app, config)
+    adminRoutes.register(app, runtimeState)
+    proxyRoutes.register(app, runtimeState)
+    return app
+  }
+
+  return {
+    buildApp: buildAppImpl
+  }
+}()
+
+export const buildApp = appControllerApi.buildApp

@@ -1,0 +1,82 @@
+const catalogViewApi = fn() {
+  fn routesPayloadImpl(routes) {
+    return {
+      ok: true,
+      routes: routes
+    }
+  }
+
+  fn modelsPayloadImpl(models) {
+    return {
+      ok: true,
+      models: models
+    }
+  }
+
+  fn catalogPayloadImpl(catalog) {
+    return {
+      ok: true,
+      catalog: catalog
+    }
+  }
+
+  fn authKeysPayloadImpl(items, revealSecret) {
+    return {
+      ok: true,
+      total: len(items),
+      items: items,
+      reveal: revealSecret
+    }
+  }
+
+  fn overviewPayloadImpl(state, runtimeSnapshot, historySnapshot, catalogSnapshot) {
+    return {
+      ok: true,
+      service: state.monitor.name,
+      ready: state.monitor.ready(),
+      requestCount: state.monitor.requestCount(),
+      runtime: runtimeSnapshot,
+      history: historySnapshot,
+      catalog: catalogSnapshot.store,
+      defaultSupplier: catalogSnapshot.defaultSupplier,
+      counters: state.monitor.counters()
+    }
+  }
+
+  fn statePayloadImpl(state, catalogSnapshot, historySnapshot, runtimeSnapshot) {
+    return {
+      ok: true,
+      config: {
+        listenAddr: state.config.listenAddr,
+        upstreamBaseUrl: state.config.upstreamBaseUrl,
+        timeoutMs: state.config.timeoutMs,
+        recentLimit: state.config.recentLimit,
+        eventLimit: state.config.eventLimit,
+        allowUnauthenticatedLocal: state.config.allowUnauthenticatedLocal,
+        apiKeyCount: len(catalogSnapshot.authKeys),
+        catalogPath: state.config.catalogPath,
+        historyPath: state.config.historyPath
+      },
+      catalog: catalogSnapshot,
+      history: historySnapshot,
+      monitor: state.monitor.snapshot(),
+      runtime: runtimeSnapshot
+    }
+  }
+
+  return {
+    routesPayload: routesPayloadImpl,
+    modelsPayload: modelsPayloadImpl,
+    catalogPayload: catalogPayloadImpl,
+    authKeysPayload: authKeysPayloadImpl,
+    overviewPayload: overviewPayloadImpl,
+    statePayload: statePayloadImpl
+  }
+}()
+
+export const routesPayload = catalogViewApi.routesPayload
+export const modelsPayload = catalogViewApi.modelsPayload
+export const catalogPayload = catalogViewApi.catalogPayload
+export const authKeysPayload = catalogViewApi.authKeysPayload
+export const overviewPayload = catalogViewApi.overviewPayload
+export const statePayload = catalogViewApi.statePayload

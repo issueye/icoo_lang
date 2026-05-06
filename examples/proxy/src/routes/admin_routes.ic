@@ -1,0 +1,176 @@
+import "@/src/controllers/admin_controller.ic" as adminController
+import "@/src/controllers/suppliers_controller.ic" as suppliersController
+import "@/src/controllers/endpoints_controller.ic" as endpointsController
+import "@/src/controllers/model_aliases_controller.ic" as modelAliasesController
+import "@/src/controllers/auth_keys_controller.ic" as authKeysController
+import "@/src/controllers/route_policies_controller.ic" as routePoliciesController
+import "@/src/controllers/settings_controller.ic" as settingsController
+import "@/src/controllers/ui_prefs_controller.ic" as uiPrefsController
+
+const adminRoutesApi = fn() {
+  fn bindRuntime(handler, state) {
+    return fn(req) {
+      return handler(req, state)
+    }
+  }
+
+  fn registerSystemRoutes(app, state) {
+    // 系统级控制面入口不属于某个具体资源，但仍由 routes 层统一挂载。
+    app.get("/healthz", bindRuntime(adminController.health, state))
+    app.get("/readyz", bindRuntime(adminController.ready, state))
+
+    app.get("/admin/routes", bindRuntime(adminController.routes, state))
+    app.get("/admin/models", bindRuntime(adminController.models, state))
+    app.get("/admin/requests", bindRuntime(adminController.requests, state))
+    app.get("/admin/monitor", bindRuntime(adminController.monitor, state))
+    app.get("/admin/catalog", bindRuntime(adminController.catalog, state))
+    app.get("/admin/history/mirror", bindRuntime(adminController.historyMirror, state))
+    app.get("/admin/history/events", bindRuntime(adminController.historyEvents, state))
+    app.get("/admin/history", bindRuntime(adminController.history, state))
+    app.post("/admin/history/clear", bindRuntime(adminController.historyClear, state))
+
+    app.get("/api/overview", bindRuntime(adminController.overview, state))
+    app.get("/api/state", bindRuntime(adminController.state, state))
+    app.post("/api/proxy/reload", bindRuntime(adminController.reload, state))
+    app.get("/api/traffic/mirror", bindRuntime(adminController.trafficMirror, state))
+    app.get("/api/traffic/events", bindRuntime(adminController.trafficEvents, state))
+    app.get("/api/traffic", bindRuntime(adminController.traffic, state))
+    app.post("/api/traffic/clear", bindRuntime(adminController.trafficClear, state))
+    return app
+  }
+
+  fn registerSupplierRoutes(app, state) {
+    // 供应商资源保留 admin 和 api 两套入口，便于兼容现有 smoke 场景。
+    app.get("/admin/suppliers/health", bindRuntime(suppliersController.health, state))
+    app.post("/admin/suppliers/health/check", bindRuntime(suppliersController.healthCheck, state))
+    app.get("/admin/suppliers/list", bindRuntime(suppliersController.list, state))
+    app.post("/admin/suppliers/create", bindRuntime(suppliersController.create, state))
+    app.get("/admin/suppliers/:id", bindRuntime(suppliersController.getById, state))
+    app.put("/admin/suppliers/:id", bindRuntime(suppliersController.update, state))
+    app.delete("/admin/suppliers/:id", bindRuntime(suppliersController.delete, state))
+    app.get("/admin/suppliers", bindRuntime(suppliersController.list, state))
+
+    app.get("/api/suppliers", bindRuntime(suppliersController.list, state))
+    app.get("/api/suppliers/:id", bindRuntime(suppliersController.getById, state))
+    app.post("/api/suppliers/health/check", bindRuntime(suppliersController.healthCheck, state))
+    app.post("/api/suppliers", bindRuntime(suppliersController.create, state))
+    app.put("/api/suppliers/:id", bindRuntime(suppliersController.update, state))
+    app.delete("/api/suppliers/:id", bindRuntime(suppliersController.delete, state))
+    app.delete("/api/suppliers", bindRuntime(suppliersController.delete, state))
+    return app
+  }
+
+  fn registerEndpointRoutes(app, state) {
+    app.get("/admin/endpoints", bindRuntime(endpointsController.list, state))
+    app.get("/admin/endpoints/:id", bindRuntime(endpointsController.getById, state))
+    app.post("/admin/endpoints", bindRuntime(endpointsController.create, state))
+    app.put("/admin/endpoints/:id", bindRuntime(endpointsController.update, state))
+    app.delete("/admin/endpoints/:id", bindRuntime(endpointsController.delete, state))
+
+    app.get("/api/endpoints", bindRuntime(endpointsController.list, state))
+    app.get("/api/endpoints/:id", bindRuntime(endpointsController.getById, state))
+    app.post("/api/endpoints", bindRuntime(endpointsController.create, state))
+    app.put("/api/endpoints/:id", bindRuntime(endpointsController.update, state))
+    app.delete("/api/endpoints/:id", bindRuntime(endpointsController.delete, state))
+    app.delete("/api/endpoints", bindRuntime(endpointsController.delete, state))
+    return app
+  }
+
+  fn registerModelAliasRoutes(app, state) {
+    app.get("/admin/model-aliases", bindRuntime(modelAliasesController.list, state))
+    app.get("/admin/model-aliases/:id", bindRuntime(modelAliasesController.getById, state))
+    app.post("/admin/model-aliases", bindRuntime(modelAliasesController.create, state))
+    app.put("/admin/model-aliases/:id", bindRuntime(modelAliasesController.update, state))
+    app.delete("/admin/model-aliases/:id", bindRuntime(modelAliasesController.delete, state))
+
+    app.get("/api/model-aliases", bindRuntime(modelAliasesController.list, state))
+    app.get("/api/model-aliases/:id", bindRuntime(modelAliasesController.getById, state))
+    app.post("/api/model-aliases", bindRuntime(modelAliasesController.create, state))
+    app.put("/api/model-aliases/:id", bindRuntime(modelAliasesController.update, state))
+    app.delete("/api/model-aliases/:id", bindRuntime(modelAliasesController.delete, state))
+    app.delete("/api/model-aliases", bindRuntime(modelAliasesController.delete, state))
+    return app
+  }
+
+  fn registerAuthKeyRoutes(app, state) {
+    app.get("/admin/auth-keys", bindRuntime(authKeysController.list, state))
+    app.get("/admin/auth-keys/:id", bindRuntime(authKeysController.getById, state))
+    app.post("/admin/auth-keys", bindRuntime(authKeysController.create, state))
+    app.put("/admin/auth-keys/:id", bindRuntime(authKeysController.update, state))
+    app.delete("/admin/auth-keys/:id", bindRuntime(authKeysController.delete, state))
+
+    app.get("/api/auth-keys", bindRuntime(authKeysController.list, state))
+    app.get("/api/auth-keys/:id", bindRuntime(authKeysController.getById, state))
+    app.post("/api/auth-keys", bindRuntime(authKeysController.create, state))
+    app.put("/api/auth-keys/:id", bindRuntime(authKeysController.update, state))
+    app.delete("/api/auth-keys/:id", bindRuntime(authKeysController.delete, state))
+    app.delete("/api/auth-keys", bindRuntime(authKeysController.delete, state))
+    return app
+  }
+
+  fn registerRoutePolicyRoutes(app, state) {
+    app.get("/admin/route-policies", bindRuntime(routePoliciesController.list, state))
+    app.get("/admin/route-policies/:id", bindRuntime(routePoliciesController.getById, state))
+    app.post("/admin/route-policies", bindRuntime(routePoliciesController.create, state))
+    app.put("/admin/route-policies/:id", bindRuntime(routePoliciesController.update, state))
+    app.delete("/admin/route-policies/:id", bindRuntime(routePoliciesController.delete, state))
+
+    app.get("/api/route-policies", bindRuntime(routePoliciesController.list, state))
+    app.get("/api/route-policies/:id", bindRuntime(routePoliciesController.getById, state))
+    app.post("/api/route-policies", bindRuntime(routePoliciesController.create, state))
+    app.put("/api/route-policies/:id", bindRuntime(routePoliciesController.update, state))
+    app.delete("/api/route-policies/:id", bindRuntime(routePoliciesController.delete, state))
+    app.delete("/api/route-policies", bindRuntime(routePoliciesController.delete, state))
+    return app
+  }
+
+  fn registerSettingRoutes(app, state) {
+    app.get("/admin/settings", bindRuntime(settingsController.list, state))
+    app.get("/admin/settings/:id", bindRuntime(settingsController.getById, state))
+    app.post("/admin/settings", bindRuntime(settingsController.create, state))
+    app.put("/admin/settings/:id", bindRuntime(settingsController.update, state))
+    app.delete("/admin/settings/:id", bindRuntime(settingsController.delete, state))
+
+    app.get("/api/settings", bindRuntime(settingsController.list, state))
+    app.get("/api/settings/:id", bindRuntime(settingsController.getById, state))
+    app.post("/api/settings", bindRuntime(settingsController.create, state))
+    app.put("/api/settings/:id", bindRuntime(settingsController.update, state))
+    app.delete("/api/settings/:id", bindRuntime(settingsController.delete, state))
+    app.delete("/api/settings", bindRuntime(settingsController.delete, state))
+    return app
+  }
+
+  fn registerUIPrefRoutes(app, state) {
+    app.get("/admin/ui-prefs", bindRuntime(uiPrefsController.list, state))
+    app.get("/admin/ui-prefs/:id", bindRuntime(uiPrefsController.getById, state))
+    app.post("/admin/ui-prefs", bindRuntime(uiPrefsController.create, state))
+    app.put("/admin/ui-prefs/:id", bindRuntime(uiPrefsController.update, state))
+    app.delete("/admin/ui-prefs/:id", bindRuntime(uiPrefsController.delete, state))
+
+    app.get("/api/ui-prefs", bindRuntime(uiPrefsController.list, state))
+    app.get("/api/ui-prefs/:id", bindRuntime(uiPrefsController.getById, state))
+    app.post("/api/ui-prefs", bindRuntime(uiPrefsController.create, state))
+    app.put("/api/ui-prefs/:id", bindRuntime(uiPrefsController.update, state))
+    app.delete("/api/ui-prefs/:id", bindRuntime(uiPrefsController.delete, state))
+    app.delete("/api/ui-prefs", bindRuntime(uiPrefsController.delete, state))
+    return app
+  }
+
+  fn registerImpl(app, state) {
+    registerSystemRoutes(app, state)
+    registerSupplierRoutes(app, state)
+    registerEndpointRoutes(app, state)
+    registerModelAliasRoutes(app, state)
+    registerAuthKeyRoutes(app, state)
+    registerRoutePolicyRoutes(app, state)
+    registerSettingRoutes(app, state)
+    registerUIPrefRoutes(app, state)
+    return app
+  }
+
+  return {
+    register: registerImpl
+  }
+}()
+
+export const register = adminRoutesApi.register

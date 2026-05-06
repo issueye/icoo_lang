@@ -1,0 +1,20 @@
+import "@/src/services/proxy_service.ic" as proxyService
+
+const proxyControllerApi = fn() {
+  fn handleProxyImpl(req, state) {
+    // 代理请求编排全部委派给服务层，控制器只处理 HTTP 入口职责。
+    return proxyService.handleProxy(req, state)
+  }
+
+  fn handleProxyDirectImpl(req, res, state) {
+    return proxyService.handleProxyDirect(req, res, state)
+  }
+
+  return {
+    handleProxy: handleProxyImpl,
+    handleProxyDirect: handleProxyDirectImpl
+  }
+}()
+
+export const handleProxy = proxyControllerApi.handleProxy
+export const handleProxyDirect = proxyControllerApi.handleProxyDirect

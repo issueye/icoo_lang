@@ -1,0 +1,59 @@
+import std.core.object as object
+import "@/src/services/admin_service.ic" as adminService
+import "@/src/views/http_view.ic" as httpView
+
+const modelAliasesControllerApi = fn() {
+  fn withIDPayload(req, id) {
+    let payload = object.get(req, "json")
+    if payload == null {
+      payload = {}
+    }
+    if id != null {
+      payload.id = id
+    }
+    req.json = payload
+    return req
+  }
+
+  fn pathID(req) {
+    let params = object.get(req, "params")
+    return object.get(params, "id")
+  }
+
+  // 模型别名控制器按资源接口暴露 CRUD，业务规则仍由 admin_service 统一处理。
+  fn listImpl(req, state) {
+    return httpView.respondJSON(adminService.listModelAliasesPayload(state))
+  }
+
+  fn getByIDImpl(req, state) {
+    return httpView.respondJSON(adminService.getModelAliasPayload(state, pathID(req)))
+  }
+
+  fn createImpl(req, state) {
+    return httpView.respondJSON(adminService.writeModelAliasPayload(state, req))
+  }
+
+  fn updateImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.writeModelAliasPayload(state, req))
+  }
+
+  fn deleteImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.deleteModelAliasPayload(state, req))
+  }
+
+  return {
+    list: listImpl,
+    getById: getByIDImpl,
+    create: createImpl,
+    update: updateImpl,
+    delete: deleteImpl
+  }
+}()
+
+export const list = modelAliasesControllerApi.list
+export const getById = modelAliasesControllerApi.getById
+export const create = modelAliasesControllerApi.create
+export const update = modelAliasesControllerApi.update
+export const delete = modelAliasesControllerApi.delete

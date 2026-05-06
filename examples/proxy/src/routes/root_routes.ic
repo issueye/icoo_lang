@@ -1,0 +1,18 @@
+import std.web.express as express
+import "@/src/views/home_view.ic" as homeView
+
+const rootRoutesApi = fn() {
+  fn registerImpl(app, config) {
+    // 根路由层只负责把首页请求映射到视图输出。
+    app.get("/", fn(req) {
+      return express.json(homeView.indexPayload(config))
+    })
+    return app
+  }
+
+  return {
+    register: registerImpl
+  }
+}()
+
+export const register = rootRoutesApi.register

@@ -1,0 +1,40 @@
+import std.web.express as express
+import std.core.object as object
+
+const httpViewApi = fn() {
+  fn respondJSONImpl(value) {
+    if object.get(value, "status") != null || object.get(value, "json") != null || object.get(value, "body") != null {
+      return value
+    }
+    return express.json(value)
+  }
+
+  fn resourceListImpl(items) {
+    return {
+      ok: true,
+      total: len(items),
+      items: items
+    }
+  }
+
+  fn badRequestImpl(message) {
+    return {
+      status: 400,
+      json: {
+        ok: false,
+        error: "bad_request",
+        message: message
+      }
+    }
+  }
+
+  return {
+    respondJSON: respondJSONImpl,
+    resourceList: resourceListImpl,
+    badRequest: badRequestImpl
+  }
+}()
+
+export const respondJSON = httpViewApi.respondJSON
+export const resourceList = httpViewApi.resourceList
+export const badRequest = httpViewApi.badRequest

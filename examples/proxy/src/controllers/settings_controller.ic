@@ -1,0 +1,59 @@
+import std.core.object as object
+import "@/src/services/admin_service.ic" as adminService
+import "@/src/views/http_view.ic" as httpView
+
+const settingsControllerApi = fn() {
+  fn withIDPayload(req, id) {
+    let payload = object.get(req, "json")
+    if payload == null {
+      payload = {}
+    }
+    if id != null {
+      payload.id = id
+    }
+    req.json = payload
+    return req
+  }
+
+  fn pathID(req) {
+    let params = object.get(req, "params")
+    return object.get(params, "id")
+  }
+
+  // 设置控制器面向命名配置资源，写操作会由 service 触发运行时 reload。
+  fn listImpl(req, state) {
+    return httpView.respondJSON(adminService.listSettingsPayload(state))
+  }
+
+  fn getByIDImpl(req, state) {
+    return httpView.respondJSON(adminService.getSettingPayload(state, pathID(req)))
+  }
+
+  fn createImpl(req, state) {
+    return httpView.respondJSON(adminService.writeSettingPayload(state, req))
+  }
+
+  fn updateImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.writeSettingPayload(state, req))
+  }
+
+  fn deleteImpl(req, state) {
+    withIDPayload(req, pathID(req))
+    return httpView.respondJSON(adminService.deleteSettingPayload(state, req))
+  }
+
+  return {
+    list: listImpl,
+    getById: getByIDImpl,
+    create: createImpl,
+    update: updateImpl,
+    delete: deleteImpl
+  }
+}()
+
+export const list = settingsControllerApi.list
+export const getById = settingsControllerApi.getById
+export const create = settingsControllerApi.create
+export const update = settingsControllerApi.update
+export const delete = settingsControllerApi.delete

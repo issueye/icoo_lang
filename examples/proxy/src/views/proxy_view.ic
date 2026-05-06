@@ -1,0 +1,45 @@
+const proxyViewApi = fn() {
+  fn upstreamErrorImpl(message) {
+    return {
+      status: 502,
+      json: {
+        ok: false,
+        error: "upstream_error",
+        message: message
+      }
+    }
+  }
+
+  fn routeNotFoundImpl(path, requestedModel) {
+    return {
+      status: 404,
+      json: {
+        ok: false,
+        error: "route_not_found",
+        path: path,
+        requestedModel: requestedModel
+      }
+    }
+  }
+
+  fn streamNotSupportedImpl(message) {
+    return {
+      status: 501,
+      json: {
+        ok: false,
+        error: "stream_not_supported",
+        message: message
+      }
+    }
+  }
+
+  return {
+    upstreamError: upstreamErrorImpl,
+    routeNotFound: routeNotFoundImpl,
+    streamNotSupported: streamNotSupportedImpl
+  }
+}()
+
+export const upstreamError = proxyViewApi.upstreamError
+export const routeNotFound = proxyViewApi.routeNotFound
+export const streamNotSupported = proxyViewApi.streamNotSupported
