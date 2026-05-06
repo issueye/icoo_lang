@@ -561,6 +561,37 @@ logger.close()
 	}
 }
 
+func TestRuntimeRunSource_StdCoreLogWithCloseReleasesFile(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "with.log")
+
+	src := `
+import std.core.log as log
+
+let logger = log.create({
+  output: "file",
+  filePath: "` + filepath.ToSlash(logPath) + `",
+  rotation: {
+    maxSizeMB: 1
+  }
+}).with({
+  service: "with-close"
+})
+
+logger.info("hello")
+logger.close()
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.core.log with close run to succeed, got: %v", err)
+	}
+
+	if err := os.Remove(logPath); err != nil {
+		t.Fatalf("expected log file to be closable after logger.close, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_StdCoreLogRejectsInvalidRotation(t *testing.T) {
 	src := `
 import std.core.log as log
@@ -579,6 +610,81 @@ log.create({
 		t.Fatal("expected std.core.log invalid rotation to fail")
 	} else if !strings.Contains(err.Error(), "maxSizeMB") {
 		t.Fatalf("expected maxSizeMB validation error, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_ImportsStdStringModule(t *testing.T) {
+	src := `
+import std.core.string as str
+
+if str.hasPrefix(".gitignore", ".") != true {
+  panic("expected hasPrefix")
+}
+if str.hasSuffix("main.ic", ".ic") != true {
+  panic("expected hasSuffix")
+}
+if str.contains("repo-summary", "summary") != true {
+  panic("expected contains")
+}
+if str.trimSpace("  icoo  ") != "icoo" {
+  panic("expected trimSpace")
+}
+if str.join(["a", "b", "c"], ",") != "a,b,c" {
+  panic("expected join")
+}
+let parts = str.split("a/b/c", "/")
+if len(parts) != 3 || parts[1] != "b" {
+  panic("expected split")
+}
+if str.replace("a-b-c", "-", "/", 1) != "a/b-c" {
+  panic("expected replace")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected std.core.string import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunSource_StdExecRunWithCwdOptions(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker.txt")
+
+	src := `
+import std.sys.exec as exec
+import std.sys.host as host
+
+let result = null
+if host.goos() == "windows" {
+  result = exec.run({
+    command: "cmd",
+    args: ["/c", "echo ok > marker.txt"],
+    cwd: "` + filepath.ToSlash(dir) + `"
+  })
+} else {
+  result = exec.run({
+    command: "sh",
+    args: ["-lc", "printf ok > marker.txt"],
+    cwd: "` + filepath.ToSlash(dir) + `"
+  })
+}
+
+if result.ok != true {
+  panic("expected exec.run options success")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected exec.run options to succeed, got: %v", err)
+	}
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("expected marker file, got: %v", err)
+	}
+	if strings.TrimSpace(string(data)) != "ok" {
+		t.Fatalf("expected marker contents ok, got: %q", string(data))
 	}
 }
 

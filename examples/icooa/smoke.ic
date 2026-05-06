@@ -1,0 +1,61 @@
+import std.io.console as io
+import std.io.fs as fs
+import std.sys.os as os
+import std.net.http.server as server
+import std.time.basic as time
+import "@/src/main.ic" as icooa
+
+let root = fs.join(os.tempDir(), "icooa-smoke")
+let workspace = fs.join(root, "workspace")
+let sessions = fs.join(root, "sessions")
+os.mkdirAll(workspace)
+os.mkdirAll(sessions)
+
+fs.writeFile(fs.join(workspace, "README.md"), "# Demo Repo\nThis is a tiny workspace.\n")
+fs.writeFile(fs.join(workspace, "main.go"), "package main\n\nfunc main() {}\n")
+
+let mock = server.listen({
+  addr: "127.0.0.1:0",
+  handler: fn(req) {
+    return {
+      json: {
+        id: "chatcmpl-demo",
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: "Summary\n- Demo workspace received.\n\nRisks\n- The scan is intentionally shallow.\n\nNext Steps\n- Open README.md.\n- Inspect main.go."
+            }
+          }
+        ]
+      }
+    }
+  }
+})
+
+let result = icooa.run({
+  workspace: workspace,
+  task: "Review this repository and propose next steps.",
+  baseUrl: mock.url + "/v1",
+  apiKey: "demo-key",
+  sessionDir: sessions,
+  logPath: fs.join(root, "icooa.log"),
+  includeHidden: true,
+  maxEntries: 8,
+  maxDepth: 2,
+  maxFileBytes: 2048
+})
+
+mock.close()
+time.sleep(50)
+
+if result.result.mode != "remote" {
+  panic("expected remote mode")
+}
+if fs.exists(result.savedPath) != true {
+  panic("expected saved session")
+}
+
+io.println("icooa smoke ok")
+
+os.removeAll(root)

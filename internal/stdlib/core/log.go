@@ -84,7 +84,7 @@ func logModuleError(args []runtime.Value) (runtime.Value, error) {
 }
 
 func logModuleWith(args []runtime.Value) (runtime.Value, error) {
-	return withLogger(slog.Default(), args)
+	return withLoggerBinding(&loggerBinding{logger: slog.Default()}, args)
 }
 
 func (binding *loggerBinding) object() *runtime.ObjectValue {
@@ -120,7 +120,7 @@ func (binding *loggerBinding) error(args []runtime.Value) (runtime.Value, error)
 }
 
 func (binding *loggerBinding) with(args []runtime.Value) (runtime.Value, error) {
-	return withLogger(binding.logger, args)
+	return withLoggerBinding(binding, args)
 }
 
 func (binding *loggerBinding) close(args []runtime.Value) (runtime.Value, error) {
@@ -133,6 +133,10 @@ func (binding *loggerBinding) close(args []runtime.Value) (runtime.Value, error)
 }
 
 func withLogger(base *slog.Logger, args []runtime.Value) (runtime.Value, error) {
+	return withLoggerBinding(&loggerBinding{logger: base}, args)
+}
+
+func withLoggerBinding(base *loggerBinding, args []runtime.Value) (runtime.Value, error) {
 	fields, err := requireLogFieldsArg("with", args)
 	if err != nil {
 		return nil, err
@@ -145,7 +149,7 @@ func withLogger(base *slog.Logger, args []runtime.Value) (runtime.Value, error) 
 	for _, attr := range attrs {
 		items = append(items, attr)
 	}
-	return (&loggerBinding{logger: base.With(items...)}).object(), nil
+	return (&loggerBinding{logger: base.logger.With(items...), closer: base.closer}).object(), nil
 }
 
 func logWithLogger(logger *slog.Logger, args []runtime.Value) (runtime.Value, error) {

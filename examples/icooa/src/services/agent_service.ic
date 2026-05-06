@@ -1,0 +1,198 @@
+import std.io.console as io
+import std.data.json as json
+import std.net.http.client as http
+import std.sys.exec as exec
+import std.time.basic as time
+import std.core.object as object
+import std.core.log as log
+import "@/src/models/workspace_model.ic" as workspaceModel
+import "@/src/models/session_model.ic" as sessionModel
+
+const agentApi = fn() {
+  fn runOptionalCommand(config, logger) {
+    if config.command == null || config.command == "" {
+      return null
+    }
+
+    logger.info("running command", {
+      command: config.command
+    })
+    let result = exec.run({
+      command: config.command,
+      cwd: config.workspace,
+      shell: true
+    })
+    logger.info("command finished", {
+      ok: result.ok,
+      code: result.code
+    })
+    return result
+  }
+
+  fn buildPrompt(config, workspaceSnapshot, commandResult) {
+    let prompt = ""
+    prompt = prompt + "You are Icooa, a repository coding assistant.\n"
+    prompt = prompt + "Act like a pragmatic terminal coding agent.\n"
+    prompt = prompt + "Return three sections with plain text headers: Summary, Risks, Next Steps.\n\n"
+    prompt = prompt + "Task:\n" + config.task + "\n\n"
+    prompt = prompt + "Workspace Snapshot:\n" + workspaceSnapshot.text + "\n"
+
+    if commandResult != null {
+      prompt = prompt + "\nCommand:\n" + config.command + "\n"
+      prompt = prompt + "Exit Code: " + json.encode(commandResult.code) + "\n"
+      prompt = prompt + "Stdout:\n" + commandResult.stdout + "\n"
+      prompt = prompt + "Stderr:\n" + commandResult.stderr + "\n"
+    }
+
+    return prompt
+  }
+
+  fn extractAssistantText(response) {
+    let payload = response.json
+    let choices = object.get(payload, "choices")
+    if typeOf(choices) == "array" && len(choices) > 0 {
+      let first = choices[0]
+      let message = object.get(first, "message")
+      let content = object.get(message, "content")
+      if typeOf(content) == "string" {
+        return content
+      }
+    }
+
+    let outputText = object.get(payload, "output_text")
+    if typeOf(outputText) == "string" {
+      return outputText
+    }
+
+    return json.encode(payload)
+  }
+
+  fn localFallback(config, prompt) {
+    let text = ""
+    text = text + "Summary\n"
+    text = text + "- No remote model was called because OPENAI_API_KEY / ICOOA_API_KEY is missing.\n"
+    text = text + "- The workspace snapshot was collected successfully.\n\n"
+    text = text + "Risks\n"
+    text = text + "- This fallback does not synthesize repo-specific reasoning beyond the captured snapshot.\n"
+    text = text + "- Command execution is optional and may need quoting review on complex shell inputs.\n\n"
+    text = text + "Next Steps\n"
+    text = text + "- Set OPENAI_API_KEY and rerun to get a model-generated coding plan.\n"
+    text = text + "- Optionally set ICOOA_COMMAND to run a repo inspection command before prompting.\n"
+    text = text + "- Review the saved session JSON and extend the prompt or workspace scan limits if needed.\n\n"
+    text = text + "Prompt Preview\n"
+    text = text + prompt
+    return {
+      mode: "local",
+      text: text
+    }
+  }
+
+  fn requestAssistant(config, prompt, logger) {
+    if config.apiKey == null || config.apiKey == "" {
+      logger.warn("api key missing, using local fallback", {})
+      return localFallback(config, prompt)
+    }
+
+    let url = config.baseUrl + "/chat/completions"
+    logger.info("sending model request", {
+      url: url,
+      model: config.model
+    })
+
+    let response = http.requestJSON({
+      url: url,
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + config.apiKey
+      },
+      json: {
+        model: config.model,
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content: "You are a coding agent similar to Claude Code. Be concise, concrete, and repository-aware."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      }
+    })
+
+    logger.info("model response received", {
+      status: response.status
+    })
+
+    return {
+      mode: "remote",
+      text: extractAssistantText(response)
+    }
+  }
+
+  fn run(config) {
+    let logger = log.create({
+      level: "info",
+      format: "text",
+      output: "file",
+      filePath: config.logPath,
+      rotation: {
+        maxSizeMB: 10,
+        maxBackups: 5,
+        maxAgeDays: 14,
+        compress: false
+      }
+    }).with({
+      app: "icooa"
+    })
+
+    logger.info("starting task", {
+      workspace: config.workspace,
+      model: config.model
+    })
+
+    let workspaceSnapshot = workspaceModel.scan(config)
+    let commandResult = runOptionalCommand(config, logger)
+    let prompt = buildPrompt(config, workspaceSnapshot, commandResult)
+    let result = requestAssistant(config, prompt, logger)
+    let savedPath = sessionModel.save(config, {
+      createdAt: time.now(),
+      workspace: config.workspace,
+      task: config.task,
+      command: config.command,
+      workspaceSnapshot: workspaceSnapshot,
+      commandResult: commandResult,
+      assistant: result
+    })
+
+    logger.info("session saved", {
+      path: savedPath
+    })
+    logger.close()
+
+    io.println("== icooa ==")
+    io.println("workspace:", config.workspace)
+    io.println("task:", config.task)
+    io.println("session:", savedPath)
+    if commandResult != null {
+      io.println("command ok:", commandResult.ok)
+      io.println("command code:", commandResult.code)
+    }
+    io.println("")
+    io.println(result.mode + ":")
+    io.println(result.text)
+
+    return {
+      savedPath: savedPath,
+      commandResult: commandResult,
+      result: result
+    }
+  }
+
+  return {
+    run: run
+  }
+}()
+
+export const run = agentApi.run

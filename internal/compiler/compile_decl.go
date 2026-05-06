@@ -47,6 +47,12 @@ func (c *Compiler) compileVarDecl(d *ast.VarDecl) {
 }
 
 func (c *Compiler) compileFnDecl(d *ast.FnDecl) {
+	localSlot := -1
+	if c.current.scopeDepth > 0 {
+		c.emitNull()
+		localSlot = c.addLocal(d.Name, true)
+	}
+
 	child := newFuncCompiler(c.current, d.Name)
 	child.proto.Arity = len(d.Params)
 	prev := c.current
@@ -73,8 +79,9 @@ func (c *Compiler) compileFnDecl(d *ast.FnDecl) {
 		c.emitShort(constIdx)
 	}
 
-	if c.current.scopeDepth > 0 {
-		c.addLocal(d.Name, true)
+	if localSlot >= 0 {
+		c.emitSetLocal(localSlot)
+		c.emit(bytecode.OpPop)
 		return
 	}
 

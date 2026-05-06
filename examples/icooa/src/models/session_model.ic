@@ -1,0 +1,20 @@
+import std.data.json as json
+import std.io.fs as fs
+import std.sys.os as os
+import std.time.basic as time
+
+const sessionApi = fn() {
+  fn save(config, payload) {
+    os.mkdirAll(config.sessionDir)
+    let stamp = time.format(time.now(), "YYYYMMDD-HHmmss", "UTC")
+    let filePath = fs.join(config.sessionDir, stamp + ".json")
+    json.saveToFile(filePath, payload)
+    return filePath
+  }
+
+  return {
+    save: save
+  }
+}()
+
+export const save = sessionApi.save

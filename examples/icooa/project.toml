@@ -1,0 +1,5 @@
+[project]
+name = "icooa"
+entry = "src/main.ic"
+entry_function = "main"
+root_alias = "@"

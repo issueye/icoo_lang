@@ -17,6 +17,7 @@ var moduleLoaders = map[string]func() *runtime.Module{
 	"std.core.object":  stdcore.LoadStdCoreObjectModule,
 	"std.core.observe": stdcore.LoadStdCoreObserveModule,
 	"std.core.log":     stdcore.LoadStdCoreLogModule,
+	"std.core.string":  stdcore.LoadStdCoreStringModule,
 	"std.core.service": stdcore.LoadStdCoreServiceModule,
 	"std.core.cache":   stdcore.LoadStdCoreCacheModule,
 

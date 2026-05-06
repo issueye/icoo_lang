@@ -256,6 +256,29 @@ if result != "hi, icoo" {
 	}
 }
 
+func TestClosureCaptureFunctionBodyLocalRecursion(t *testing.T) {
+	src := `
+fn factory() {
+  fn walk(n) {
+    if n <= 0 {
+      return 0
+    }
+    return n + walk(n - 1)
+  }
+
+  return walk(4)
+}
+
+if factory() != 10 {
+  panic("expected recursive local function to work")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("function body local recursion failed: %v", err)
+	}
+}
+
 func TestClosureCaptureNonExistent(t *testing.T) {
 	src := `
 fn outer() {

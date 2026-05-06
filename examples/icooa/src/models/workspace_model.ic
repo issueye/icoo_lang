@@ -1,0 +1,86 @@
+import std.data.json as json
+import std.core.string as str
+import std.io.fs as fs
+
+const workspaceApi = fn() {
+  fn summarizeFile(path, stat, maxFileBytes) {
+    let text = "FILE " + path + " size=" + json.encode(stat.size) + "\n"
+    if stat.size <= maxFileBytes {
+      text = text + fs.readFile(path) + "\n"
+    } else {
+      text = text + "<omitted: file too large>\n"
+    }
+    return {
+      count: 1,
+      text: text
+    }
+  }
+
+  fn isHidden(name) {
+    return str.hasPrefix(name, ".")
+  }
+
+  fn walk(path, depth, remaining, maxDepth, maxFileBytes, includeHidden) {
+    if remaining <= 0 {
+      return {
+        count: 0,
+        text: ""
+      }
+    }
+
+    let stat = fs.stat(path)
+    if stat.isFile {
+      return summarizeFile(path, stat, maxFileBytes)
+    }
+
+    let text = "DIR " + path + "\n"
+    let used = 0
+    if depth >= maxDepth {
+      return {
+        count: 0,
+        text: text + "  <max depth reached>\n"
+      }
+    }
+
+    let entries = fs.readDir(path)
+    for i, entry in entries {
+      if used >= remaining {
+        break
+      }
+      if includeHidden != true && isHidden(entry.name) {
+        continue
+      }
+      if entry.isDir {
+        let child = walk(entry.path, depth + 1, remaining - used, maxDepth, maxFileBytes, includeHidden)
+        used = used + child.count
+        text = text + "  - " + entry.name + "/\n" + child.text
+        continue
+      }
+
+      let fileSummary = summarizeFile(entry.path, fs.stat(entry.path), maxFileBytes)
+      used = used + fileSummary.count
+      text = text + "  - " + entry.name + "\n" + fileSummary.text
+    }
+
+    return {
+      count: used,
+      text: text
+    }
+  }
+
+  fn scan(config) {
+    let root = config.workspace
+    let summary = walk(root, 0, config.maxEntries, config.maxDepth, config.maxFileBytes, config.includeHidden)
+    return {
+      root: root,
+      scanned: summary.count,
+      text: "Workspace: " + root + "\n\n" + summary.text
+    }
+  }
+
+  return {
+    scan: scan
+  }
+}()
+
+export const scan = workspaceApi.scan
