@@ -20,6 +20,13 @@ class ListDir {
         error: "directory not found: " + path
       }
     }
+    let info = fs.stat(path)
+    if info.isDir != true {
+      return {
+        ok: false,
+        error: "path is not a directory: " + path
+      }
+    }
 
     let entries = fs.readDir(path).map(fn(entry) {
       return {

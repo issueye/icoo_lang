@@ -6,6 +6,32 @@ class ArgsConfig {
     return argv()
   }
 
+  isHelpRequest() {
+    let values = this.argvList()
+    for i, value in values {
+      if value == "--help" || value == "-h" {
+        return true
+      }
+    }
+    return false
+  }
+
+  hasWorkspaceArg() {
+    let values = this.argvList()
+    let index = 0
+    while index < len(values) {
+      let value = values[index]
+      if value == "--workspace" || value == "--root" {
+        return index + 1 < len(values)
+      }
+      if str.hasPrefix(value, "--workspace=") || str.hasPrefix(value, "--root=") {
+        return true
+      }
+      index = index + 1
+    }
+    return false
+  }
+
   defineApp() {
     // agent 的启动参数统一挂在原生 CLI 框架上，避免继续手写 argv 遍历。
     let app = cli.create({
@@ -17,8 +43,7 @@ class ArgsConfig {
     app.flagString({
       name: "workspace",
       aliases: ["root"],
-      description: "Workspace root path for context collection",
-      required: true
+      description: "Workspace root path for context collection"
     })
     app.flagString({
       name: "mode",
@@ -111,14 +136,15 @@ class ArgsConfig {
   }
 
   applyArgs(config) {
-    let parsed = this.defineApp().run()
-    if parsed.help == true {
+    let app = this.defineApp()
+    if this.isHelpRequest() == true {
       return {
         config: config,
         help: true,
-        helpText: parsed.helpText
+        helpText: app.help()
       }
     }
+    let parsed = app.run()
 
     let flags = parsed.flags
     config = this.applyIfString(config, flags.workspace, "workspace")
@@ -137,6 +163,10 @@ class ArgsConfig {
     config = this.applyIfInt(config, flags["max-total-bytes"], "maxTotalBytes")
     config = this.applyIfBoolString(config, flags["stream-final-answer"], "streamFinalAnswer")
     config = this.applyIfString(config, flags["agent-name"], "agentName")
+
+    if this.hasWorkspaceArg() != true {
+      panic("missing required flag: --workspace")
+    }
 
     // 先把未知参数完整保留，后续可以转给更细的子工具链或模型层调试入口。
     config.cliUnknownArgs = parsed.unknown

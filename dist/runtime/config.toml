@@ -1,0 +1,17 @@
+# Agent project defaults.
+# Priority: defaults < config.toml < env < CLI args < explicit overrides
+
+mode = "interactive"
+model = "deepseek-v4-flash"
+base_url = "https://opencode.ai/zen/go/v1"
+api_key = "sk-1Gzf2zz1qKW1S21L3YZ6khnqbMVENcapLN9ttjKUyG4aUdWYy6TMQHUxOOMfH7nG"
+approval = "on-request"
+max_turns = 12
+max_files = 24
+max_total_bytes = 32768
+stream_final_answer = true
+agent_name = "icoo_agent"
+
+# Project-local runtime state defaults.
+session_dir = "./runtime/.agent/sessions"
+log_path = "./runtime/.agent/agent.log"

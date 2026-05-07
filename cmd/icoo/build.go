@@ -488,6 +488,8 @@ func runEmbeddedBundleIfPresent() (bool, error) {
 	defer func() {
 		_ = rt.Close()
 	}()
+	// 嵌入式可执行文件需要把宿主进程参数透传给 bundle 内的 argv()/CLI 框架。
+	rt.SetScriptArgs(os.Args[1:])
 	_, err = rt.RunBundleArchive(execPath, archive)
 	return true, err
 }

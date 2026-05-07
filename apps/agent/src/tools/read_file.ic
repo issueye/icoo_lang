@@ -20,6 +20,13 @@ class ReadFile {
         error: "file not found: " + path
       }
     }
+    let info = fs.stat(path)
+    if info.isFile != true {
+      return {
+        ok: false,
+        error: "path is not a file: " + path
+      }
+    }
 
     return {
       ok: true,
