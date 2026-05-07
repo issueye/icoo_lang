@@ -14,7 +14,7 @@ class Animal {
   }
 }
 
-class Dog < Animal {
+class Dog <- Animal {
   init(name, breed) {
     super.init(name)
     this.breed = breed

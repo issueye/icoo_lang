@@ -1,0 +1,23 @@
+import std.io.console as io
+import "@/src/config/merge.ic" as config
+import "@/src/runtime/runtime.ic" as runtime
+
+const agentApi = fn() {
+  fn startImpl(overrides) {
+    // 启动层只负责拿到最终配置，再把实际运行交给 runtime。
+    let cfg = config.loadConfig(overrides)
+    return runtime.start(cfg)
+  }
+
+  fn mainImpl() {
+    return startImpl(null)
+  }
+
+  return {
+    start: startImpl,
+    main: mainImpl
+  }
+}()
+
+export const start = agentApi.start
+export const main = agentApi.main

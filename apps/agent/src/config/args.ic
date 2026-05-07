@@ -1,0 +1,103 @@
+import std.sys.os as os
+import std.math.basic as math
+
+const argsApi = fn() {
+  fn parseIntOr(value, fallback) {
+    try {
+      return math.parseInt(value)
+    } catch err {
+      return fallback
+    }
+  }
+
+  fn applyArgs(config) {
+    let args = os.args()
+    let i = 0
+
+    // `icoo run apps/agent -- ...` 传进来的 script args 在这里统一解析。
+    for i < len(args) {
+      let current = args[i]
+
+      if current == "--workspace" && i + 1 < len(args) {
+        config.workspace = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--mode" && i + 1 < len(args) {
+        config.mode = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--model" && i + 1 < len(args) {
+        config.model = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--base-url" && i + 1 < len(args) {
+        config.baseUrl = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--api-key" && i + 1 < len(args) {
+        config.apiKey = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--task" && i + 1 < len(args) {
+        config.task = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--session" && i + 1 < len(args) {
+        config.sessionId = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--resume" && i + 1 < len(args) {
+        config.resumeSession = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--approval" && i + 1 < len(args) {
+        config.approval = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--session-dir" && i + 1 < len(args) {
+        config.sessionDir = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--log-path" && i + 1 < len(args) {
+        config.logPath = args[i + 1]
+        i = i + 2
+        continue
+      }
+      if current == "--max-turns" && i + 1 < len(args) {
+        config.maxTurns = parseIntOr(args[i + 1], config.maxTurns)
+        i = i + 2
+        continue
+      }
+      if current == "--max-files" && i + 1 < len(args) {
+        config.maxFiles = parseIntOr(args[i + 1], config.maxFiles)
+        i = i + 2
+        continue
+      }
+      if current == "--max-total-bytes" && i + 1 < len(args) {
+        config.maxTotalBytes = parseIntOr(args[i + 1], config.maxTotalBytes)
+        i = i + 2
+        continue
+      }
+
+      i = i + 1
+    }
+
+    return config
+  }
+
+  return {
+    applyArgs: applyArgs
+  }
+}()
+
+export const applyArgs = argsApi.applyArgs

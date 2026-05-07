@@ -1,5 +1,5 @@
 [project]
-name = "icooa"
+name = "icoo_agent"
 entry = "src/main.ic"
 entry_function = "main"
 root_alias = "@"

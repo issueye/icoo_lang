@@ -161,7 +161,11 @@ func (p *Parser) parseClassDecl() ast.Decl {
 	startTok := p.expect(token.Class, "expected 'class'")
 	nameTok := p.expect(token.Ident, "expected class name")
 	var super ast.Expr
-	if p.match(token.Lt) {
+	if p.match(token.Inherit) {
+		super = p.parseExpression(PrecLowest)
+	} else if p.check(token.Lt) {
+		p.errorAtCurrent("class inheritance uses '<-' instead of '<'")
+		p.advance()
 		super = p.parseExpression(PrecLowest)
 	}
 	p.expect(token.LBrace, "expected '{' after class name")

@@ -237,3 +237,9 @@ func TestSema_InvalidAssignmentTarget(t *testing.T) {
 	diags := Analyze(program)
 	hasError(t, diags, "invalid assignment target")
 }
+
+func TestSema_LessComparisonStillValidAfterInheritanceSyntaxChange(t *testing.T) {
+	program := parse("let ok = 1 < 2")
+	diags := Analyze(program)
+	noError(t, diags)
+}

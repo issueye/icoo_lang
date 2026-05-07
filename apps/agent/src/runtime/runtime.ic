@@ -1,0 +1,39 @@
+import std.io.console as io
+import "@/src/session/store.ic" as sessionStore
+
+const runtimeApi = fn() {
+  fn start(config) {
+    // 运行时第一步先拿到 session，这样后续 context/tool/model 都能共享统一状态。
+    let opened = sessionStore.open(config)
+    let session = opened.session
+
+    // 这里先只做启动面板输出，后续再接 session/context/tool/runtime 主流程。
+    io.println("== icoo agent ==")
+    io.println("workspace:", config.workspace)
+    io.println("mode:", config.mode)
+    io.println("model:", config.model)
+    io.println("approval:", config.approval)
+    io.println("session id:", session.sessionId)
+    io.println("resume:", config.resumeSession)
+    io.println("session dir:", config.sessionDir)
+    io.println("session path:", opened.path)
+    io.println("session resumed:", opened.resumed)
+    io.println("log path:", config.logPath)
+    io.println("max turns:", config.maxTurns)
+    io.println("max files:", config.maxFiles)
+    io.println("max total bytes:", config.maxTotalBytes)
+
+    return {
+      ok: true,
+      config: config,
+      session: session,
+      sessionPath: opened.path
+    }
+  }
+
+  return {
+    start: start
+  }
+}()
+
+export const start = runtimeApi.start

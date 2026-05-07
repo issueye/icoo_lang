@@ -1,0 +1,69 @@
+import std.data.json as json
+import std.io.fs as fs
+import std.sys.os as os
+import std.time.basic as time
+import "@/src/session/schema.ic" as schema
+
+const storeApi = fn() {
+  fn sessionPath(config, sessionId) {
+    return fs.join(config.sessionDir, sessionId + ".json")
+  }
+
+  fn save(config, session) {
+    os.mkdirAll(config.sessionDir)
+    session.updatedAt = time.now()
+    let filePath = sessionPath(config, session.sessionId)
+    json.saveToFile(filePath, session)
+    return filePath
+  }
+
+  fn load(config, sessionId) {
+    let filePath = sessionPath(config, sessionId)
+    if fs.exists(filePath) != true {
+      return null
+    }
+
+    let loaded = json.fromFile(filePath)
+    if loaded == null || typeOf(loaded) != "object" {
+      panic("invalid session file: " + filePath)
+    }
+    if loaded.sessionId == null || loaded.sessionId == "" {
+      panic("invalid session schema: missing sessionId")
+    }
+
+    return loaded
+  }
+
+  fn open(config) {
+    let sessionId = schema.normalizeSessionId(config)
+    let loaded = load(config, sessionId)
+    if loaded != null {
+      let loadedPath = save(config, loaded)
+      return {
+        session: loaded,
+        path: loadedPath,
+        resumed: true
+      }
+    }
+
+    let created = schema.newSession(config, sessionId)
+    let createdPath = save(config, created)
+    return {
+      session: created,
+      path: createdPath,
+      resumed: false
+    }
+  }
+
+  return {
+    sessionPath: sessionPath,
+    save: save,
+    load: load,
+    open: open
+  }
+}()
+
+export const sessionPath = storeApi.sessionPath
+export const save = storeApi.save
+export const load = storeApi.load
+export const open = storeApi.open

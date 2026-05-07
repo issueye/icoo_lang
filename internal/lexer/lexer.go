@@ -139,6 +139,10 @@ func (l *Lexer) NextToken() token.Token {
 		return l.makeToken(token.Assign, "=", start)
 	case '<':
 		l.advance()
+		if l.peek() == '-' {
+			l.advance()
+			return l.makeToken(token.Inherit, "<-", start)
+		}
 		if l.peek() == '=' {
 			l.advance()
 			return l.makeToken(token.Lte, "<=", start)

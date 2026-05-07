@@ -1,0 +1,51 @@
+import std.time.basic as time
+
+const schemaApi = fn() {
+  fn normalizeSessionId(config) {
+    if config.resumeSession != null && config.resumeSession != "" {
+      return config.resumeSession
+    }
+    if config.sessionId != null && config.sessionId != "" {
+      return config.sessionId
+    }
+    return "s_" + time.format(time.now(), "YYYYMMDD-HHmmss", "UTC")
+  }
+
+  fn newSession(config, sessionId) {
+    let now = time.now()
+
+    // Session 作为顶层状态容器，后续所有 turn / event / artifact 都挂在这里。
+    return {
+      sessionId: sessionId,
+      workspace: config.workspace,
+      mode: config.mode,
+      status: "idle",
+      createdAt: now,
+      updatedAt: now,
+      config: {
+        model: config.model,
+        baseUrl: config.baseUrl,
+        approval: config.approval,
+        maxTurns: config.maxTurns,
+        maxFiles: config.maxFiles,
+        maxTotalBytes: config.maxTotalBytes
+      },
+      turns: [],
+      events: [],
+      artifacts: [],
+      budgets: {
+        turnCount: 0,
+        toolCallCount: 0
+      },
+      approvals: []
+    }
+  }
+
+  return {
+    normalizeSessionId: normalizeSessionId,
+    newSession: newSession
+  }
+}()
+
+export const normalizeSessionId = schemaApi.normalizeSessionId
+export const newSession = schemaApi.newSession

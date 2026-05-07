@@ -34,6 +34,7 @@ const (
 
 	Eq          // ==
 	Neq         // !=
+	Inherit     // <-
 	Lt          // <
 	Lte         // <=
 	Gt          // >
@@ -196,6 +197,8 @@ func (t Type) String() string {
 		return "Eq"
 	case Neq:
 		return "Neq"
+	case Inherit:
+		return "Inherit"
 	case Lt:
 		return "Lt"
 	case Lte:

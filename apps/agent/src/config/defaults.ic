@@ -1,0 +1,31 @@
+import std.io.fs as fs
+import std.sys.os as os
+
+const defaultsApi = fn() {
+  fn defaultConfig() {
+    // 所有运行期状态默认落在当前工作区下，先保证最小可运行。
+    let stateDir = fs.join(os.cwd(), ".agent")
+    return {
+      workspace: os.cwd(),
+      mode: "interactive",
+      model: "gpt-4.1-mini",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: null,
+      task: null,
+      sessionId: null,
+      resumeSession: null,
+      approval: "on-request",
+      maxTurns: 12,
+      maxFiles: 24,
+      maxTotalBytes: 32768,
+      sessionDir: fs.join(stateDir, "sessions"),
+      logPath: fs.join(stateDir, "agent.log")
+    }
+  }
+
+  return {
+    defaultConfig: defaultConfig
+  }
+}()
+
+export const defaultConfig = defaultsApi.defaultConfig

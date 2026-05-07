@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 
 	"icoo_lang/internal/lexer"
@@ -42,4 +43,51 @@ func TestObjectLiteralParse(t *testing.T) {
 		t.Logf("Error: %v", err)
 	}
 	t.Log("Done")
+}
+
+func TestClassInheritanceOldSyntaxDiagnostic(t *testing.T) {
+	input := `class Dog < Animal {}`
+	tokens := lexer.LexAll(input)
+
+	p := New(tokens)
+	_ = p.ParseProgram()
+	errs := p.Errors()
+	if len(errs) == 0 {
+		t.Fatal("expected parser error for old inheritance syntax")
+	}
+
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "class inheritance uses '<-' instead of '<'") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected targeted inheritance diagnostic, got: %v", errs)
+	}
+}
+
+func TestClassInheritanceArrowAndLessComparisonCoexist(t *testing.T) {
+	input := `
+class Base {
+  less(a, b) {
+    return a < b
+  }
+}
+
+class Child <- Base {
+  check() {
+    return this.less(1, 2)
+  }
+}
+`
+	tokens := lexer.LexAll(input)
+
+	p := New(tokens)
+	_ = p.ParseProgram()
+	errs := p.Errors()
+	if len(errs) > 0 {
+		t.Fatalf("expected no parser errors, got: %v", errs)
+	}
 }

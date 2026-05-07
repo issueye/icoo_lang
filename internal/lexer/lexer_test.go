@@ -196,6 +196,7 @@ func TestLexer_Operators(t *testing.T) {
 		{"=", token.Assign},
 		{"==", token.Eq},
 		{"!=", token.Neq},
+		{"<-", token.Inherit},
 		{"<", token.Lt},
 		{"<=", token.Lte},
 		{">", token.Gt},
@@ -394,7 +395,7 @@ func TestLexer_GoChanSelect(t *testing.T) {
 }
 
 func TestLexer_ClassDeclaration(t *testing.T) {
-	input := "class Dog < Animal { fn bark() { } }"
+	input := "class Dog <- Animal { fn bark() { } }"
 	tokens := LexAll(input)
 
 	types := make([]token.Type, 0)
@@ -408,8 +409,8 @@ func TestLexer_ClassDeclaration(t *testing.T) {
 	if types[1] != token.Ident || tokens[1].Lexeme != "Dog" {
 		t.Errorf("expected Dog Ident, got %s (%q)", types[1], tokens[1].Lexeme)
 	}
-	if types[2] != token.Lt {
-		t.Errorf("expected <, got %s", types[2])
+	if types[2] != token.Inherit {
+		t.Errorf("expected <-, got %s", types[2])
 	}
 }
 

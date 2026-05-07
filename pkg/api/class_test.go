@@ -249,7 +249,7 @@ class Animal {
   }
 }
 
-class Dog < Animal {
+class Dog <- Animal {
   wag() {
     return this.name
   }
@@ -280,7 +280,7 @@ class Animal {
   }
 }
 
-class Dog < Animal {
+class Dog <- Animal {
   init(name, breed) {
     super.init(name)
     this.breed = breed
@@ -312,7 +312,7 @@ class Base {
   }
 }
 
-class Child < Base {
+class Child <- Base {
   greet() {
     let callSuper = fn() {
       return super.greet()
