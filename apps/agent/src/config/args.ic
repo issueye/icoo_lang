@@ -69,6 +69,10 @@ const argsApi = fn() {
       aliases: ["context-bytes"],
       description: "Maximum context bytes"
     })
+    app.flagString({
+      name: "stream-final-answer",
+      description: "Enable or disable streaming for the final assistant answer"
+    })
 
     return app
   }
@@ -83,6 +87,16 @@ const argsApi = fn() {
   fn applyIfInt(config, value, key) {
     if typeOf(value) == "int" {
       config[key] = value
+    }
+    return config
+  }
+
+  fn applyIfBoolString(config, value, key) {
+    if value == "true" {
+      config[key] = true
+    }
+    if value == "false" {
+      config[key] = false
     }
     return config
   }
@@ -112,6 +126,7 @@ const argsApi = fn() {
     config = applyIfInt(config, flags["max-turns"], "maxTurns")
     config = applyIfInt(config, flags["max-files"], "maxFiles")
     config = applyIfInt(config, flags["max-total-bytes"], "maxTotalBytes")
+    config = applyIfBoolString(config, flags["stream-final-answer"], "streamFinalAnswer")
 
     // 先把未知参数完整保留，后续可以转给更细的子工具链或模型层调试入口。
     config.cliUnknownArgs = parsed.unknown

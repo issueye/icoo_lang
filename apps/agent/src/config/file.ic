@@ -1,0 +1,102 @@
+import std.core.object as object
+import std.core.string as str
+import std.data.toml as toml
+import std.io.fs as fs
+
+const fileApi = fn() {
+  fn applyString(config, value, key) {
+    if typeOf(value) == "string" && value != "" {
+      config[key] = value
+    }
+    return config
+  }
+
+  fn applyInt(config, value, key) {
+    if typeOf(value) == "int" {
+      config[key] = value
+    }
+    return config
+  }
+
+  fn resolveConfigPath(config) {
+    let workspace = config.workspace
+    if typeOf(workspace) != "string" || workspace == "" {
+      return null
+    }
+
+    let normalized = workspace
+    if str.hasSuffix(normalized, "/") || str.hasSuffix(normalized, "\\") {
+      normalized = fs.dir(normalized + "x")
+    }
+    return fs.join(normalized, "config.toml")
+  }
+
+  fn isAbsolutePath(path) {
+    if typeOf(path) != "string" || path == "" {
+      return false
+    }
+    if str.hasPrefix(path, "/") || str.hasPrefix(path, "\\") {
+      return true
+    }
+    return str.indexOf(path, ":") == 1
+  }
+
+  fn resolvePathValue(configDir, value) {
+    if typeOf(value) != "string" || value == "" {
+      return value
+    }
+    if isAbsolutePath(value) == true {
+      return value
+    }
+    return fs.join(configDir, value)
+  }
+
+  fn applyFile(config) {
+    let filePath = resolveConfigPath(config)
+    if filePath == null || fs.exists(filePath) != true {
+      return config
+    }
+    let configDir = fs.dir(filePath)
+
+    let loaded = toml.fromFile(filePath)
+    if typeOf(loaded) != "object" {
+      return config
+    }
+
+    // config.toml 只承载项目级默认值，CLI 与 env 仍然可以继续覆盖。
+    config = applyString(config, object.get(loaded, "workspace"), "workspace")
+    config = applyString(config, object.get(loaded, "mode"), "mode")
+    config = applyString(config, object.get(loaded, "model"), "model")
+    config = applyString(config, object.get(loaded, "base_url"), "baseUrl")
+    config = applyString(config, object.get(loaded, "api_key"), "apiKey")
+    config = applyString(config, object.get(loaded, "task"), "task")
+    config = applyString(config, object.get(loaded, "session"), "sessionId")
+    config = applyString(config, object.get(loaded, "resume"), "resumeSession")
+    config = applyString(config, object.get(loaded, "approval"), "approval")
+    config = applyString(
+      config,
+      resolvePathValue(configDir, object.get(loaded, "session_dir")),
+      "sessionDir"
+    )
+    config = applyString(
+      config,
+      resolvePathValue(configDir, object.get(loaded, "log_path")),
+      "logPath"
+    )
+    config = applyInt(config, object.get(loaded, "max_turns"), "maxTurns")
+    config = applyInt(config, object.get(loaded, "max_files"), "maxFiles")
+    config = applyInt(config, object.get(loaded, "max_total_bytes"), "maxTotalBytes")
+
+    return config
+  }
+
+  return {
+    applyFile: applyFile,
+    resolveConfigPath: resolveConfigPath,
+    resolvePathValue: resolvePathValue
+  }
+}()
+
+export const applyFile = fileApi.applyFile
+export const resolveConfigPath = fileApi.resolveConfigPath
+export const resolvePathValue = fileApi.resolvePathValue

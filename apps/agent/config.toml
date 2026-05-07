@@ -1,0 +1,14 @@
+# Agent project defaults.
+# Priority: defaults < config.toml < env < CLI args < explicit overrides
+
+mode = "interactive"
+model = "gpt-4.1-mini"
+base_url = "https://api.openai.com/v1"
+approval = "on-request"
+max_turns = 12
+max_files = 24
+max_total_bytes = 32768
+
+# Project-local runtime state defaults.
+session_dir = "./.agent/sessions"
+log_path = "./.agent/agent.log"

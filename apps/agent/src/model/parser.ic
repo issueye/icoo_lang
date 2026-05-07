@@ -1,6 +1,72 @@
 import std.core.object as object
 
 const parserApi = fn() {
+  fn appendDeltaToolCalls(toolCalls, rawToolCalls) {
+    if typeOf(rawToolCalls) != "array" {
+      return toolCalls
+    }
+
+    for i, rawCall in rawToolCalls {
+      if typeOf(rawCall) != "object" {
+        continue
+      }
+
+      let callId = object.get(rawCall, "id", "")
+      let callIndex = object.get(rawCall, "index", -1)
+      let matched = false
+      let nextCalls = []
+      for j, existing in toolCalls {
+        let existingId = object.get(existing, "id", "")
+        let existingIndex = object.get(existing, "streamIndex", -1)
+        let sameCall = false
+        if callId != "" && existingId == callId {
+          sameCall = true
+        }
+        if callId == "" && callIndex >= 0 && existingIndex == callIndex {
+          sameCall = true
+        }
+
+        if sameCall != true {
+          nextCalls = nextCalls.append(existing)
+          continue
+        }
+
+        let existingFn = object.get(existing, "function", {})
+        let deltaFn = object.get(rawCall, "function", {})
+        nextCalls = nextCalls.append({
+          id: callId,
+          streamIndex: callIndex,
+          type: object.get(rawCall, "type", object.get(existing, "type", "function")),
+          function: {
+            name: object.get(deltaFn, "name", object.get(existingFn, "name", "")),
+            arguments:
+              object.get(existingFn, "arguments", "") +
+              object.get(deltaFn, "arguments", "")
+          }
+        })
+        matched = true
+      }
+
+      if matched == true {
+        toolCalls = nextCalls
+        continue
+      }
+
+      let fnDef = object.get(rawCall, "function", {})
+      toolCalls = toolCalls.append({
+        id: callId,
+        streamIndex: callIndex,
+        type: object.get(rawCall, "type", "function"),
+        function: {
+          name: object.get(fnDef, "name", ""),
+          arguments: object.get(fnDef, "arguments", "")
+        }
+      })
+    }
+
+    return toolCalls
+  }
+
   fn normalizeContent(content) {
     if typeOf(content) == "string" {
       return content
@@ -96,9 +162,38 @@ const parserApi = fn() {
     }
   }
 
+  fn parseStreamEvent(payload, state) {
+    let choices = object.get(payload, "choices")
+    if typeOf(choices) != "array" || len(choices) == 0 {
+      return state
+    }
+
+    let first = choices[0]
+    let delta = object.get(first, "delta", {})
+    let deltaContent = normalizeContent(object.get(delta, "content"))
+    let deltaReasoning = normalizeContent(object.get(delta, "reasoning_content"))
+    let rawToolCalls = object.get(delta, "tool_calls")
+    let nextToolCalls = appendDeltaToolCalls(
+      object.get(state, "toolCalls", []),
+      rawToolCalls
+    )
+
+    return {
+      text: object.get(state, "text", "") + deltaContent,
+      reasoningContent: object.get(state, "reasoningContent", "") + deltaReasoning,
+      toolCalls: nextToolCalls,
+      finishReason: object.get(first, "finish_reason"),
+      hasToolCalls: len(nextToolCalls) > 0,
+      deltaText: deltaContent,
+      sawToolCallDelta: typeOf(rawToolCalls) == "array" && len(rawToolCalls) > 0
+    }
+  }
+
   return {
-    parseResponse: parseResponse
+    parseResponse: parseResponse,
+    parseStreamEvent: parseStreamEvent
   }
 }()
 
 export const parseResponse = parserApi.parseResponse
+export const parseStreamEvent = parserApi.parseStreamEvent

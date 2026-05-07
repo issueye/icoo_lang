@@ -1,12 +1,14 @@
 import std.core.object as object
 import "@/src/config/defaults.ic" as defaults
+import "@/src/config/file.ic" as file
 import "@/src/config/env.ic" as env
 import "@/src/config/args.ic" as args
 
 const mergeApi = fn() {
   fn loadConfig(overrides) {
-    // 配置优先级固定为 defaults -> env -> args -> explicit overrides。
+    // 配置优先级固定为 defaults -> file -> env -> args -> explicit overrides。
     let config = defaults.defaultConfig()
+    config = file.applyFile(config)
     config = env.applyEnv(config)
 
     let argResult = args.applyArgs(config)

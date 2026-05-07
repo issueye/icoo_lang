@@ -1,9 +1,120 @@
 import std.net.http.client as http
+import std.io.console as io
+import std.core.object as object
+import std.core.string as str
 import std.data.json as json
 import "@/src/model/messages.ic" as messages
 import "@/src/model/parser.ic" as parser
 
 const clientApi = fn() {
+  fn shouldStreamFinalAnswer(config, builtMessages) {
+    if config.streamFinalAnswer != true {
+      return false
+    }
+
+    for i, message in builtMessages {
+      if message.role == "tool" {
+        return true
+      }
+    }
+    return false
+  }
+
+  fn tryParseStreamLine(line) {
+    if str.hasPrefix(line, "data: ") != true {
+      return null
+    }
+    let raw = str.split(line, "data: ")[1]
+    if raw == "[DONE]" {
+      return {
+        done: true
+      }
+    }
+
+    try {
+      return {
+        done: false,
+        json: json.decode(raw)
+      }
+    } catch err {
+      return null
+    }
+  }
+
+  fn requestRemoteStream(config, payload) {
+    let stream = http.requestStream({
+      url: config.baseUrl + "/chat/completions",
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + config.apiKey,
+        Accept: "text/event-stream",
+        "Content-Type": "application/json"
+      },
+      body: json.encode(payload)
+    })
+
+    let state = {
+      text: "",
+      reasoningContent: "",
+      toolCalls: [],
+      finishReason: null,
+      hasToolCalls: false,
+      deltaText: ""
+    }
+    let done = false
+    let startedOutput = false
+    let printed = false
+
+    try {
+      let text = stream.readAll()
+      let lines = str.split(text, "\n")
+      for i, rawLine in lines {
+        let line = str.trimSpace(rawLine)
+        if line == "" {
+          continue
+        }
+
+        let parsedLine = tryParseStreamLine(line)
+        if parsedLine == null {
+          continue
+        }
+        if parsedLine.done == true {
+          done = true
+          break
+        }
+
+        state = parser.parseStreamEvent(parsedLine.json, state)
+        if state.sawToolCallDelta == true {
+          panic("stream emitted tool_calls; fallback to non-streaming response")
+        }
+        if state.deltaText != "" {
+          if startedOutput != true {
+            io.println("streaming final answer:")
+            startedOutput = true
+          }
+          io.print(state.deltaText)
+          printed = true
+        }
+      }
+    } finally {
+      stream.close()
+    }
+
+    if printed == true {
+      io.println("")
+    }
+
+    return {
+      mode: "remote",
+      text: state.text,
+      reasoningContent: state.reasoningContent,
+      raw: null,
+      toolCalls: state.toolCalls,
+      hasToolCalls: state.hasToolCalls,
+      finishReason: state.finishReason
+    }
+  }
+
   fn localFallback(context) {
     return {
       mode: "local",
@@ -84,12 +195,24 @@ const clientApi = fn() {
       }
     }
 
-    return requestRemote(config, {
+    let payload = {
       model: config.model,
       temperature: 0.2,
       messages: builtMessages,
       tools: messages.toolDefinitions()
-    })
+    }
+
+    if shouldStreamFinalAnswer(config, builtMessages) == true {
+      try {
+        return requestRemoteStream(config, object.merge(payload, {
+          stream: true
+        }))
+      } catch err {
+        return requestRemote(config, payload)
+      }
+    }
+
+    return requestRemote(config, payload)
   }
 
   return {

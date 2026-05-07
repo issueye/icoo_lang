@@ -18,6 +18,7 @@ const defaultsApi = fn() {
       maxTurns: 12,
       maxFiles: 24,
       maxTotalBytes: 32768,
+      streamFinalAnswer: true,
       sessionDir: fs.join(stateDir, "sessions"),
       logPath: fs.join(stateDir, "agent.log"),
       cliUnknownArgs: []
