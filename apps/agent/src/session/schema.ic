@@ -1,11 +1,14 @@
 import std.time.basic as time
 
-const schemaApi = fn() {
-  fn sessionSchemaVersion() {
+// 会话数据库 schema 定义
+export class Schema {
+  // Session 数据库 schema 版本
+  sessionSchemaVersion() {
     return 2
   }
 
-  fn normalizeSessionId(config) {
+  // 归一化会话 ID，确保唯一性
+  normalizeSessionId(config) {
     if config.resumeSession != null && config.resumeSession != "" {
       return config.resumeSession
     }
@@ -15,12 +18,13 @@ const schemaApi = fn() {
     return "s_" + time.format(time.now(), "YYYYMMDD-HHmmss", "UTC")
   }
 
-  fn newSession(config, sessionId) {
+  // 创建新会话
+  newSession(config, sessionId) {
     let now = time.now()
 
     // Session 作为顶层状态容器，后续所有 turn / event / artifact 都挂在这里。
     return {
-      sessionSchemaVersion: sessionSchemaVersion(),
+      sessionSchemaVersion: this.sessionSchemaVersion(),
       sessionId: sessionId,
       workspace: config.workspace,
       mode: config.mode,
@@ -46,7 +50,8 @@ const schemaApi = fn() {
     }
   }
 
-  fn newTurn(kind, payload) {
+  // 创建新 turn
+  newTurn(kind, payload) {
     let now = time.now()
     return {
       kind: kind,
@@ -55,18 +60,21 @@ const schemaApi = fn() {
     }
   }
 
-  fn userMessage(message) {
-    return newTurn("user_message", message)
+  // 创建新用户消息 turn
+  userMessage(message) {
+    return this.newTurn("user_message", message)
   }
 
-  fn requestSnapshot(messages) {
-    return newTurn("request_snapshot", {
+  // 创建新请求快照 turn
+  requestSnapshot(messages) {
+    return this.newTurn("request_snapshot", {
       messages: messages
     })
   }
 
-  fn assistantMessage(response) {
-    return newTurn("assistant_message", {
+  // 创建新助手消息 turn
+  assistantMessage(response) {
+    return this.newTurn("assistant_message", {
       role: "assistant",
       content: response.text,
       reasoningContent: response.reasoningContent,
@@ -77,8 +85,9 @@ const schemaApi = fn() {
     })
   }
 
-  fn toolMessage(executed) {
-    return newTurn("tool_message", {
+  // 创建新工具消息 turn
+  toolMessage(executed) {
+    return this.newTurn("tool_message", {
       role: "tool",
       toolCallId: executed.toolCallId,
       name: executed.name,
@@ -88,31 +97,8 @@ const schemaApi = fn() {
     })
   }
 
-  fn runSummary(summary) {
-    return newTurn("run_summary", summary)
+  // 创建新运行摘要 turn
+  runSummary(summary) {
+    return this.newTurn("run_summary", summary)
   }
-
-  return {
-    sessionSchemaVersion: sessionSchemaVersion,
-    normalizeSessionId: normalizeSessionId,
-    newSession: newSession,
-    newTurn: newTurn,
-    userMessage: userMessage,
-    requestSnapshot: requestSnapshot,
-    assistantMessage: assistantMessage,
-    toolMessage: toolMessage,
-    runSummary: runSummary
-  }
-}()
-
-export {
-  sessionSchemaVersion: schemaApi.sessionSchemaVersion,
-  normalizeSessionId: schemaApi.normalizeSessionId,
-  newSession: schemaApi.newSession,
-  newTurn: schemaApi.newTurn,
-  userMessage: schemaApi.userMessage,
-  requestSnapshot: schemaApi.requestSnapshot,
-  assistantMessage: schemaApi.assistantMessage,
-  toolMessage: schemaApi.toolMessage,
-  runSummary: schemaApi.runSummary,
 }

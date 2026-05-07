@@ -1,0 +1,22 @@
+import "@/config/args.ic" as args
+import "@/config/merge.ic" as config
+import "@/config/env.ic" as env
+
+// 应用
+export class App {
+    // 初始化应用参数
+    init() {
+        this.args = args.ArgsConfig()
+        this.config = config.MergeConfig()
+        this.env = env.EnvConfig()
+    }
+
+    // start 启动应用
+    start() {
+
+    }
+
+    // stop 停止应用
+    stop() {
+    }
+}

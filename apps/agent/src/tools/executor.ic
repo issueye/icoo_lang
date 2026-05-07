@@ -3,6 +3,10 @@ import std.data.json as json
 import "@/src/tools/registry.ic" as registry
 
 export class ToolExecutor {
+  init() {
+    this.toolRegistry = registry.ToolRegistry()
+  }
+
   parseArguments(rawArguments) {
     if typeOf(rawArguments) == "object" {
       return {
@@ -31,7 +35,7 @@ export class ToolExecutor {
   }
 
   run(config, name, input) {
-    let tool = registry.ToolRegistry().get(name)
+    let tool = this.toolRegistry.get(name)
     if tool == null {
       return {
         ok: false,
@@ -71,5 +75,4 @@ export class ToolExecutor {
       error: object.get(result, "error")
     }
   }
-
 }

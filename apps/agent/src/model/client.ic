@@ -6,7 +6,15 @@ import std.data.json as json
 import "@/src/model/messages.ic" as messages
 import "@/src/model/parser.ic" as parser
 
+// 模型客户端
 class ModelClient {
+  // 初始化模型客户端
+  init() {
+    this.messages = messages.ModelMessages()
+    this.parser = parser.ModelParser()
+  }
+
+  // 是否应该流式输出最终答案
   shouldStreamFinalAnswer(config, builtMessages) {
     if config.streamFinalAnswer != true {
       return false
@@ -20,6 +28,7 @@ class ModelClient {
     return false
   }
 
+  // 尝试解析流式响应行
   tryParseStreamLine(line) {
     if str.hasPrefix(line, "data: ") != true {
       return null
@@ -41,6 +50,7 @@ class ModelClient {
     }
   }
 
+  // 请求远程模型流式响应
   requestRemoteStream(config, payload) {
     let stream = http.requestStream({
       url: config.baseUrl + "/chat/completions",
@@ -83,7 +93,7 @@ class ModelClient {
           break
         }
 
-        state = parser.ModelParser().parseStreamEvent(parsedLine.json, state)
+        state = this.parser.parseStreamEvent(parsedLine.json, state)
         if state.sawToolCallDelta == true {
           panic("stream emitted tool_calls; fallback to non-streaming response")
         }
@@ -115,6 +125,7 @@ class ModelClient {
     }
   }
 
+  // 本地回退响应
   localFallback(context) {
     return {
       mode: "local",
@@ -136,6 +147,7 @@ class ModelClient {
     }
   }
 
+  // 请求远程模型响应
   requestRemote(config, payload) {
     let response = http.requestJSON({
       url: config.baseUrl + "/chat/completions",
@@ -146,7 +158,7 @@ class ModelClient {
       json: payload
     })
 
-    let parsed = parser.ModelParser().parseResponse(response.json)
+    let parsed = this.parser.parseResponse(response.json)
     if parsed.ok == true {
       return {
         mode: "remote",
@@ -170,6 +182,7 @@ class ModelClient {
     }
   }
 
+  // 请求远程模型
   request(config, context) {
     if config.apiKey == null || config.apiKey == "" {
       return this.localFallback(context)
@@ -178,11 +191,12 @@ class ModelClient {
     return this.requestRemote(config, {
       model: config.model,
       temperature: 0.2,
-      messages: messages.ModelMessages().build(config, context),
-      tools: messages.ModelMessages().toolDefinitions()
+      messages: this.messages.build(config, context),
+      tools: this.messages.toolDefinitions()
     })
   }
 
+  // 请求远程模型，使用已构建的消息列表
   requestWithMessages(config, builtMessages) {
     if config.apiKey == null || config.apiKey == "" {
       return {
@@ -199,7 +213,7 @@ class ModelClient {
       model: config.model,
       temperature: 0.2,
       messages: builtMessages,
-      tools: messages.ModelMessages().toolDefinitions()
+      tools: this.messages.toolDefinitions()
     }
 
     if this.shouldStreamFinalAnswer(config, builtMessages) == true {
@@ -217,12 +231,3 @@ class ModelClient {
 
 }
 
-let clientApi = ModelClient()
-
-// const request = clientApi.request
-// const requestWithMessages = clientApi.requestWithMessages
-
-export {
-  request: clientApi.request, 
-  requestWithMessages: clientApi.requestWithMessages,
-}

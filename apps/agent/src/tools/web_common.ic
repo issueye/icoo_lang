@@ -1,7 +1,9 @@
 import std.core.string as str
 import std.data.json as json
 
+// WebCommon 是一个通用的Web工具类。
 export class WebCommon {
+  // after 提取字符串中指定标记之后的内容。
   after(text, marker) {
     let parts = str.split(text, marker)
     if len(parts) < 2 {
@@ -10,6 +12,7 @@ export class WebCommon {
     return parts[1]
   }
 
+  // between 提取字符串中两个标记之间的内容。
   between(text, startMarker, endMarker) {
     let tail = this.after(text, startMarker)
     if tail == "" {
@@ -18,6 +21,7 @@ export class WebCommon {
     return str.split(tail, endMarker)[0]
   }
 
+  // decodeEntities 解码HTML实体。
   decodeEntities(text) {
     text = str.replace(text, "&amp;", "&")
     text = str.replace(text, "&lt;", "<")
@@ -28,10 +32,12 @@ export class WebCommon {
     return text
   }
 
+  // quoteChar 获取HTML实体中的引号。
   quoteChar() {
     return this.decodeEntities("&quot;")
   }
 
+  // decodeJSONString 解码JSON字符串。
   decodeJSONString(text) {
     try {
       let decoded = json.decode(text)
@@ -44,6 +50,7 @@ export class WebCommon {
     return text
   }
 
+  // normalizeSpaces 规范化空格。
   normalizeSpaces(text) {
     text = str.replace(text, "\r", " ")
     text = str.replace(text, "\n", " ")
@@ -61,6 +68,7 @@ export class WebCommon {
     return str.join(compact, " ")
   }
 
+  // htmlToText 将HTML转换为文本。
   htmlToText(html) {
     html = this.decodeEntities(html)
 
@@ -83,6 +91,7 @@ export class WebCommon {
     return this.normalizeSpaces(str.join(chunks, " "))
   }
 
+  // clipText 截取文本，确保不超过最大字符数。
   clipText(text, maxChars) {
     if typeOf(maxChars) != "int" || maxChars <= 0 {
       return text
@@ -115,6 +124,7 @@ export class WebCommon {
     return clipped
   }
 
+  // extractTitle 从HTML中提取标题。
   extractTitle(html) {
     let title = this.between(html, "<title>", "</title>")
     if title == "" {
@@ -123,6 +133,7 @@ export class WebCommon {
     return this.normalizeSpaces(this.decodeEntities(title))
   }
 
+  // extractSnippet 从HTML中提取片段。
   extractSnippet(chunk) {
     let tail = this.after(chunk, "result__snippet")
     if tail == "" {
@@ -135,7 +146,8 @@ export class WebCommon {
     }
     return this.htmlToText(parts[1])
   }
-
+  
+  // parseDuckDuckGoResults 解析DuckDuckGo搜索结果。
   parseDuckDuckGoResults(html, maxResults) {
     let results = []
     let limit = maxResults

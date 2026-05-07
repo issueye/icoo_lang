@@ -1,6 +1,8 @@
 import std.core.object as object
 
+// 模型消息解析器
 export class ModelParser {
+  // 追加助手工具调用消息
   appendDeltaToolCalls(toolCalls, rawToolCalls) {
     if typeOf(rawToolCalls) != "array" {
       return toolCalls
@@ -67,6 +69,7 @@ export class ModelParser {
     return toolCalls
   }
 
+  // 归一化内容
   normalizeContent(content) {
     if typeOf(content) == "string" {
       return content
@@ -90,6 +93,7 @@ export class ModelParser {
     return ""
   }
 
+  // 归一化工具调用消息
   normalizeToolCalls(rawToolCalls) {
     if typeOf(rawToolCalls) != "array" {
       return []
@@ -113,6 +117,7 @@ export class ModelParser {
     return calls
   }
 
+  // 解析选择消息
   parseChoiceMessage(message) {
     let content = this.normalizeContent(object.get(message, "content"))
     let toolCalls = this.normalizeToolCalls(object.get(message, "tool_calls"))
@@ -128,6 +133,7 @@ export class ModelParser {
     }
   }
 
+  // 解析模型响应
   parseResponse(payload) {
     let choices = object.get(payload, "choices")
     if typeOf(choices) == "array" && len(choices) > 0 {
@@ -162,6 +168,7 @@ export class ModelParser {
     }
   }
 
+  // 解析模型流事件
   parseStreamEvent(payload, state) {
     let choices = object.get(payload, "choices")
     if typeOf(choices) != "array" || len(choices) == 0 {
@@ -188,6 +195,5 @@ export class ModelParser {
       sawToolCallDelta: typeOf(rawToolCalls) == "array" && len(rawToolCalls) > 0
     }
   }
-
 }
 

@@ -1,11 +1,14 @@
 import std.sys.cli as cli
 import std.core.string as str
 
+// Agent 启动参数配置
 class ArgsConfig {
+  // 获取所有启动参数
   argvList() {
     return argv()
   }
 
+  // 是否请求帮助
   isHelpRequest() {
     let values = this.argvList()
     for i, value in values {
@@ -32,6 +35,7 @@ class ArgsConfig {
     return false
   }
 
+  // 定义应用参数
   defineApp() {
     // agent 的启动参数统一挂在原生 CLI 框架上，避免继续手写 argv 遍历。
     let app = cli.create({

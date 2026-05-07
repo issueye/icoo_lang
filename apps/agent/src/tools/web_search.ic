@@ -1,8 +1,14 @@
 import std.net.http.client as http
 import std.core.object as object
-import "@/src/tools/web_common.ic" as webCommon
 
+// WebSearch 是一个从DuckDuckGo搜索的工具。
 export class WebSearch {
+  // init 初始化 WebSearch。
+  init(webCommon) {
+    this.webCommon = webCommon
+  }
+
+  // run 执行搜索。
   run(config, input) {
     let query = object.get(input, "query")
     let maxResults = object.get(input, "maxResults", 5)
@@ -34,7 +40,7 @@ export class WebSearch {
     }
 
     let body = object.get(response, "body", "")
-    let results = webCommon.WebCommon().parseDuckDuckGoResults(body, maxResults)
+    let results = this.webCommon.parseDuckDuckGoResults(body, maxResults)
     return {
       ok: true,
       content: results,

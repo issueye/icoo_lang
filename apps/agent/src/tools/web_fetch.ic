@@ -1,8 +1,12 @@
 import std.net.http.client as http
 import std.core.object as object
-import "@/src/tools/web_common.ic" as webCommon
 
+// WebFetch 是一个从URL获取文本的工具。
 export class WebFetch {
+  init(webCommon) {
+    this.webCommon = webCommon
+  }
+
   run(config, input) {
     let url = object.get(input, "url")
     let maxChars = object.get(input, "maxChars", 4000)
@@ -30,9 +34,9 @@ export class WebFetch {
     }
 
     let body = object.get(response, "body", "")
-    let title = webCommon.WebCommon().extractTitle(body)
-    let text = webCommon.WebCommon().clipText(
-      webCommon.WebCommon().htmlToText(body),
+    let title = this.webCommon.extractTitle(body)
+    let text = this.webCommon.clipText(
+      this.webCommon.htmlToText(body),
       maxChars
     )
     return {

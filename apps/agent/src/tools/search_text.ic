@@ -1,10 +1,14 @@
 import std.io.fs as fs
 import std.core.object as object
 import std.core.string as str
-import "@/src/context/ignore.ic" as ignore
-import "@/src/tools/tool_path.ic" as toolPath
 
+// SearchText 是一个搜索工作区文本的工具。
 export class SearchText {
+  init(toolPath, ignore) {
+    this.toolPath = toolPath
+    this.ignore = ignore
+  }
+
   // isSearchable 判断文件是否适合文本搜索。
   isSearchable(path) {
     return (
@@ -40,7 +44,7 @@ export class SearchText {
 
     let entries = fs.readDir(path)
     for i, entry in entries {
-      if ignore.shouldIgnoreName(entry.name) == true {
+      if this.ignore.shouldIgnoreName(entry.name) == true {
         continue
       }
       matches = this.scan(entry.path, needle, matches)
@@ -65,7 +69,7 @@ export class SearchText {
       }
     }
 
-    path = toolPath.ToolPath().resolve(config, path)
+    path = this.toolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
         ok: false,

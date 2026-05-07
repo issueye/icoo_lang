@@ -6,7 +6,17 @@ import "@/src/model/messages.ic" as modelMessages
 import "@/src/session/store.ic" as sessionStore
 import "@/src/tools/executor.ic" as toolExecutor
 
+// 运行时
 export class Runtime {
+  // 初始化运行时
+  init() {
+    this.ctxBuilder = contextBuilder.ContextBuilder()
+    this.modelClient = modelClient.ModelClient()
+    this.sessionStore = sessionStore.SessionStore()
+    this.toolExecutor = toolExecutor.ToolExecutor()
+  }
+
+  // 打印列表预览
   printListPreview(label, items, limit) {
     if typeOf(items) != "array" || len(items) == 0 {
       io.println(label + ":", "[]")
@@ -17,12 +27,13 @@ export class Runtime {
     io.println(label + ":", json.encode(preview))
   }
 
+  // 追加工具调用结果
   appendToolResults(config, session, messages, toolCalls, toolRuns) {
     // tool_calls 必须顺序回放为 tool 消息，模型下一轮才能继续基于结果推理。
     for i, call in toolCalls {
-      let executed = toolExecutor.ToolExecutor().runCall(config, call)
+      let executed = this.toolExecutor.runCall(config, call)
       toolRuns = toolRuns.append(executed)
-      sessionStore.appendToolMessage(config, session, executed)
+      this.sessionStore.appendToolMessage(config, session, executed)
       messages = modelMessages.ModelMessages().appendToolResult(
         messages,
         executed.toolCallId,
@@ -37,19 +48,20 @@ export class Runtime {
     }
   }
 
+  // 运行工具循环
   runToolLoop(config, session, context) {
     let userPrompt = modelMessages.ModelMessages().userPrompt(config, context)
     let builtContext = {
       userPrompt: userPrompt
     }
-    let messages = sessionStore.buildMessages(config, builtContext, session)
+    let messages = this.sessionStore.buildMessages(config, builtContext, session)
     if len(session.turns) == 0 {
       let userMessage = {
         role: "user",
         content: userPrompt
       }
-      sessionStore.appendUserMessage(config, session, userMessage)
-      messages = sessionStore.buildMessages(config, builtContext, session)
+      this.sessionStore.appendUserMessage(config, session, userMessage)
+      messages = this.sessionStore.buildMessages(config, builtContext, session)
     }
 
     let requests = []
@@ -61,9 +73,9 @@ export class Runtime {
     // 多轮循环统一受 maxTurns 限制，避免模型持续请求工具导致无限运行。
     while turn < config.maxTurns {
       turn = turn + 1
-      sessionStore.appendRequestSnapshot(config, session, messages)
-      let response = modelClient.requestWithMessages(config, messages)
-      sessionStore.appendAssistantMessage(config, session, response)
+      this.sessionStore.appendRequestSnapshot(config, session, messages)
+      let response = this.modelClient.requestWithMessages(config, messages)
+      this.sessionStore.appendAssistantMessage(config, session, response)
       requests = requests.append(response)
       finalResult = response
 
@@ -111,11 +123,12 @@ export class Runtime {
     }
   }
 
+  // 启动运行时
   start(config) {
     // session 先于 runtime 其他组件建立，后续会把 turn 持久化也挂在同一个 session 上。
-    let opened = sessionStore.open(config)
+    let opened = this.sessionStore.open(config)
     let session = opened.session
-    let context = contextBuilder.ContextBuilder().build(config)
+    let context = this.ctxBuilder.build(config)
     let modelContext = {
       workspace: context.workspace,
       summaryJson: json.encode(context.summary),
@@ -124,7 +137,7 @@ export class Runtime {
       cliUnknownArgs: config.cliUnknownArgs
     }
     let modelLoop = this.runToolLoop(config, session, modelContext)
-    sessionStore.markCompleted(config, session, {
+    this.sessionStore.markCompleted(config, session, {
       turnsUsed: modelLoop.turnsUsed,
       stopReason: modelLoop.stopReason,
       mode: modelLoop.final.mode
@@ -175,5 +188,4 @@ export class Runtime {
       stopReason: modelLoop.stopReason
     }
   }
-
 }

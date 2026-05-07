@@ -26,9 +26,3 @@ class Defaults {
     }
   }
 }
-
-let defaultsApi = Defaults()
-
-export {
-  defaultConfig: defaultsApi.defaultConfig,
-}

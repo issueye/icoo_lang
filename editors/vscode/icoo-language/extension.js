@@ -202,21 +202,9 @@ function resolveCli(document) {
 
   if (workspaceFolder) {
     const workspaceRoot = workspaceFolder.uri.fsPath;
-    if (fs.existsSync(path.join(workspaceRoot, "go.mod")) && fs.existsSync(path.join(workspaceRoot, "cmd", "icoo", "main.go"))) {
-      return {
-        command: "go",
-        args: ["run", "./cmd/icoo"],
-        cwd: workspaceRoot
-      };
-    }
-
-    const localCli = path.join(workspaceRoot, process.platform === "win32" ? "icoo.exe" : "icoo");
-    if (fs.existsSync(localCli)) {
-      return {
-        command: localCli,
-        args: [],
-        cwd: workspaceRoot
-      };
+    const detectedCli = detectWorkspaceCli(workspaceRoot);
+    if (detectedCli) {
+      return detectedCli;
     }
   }
 
@@ -225,6 +213,29 @@ function resolveCli(document) {
     args: [],
     cwd: configuredCwd
   };
+}
+
+function detectWorkspaceCli(workspaceRoot) {
+  for (const candidateRoot of [workspaceRoot, path.join(workspaceRoot, "icoo")]) {
+    if (fs.existsSync(path.join(candidateRoot, "go.mod")) && fs.existsSync(path.join(candidateRoot, "cmd", "icoo", "main.go"))) {
+      return {
+        command: "go",
+        args: ["run", "./cmd/icoo"],
+        cwd: candidateRoot
+      };
+    }
+
+    const localCli = path.join(candidateRoot, process.platform === "win32" ? "icoo.exe" : "icoo");
+    if (fs.existsSync(localCli)) {
+      return {
+        command: localCli,
+        args: [],
+        cwd: candidateRoot
+      };
+    }
+  }
+
+  return null;
 }
 
 function resolveConfiguredCwd(rawValue, workspaceFolder) {

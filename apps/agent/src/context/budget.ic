@@ -1,17 +1,11 @@
-const budgetApi = fn() {
-  fn create(config) {
+// 上下文预算配置
+export class Budget {
+  // 创建上下文预算
+  create(config) {
     return {
       maxFiles: config.maxFiles,
       maxTotalBytes: config.maxTotalBytes,
       maxDepth: 3
     }
   }
-
-  return {
-    create: create
-  }
-}()
-
-export {
-  create: budgetApi.create,
 }

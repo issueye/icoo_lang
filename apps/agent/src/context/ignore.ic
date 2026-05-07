@@ -1,7 +1,8 @@
 import std.core.string as str
 
-const ignoreApi = fn() {
-  fn shouldIgnoreName(name) {
+// 忽略文件名
+export class Ignore{
+  shouldIgnoreName(name) {
     if name == ".git" || name == "node_modules" || name == "dist" || name == "build" {
       return true
     }
@@ -10,12 +11,4 @@ const ignoreApi = fn() {
     }
     return false
   }
-
-  return {
-    shouldIgnoreName: shouldIgnoreName
-  }
-}()
-
-export {
-  shouldIgnoreName: ignoreApi.shouldIgnoreName,
 }

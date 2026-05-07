@@ -1,8 +1,12 @@
 import std.io.fs as fs
 import std.core.object as object
-import "@/src/tools/tool_path.ic" as toolPath
 
+// ReadFile 是一个读取工作区文本文件的工具。
 export class ReadFile {
+  init(toolPath) {
+    this.toolPath = toolPath
+  }
+
   // run 读取工作区中的文本文件。
   run(config, input) {
     let path = object.get(input, "path")
@@ -13,7 +17,7 @@ export class ReadFile {
       }
     }
 
-    path = toolPath.ToolPath().resolve(config, path)
+    path = this.toolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
         ok: false,

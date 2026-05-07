@@ -2,10 +2,18 @@ import std.io.console as io
 import "@/src/config/merge.ic" as config
 import "@/src/runtime/runtime.ic" as runtime
 
-const agentApi = fn() {
-  fn startImpl(overrides) {
+// 代理
+export class Agent {
+  init() {
+    this.config = config.MergeConfig()
+    this.runtime = runtime.Runtime()
+  }
+
+  // 启动代理
+  startImpl(overrides) {
     // 启动层先收敛配置和 help 分支，再决定是否进入 runtime。
     let loaded = config.MergeConfig().loadConfig(overrides)
+    // 合并配置
     let cfg = loaded.config
     if loaded.help == true {
       io.println(loaded.helpText)
@@ -18,19 +26,8 @@ const agentApi = fn() {
     return runtime.Runtime().start(cfg)
   }
 
-  fn mainImpl() {
-    return startImpl(null)
+  // 主函数
+  mainImpl() {
+    return this.startImpl(null)
   }
-
-  return {
-    start: startImpl,
-    main: mainImpl
-  }
-}()
-
-const main = agentApi.main
-
-export {
-  start: agentApi.start,
-  main,
 }

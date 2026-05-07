@@ -4,7 +4,13 @@ import std.sys.os as os
 import std.time.basic as time
 import "@/src/session/schema.ic" as schema
 
-class SessionStore {
+// 会话数据库存储
+export class SessionStore {
+  init() {
+    this.schema = schema.Schema()
+  }
+
+  // 验证会话 turn 类型是否符合 schema 定义
   validateTurnKinds(turns, filePath) {
     let allowed = {
       user_message: true,
@@ -31,10 +37,12 @@ class SessionStore {
     }
   }
 
+  // 会话文件路径
   sessionPath(config, sessionId) {
     return fs.join(config.sessionDir, sessionId + ".json")
   }
 
+  // 保存会话
   save(config, session) {
     os.mkdirAll(config.sessionDir)
     session.updatedAt = time.now()
@@ -43,6 +51,7 @@ class SessionStore {
     return filePath
   }
 
+  // 加载会话
   load(config, sessionId) {
     let filePath = this.sessionPath(config, sessionId)
     if fs.exists(filePath) != true {
@@ -56,7 +65,7 @@ class SessionStore {
     if loaded.sessionId == null || loaded.sessionId == "" {
       panic("invalid session schema: missing sessionId")
     }
-    if loaded.sessionSchemaVersion != schema.sessionSchemaVersion() {
+    if loaded.sessionSchemaVersion != this.schema.sessionSchemaVersion() {
       panic("unsupported session schema version: " + loaded.sessionSchemaVersion)
     }
     if typeOf(loaded.turns) != "array" {
@@ -83,8 +92,9 @@ class SessionStore {
     return loaded
   }
 
+  // 打开会话
   open(config) {
-    let sessionId = schema.normalizeSessionId(config)
+    let sessionId = this.schema.normalizeSessionId(config)
     let loaded = this.load(config, sessionId)
     if loaded != null {
       loaded.status = "running"
@@ -96,7 +106,7 @@ class SessionStore {
       }
     }
 
-    let created = schema.newSession(config, sessionId)
+    let created = this.schema.newSession(config, sessionId)
     created.status = "running"
     let createdPath = this.save(config, created)
     return {
@@ -106,6 +116,7 @@ class SessionStore {
     }
   }
 
+  // 追加会话 turn
   appendTurn(config, session, turn) {
     session.turns = session.turns.append(turn)
     session.budgets.turnCount = len(session.turns)
@@ -116,31 +127,37 @@ class SessionStore {
     return turn
   }
 
+  // 追加用户消息 turn
   appendUserMessage(config, session, message) {
-    return this.appendTurn(config, session, schema.userMessage(message))
+    return this.appendTurn(config, session, this.schema.userMessage(message))
   }
 
+  // 追加请求快照 turn
   appendRequestSnapshot(config, session, messages) {
-    return this.appendTurn(config, session, schema.requestSnapshot(messages))
+    return this.appendTurn(config, session, this.schema.requestSnapshot(messages))
   }
 
+  // 追加助手消息 turn
   appendAssistantMessage(config, session, response) {
-    return this.appendTurn(config, session, schema.assistantMessage(response))
+    return this.appendTurn(config, session, this.schema.assistantMessage(response))
   }
 
+  // 追加工具消息 turn
   appendToolMessage(config, session, executed) {
-    return this.appendTurn(config, session, schema.toolMessage(executed))
+    return this.appendTurn(config, session, this.schema.toolMessage(executed))
   }
 
+  // 标记会话为已完成
   markCompleted(config, session, summary) {
     session.status = "completed"
     if summary != null {
       session.lastResult = summary
-      this.appendTurn(config, session, schema.runSummary(summary))
+      this.appendTurn(config, session, this.schema.runSummary(summary))
     }
     return this.save(config, session)
   }
 
+  // 构建会话消息列表
   buildMessages(config, context, session) {
     let messages = [
       {
@@ -195,20 +212,4 @@ class SessionStore {
     return messages
   }
 
-}
-
-let storeApi = SessionStore()
-
-export {
-  sessionPath: storeApi.sessionPath,
-  save: storeApi.save,
-  load: storeApi.load,
-  open: storeApi.open,
-  appendTurn: storeApi.appendTurn,
-  appendUserMessage: storeApi.appendUserMessage,
-  appendRequestSnapshot: storeApi.appendRequestSnapshot,
-  appendAssistantMessage: storeApi.appendAssistantMessage,
-  appendToolMessage: storeApi.appendToolMessage,
-  markCompleted: storeApi.markCompleted,
-  buildMessages: storeApi.buildMessages,
 }

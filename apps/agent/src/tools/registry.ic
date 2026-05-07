@@ -5,8 +5,29 @@ import "@/src/tools/list_dir.ic" as listDir
 import "@/src/tools/search_text.ic" as searchText
 import "@/src/tools/web_fetch.ic" as webFetch
 import "@/src/tools/web_search.ic" as webSearch
+import "@/src/tools/tool_path.ic" as toolPath
+import "@/src/tools/web_common.ic" as webCommon
+import "@/src/context/ignore.ic" as ignore
 
+// ToolRegistry 是一个工具注册器。
 export class ToolRegistry {
+  init() {
+    // 初始化执行命令工具。
+    this.execCommand = execCommand.ExecCommand(this.toolsPath)
+
+    // 初始化工具路径。
+    this.toolsPath = toolPath.ToolPath()
+    this.ignore = ignore.Ignore()
+    this.readFile = readFile.ReadFile(this.toolsPath)
+    this.listDir = listDir.ListDir(this.toolsPath)
+    this.searchText = searchText.SearchText(this.toolsPath, this.ignore)
+    
+    // 初始化网络工具。
+    this.webCommon = webCommon.WebCommon(this.toolsPath)
+    this.webFetch = webFetch.WebFetch(this.webCommon)
+    this.webSearch = webSearch.WebSearch(this.webCommon)
+  }
+
   build() {
     // registry 统一维护本地 handler 与暴露给 LLM 的 function schema。
     return {
@@ -23,7 +44,7 @@ export class ToolRegistry {
           },
           required: ["path"]
         },
-        handler: readFile.ReadFile.run
+        handler: this.readFile.run
       },
       listDir: {
         name: "listDir",
@@ -38,7 +59,7 @@ export class ToolRegistry {
           },
           required: ["path"]
         },
-        handler: listDir.ListDir.run
+        handler: this.listDir.run
       },
       searchText: {
         name: "searchText",
@@ -57,7 +78,7 @@ export class ToolRegistry {
           },
           required: ["path", "query"]
         },
-        handler: searchText.SearchText.run
+        handler: this.searchText.run
       },
       execCommand: {
         name: "execCommand",
@@ -94,7 +115,7 @@ export class ToolRegistry {
           },
           required: ["command"]
         },
-        handler: execCommand.ExecCommand.run
+        handler: this.execCommand.run
       },
       webFetch: {
         name: "webFetch",
@@ -113,7 +134,7 @@ export class ToolRegistry {
           },
           required: ["url"]
         },
-        handler: webFetch.WebFetch.run
+        handler: this.webFetch.run
       },
       webSearch: {
         name: "webSearch",
@@ -132,7 +153,7 @@ export class ToolRegistry {
           },
           required: ["query"]
         },
-        handler: webSearch.WebSearch.run
+        handler: this.webSearch.run
       }
     }
   }
@@ -159,6 +180,4 @@ export class ToolRegistry {
     }
     return definitions
   }
-
 }
-

@@ -1,11 +1,18 @@
 import std.data.json as json
 import "@/src/tools/registry.ic" as registry
 
+// 模型消息构建器
 export class ModelMessages {
+  // 初始化模型消息构建器
+  init() {
+    this.toolRegistry = registry.ToolRegistry()
+  }
+
   systemPrompt() {
     return "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
   }
 
+  // 构建用户提示
   userPrompt(config, context) {
     let text = ""
     if config.task != null && config.task != "" {
@@ -22,6 +29,7 @@ export class ModelMessages {
     return text
   }
 
+  // 构建基础消息列表
   buildBase(config, context) {
     return [
       {
@@ -35,14 +43,17 @@ export class ModelMessages {
     ]
   }
 
+  // 构建完整消息列表
   build(config, context) {
     return this.buildBase(config, context)
   }
 
+  // 获取工具定义
   toolDefinitions() {
-    return registry.ToolRegistry().definitions()
+    return this.toolRegistry.definitions()
   }
 
+  // 追加助手工具调用消息
   appendAssistantToolCalls(messages, toolCalls, content, reasoningContent) {
     let assistantContent = content
     if assistantContent == null {
@@ -60,6 +71,7 @@ export class ModelMessages {
     return messages.append(assistantMessage)
   }
 
+  // 追加工具结果消息
   appendToolResult(messages, toolCallId, name, output) {
     return messages.append({
       role: "tool",
@@ -68,5 +80,4 @@ export class ModelMessages {
       content: json.encode(output)
     })
   }
-
 }
