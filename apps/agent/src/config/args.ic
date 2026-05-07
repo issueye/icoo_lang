@@ -1,12 +1,12 @@
 import std.sys.cli as cli
 import std.core.string as str
 
-const argsApi = fn() {
-  fn argvList() {
+class ArgsConfig {
+  argvList() {
     return argv()
   }
 
-  fn defineApp() {
+  defineApp() {
     // agent 的启动参数统一挂在原生 CLI 框架上，避免继续手写 argv 遍历。
     let app = cli.create({
       name: "icoo-agent",
@@ -86,21 +86,21 @@ const argsApi = fn() {
     return app
   }
 
-  fn applyIfString(config, value, key) {
+  applyIfString(config, value, key) {
     if typeOf(value) == "string" && value != "" {
       config[key] = value
     }
     return config
   }
 
-  fn applyIfInt(config, value, key) {
+  applyIfInt(config, value, key) {
     if typeOf(value) == "int" {
       config[key] = value
     }
     return config
   }
 
-  fn applyIfBoolString(config, value, key) {
+  applyIfBoolString(config, value, key) {
     if value == "true" {
       config[key] = true
     }
@@ -110,8 +110,8 @@ const argsApi = fn() {
     return config
   }
 
-  fn applyArgs(config) {
-    let parsed = defineApp().run()
+  applyArgs(config) {
+    let parsed = this.defineApp().run()
     if parsed.help == true {
       return {
         config: config,
@@ -121,22 +121,22 @@ const argsApi = fn() {
     }
 
     let flags = parsed.flags
-    config = applyIfString(config, flags.workspace, "workspace")
-    config = applyIfString(config, flags.mode, "mode")
-    config = applyIfString(config, flags.model, "model")
-    config = applyIfString(config, flags["base-url"], "baseUrl")
-    config = applyIfString(config, flags["api-key"], "apiKey")
-    config = applyIfString(config, flags.task, "task")
-    config = applyIfString(config, flags.session, "sessionId")
-    config = applyIfString(config, flags.resume, "resumeSession")
-    config = applyIfString(config, flags.approval, "approval")
-    config = applyIfString(config, flags["session-dir"], "sessionDir")
-    config = applyIfString(config, flags["log-path"], "logPath")
-    config = applyIfInt(config, flags["max-turns"], "maxTurns")
-    config = applyIfInt(config, flags["max-files"], "maxFiles")
-    config = applyIfInt(config, flags["max-total-bytes"], "maxTotalBytes")
-    config = applyIfBoolString(config, flags["stream-final-answer"], "streamFinalAnswer")
-    config = applyIfString(config, flags["agent-name"], "agentName")
+    config = this.applyIfString(config, flags.workspace, "workspace")
+    config = this.applyIfString(config, flags.mode, "mode")
+    config = this.applyIfString(config, flags.model, "model")
+    config = this.applyIfString(config, flags["base-url"], "baseUrl")
+    config = this.applyIfString(config, flags["api-key"], "apiKey")
+    config = this.applyIfString(config, flags.task, "task")
+    config = this.applyIfString(config, flags.session, "sessionId")
+    config = this.applyIfString(config, flags.resume, "resumeSession")
+    config = this.applyIfString(config, flags.approval, "approval")
+    config = this.applyIfString(config, flags["session-dir"], "sessionDir")
+    config = this.applyIfString(config, flags["log-path"], "logPath")
+    config = this.applyIfInt(config, flags["max-turns"], "maxTurns")
+    config = this.applyIfInt(config, flags["max-files"], "maxFiles")
+    config = this.applyIfInt(config, flags["max-total-bytes"], "maxTotalBytes")
+    config = this.applyIfBoolString(config, flags["stream-final-answer"], "streamFinalAnswer")
+    config = this.applyIfString(config, flags["agent-name"], "agentName")
 
     // 先把未知参数完整保留，后续可以转给更细的子工具链或模型层调试入口。
     config.cliUnknownArgs = parsed.unknown
@@ -148,8 +148,8 @@ const argsApi = fn() {
     }
   }
 
-  fn previewWorkspace(config) {
-    let values = argvList()
+  previewWorkspace(config) {
+    let values = this.argvList()
     let index = 0
     while index < len(values) {
       let value = values[index]
@@ -178,11 +178,9 @@ const argsApi = fn() {
     return config
   }
 
-  return {
-    applyArgs: applyArgs,
-    previewWorkspace: previewWorkspace
-  }
-}()
+}
+
+let argsApi = ArgsConfig()
 
 export const applyArgs = argsApi.applyArgs
 export const previewWorkspace = argsApi.previewWorkspace

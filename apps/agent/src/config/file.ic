@@ -3,29 +3,29 @@ import std.core.string as str
 import std.data.toml as toml
 import std.io.fs as fs
 
-const fileApi = fn() {
-  fn applyString(config, value, key) {
+class ConfigFile {
+  applyString(config, value, key) {
     if typeOf(value) == "string" && value != "" {
       config[key] = value
     }
     return config
   }
 
-  fn applyInt(config, value, key) {
+  applyInt(config, value, key) {
     if typeOf(value) == "int" {
       config[key] = value
     }
     return config
   }
 
-  fn applyBool(config, value, key) {
+  applyBool(config, value, key) {
     if typeOf(value) == "bool" {
       config[key] = value
     }
     return config
   }
 
-  fn resolveConfigPath(config) {
+  resolveConfigPath(config) {
     let workspace = config.workspace
     if typeOf(workspace) != "string" || workspace == "" {
       return null
@@ -38,7 +38,7 @@ const fileApi = fn() {
     return fs.join(normalized, "config.toml")
   }
 
-  fn isAbsolutePath(path) {
+  isAbsolutePath(path) {
     if typeOf(path) != "string" || path == "" {
       return false
     }
@@ -48,18 +48,18 @@ const fileApi = fn() {
     return str.indexOf(path, ":") == 1
   }
 
-  fn resolvePathValue(configDir, value) {
+  resolvePathValue(configDir, value) {
     if typeOf(value) != "string" || value == "" {
       return value
     }
-    if isAbsolutePath(value) == true {
+    if this.isAbsolutePath(value) == true {
       return value
     }
     return fs.join(configDir, value)
   }
 
-  fn applyFile(config) {
-    let filePath = resolveConfigPath(config)
+  applyFile(config) {
+    let filePath = this.resolveConfigPath(config)
     if filePath == null || fs.exists(filePath) != true {
       return config
     }
@@ -71,40 +71,36 @@ const fileApi = fn() {
     }
 
     // config.toml 只承载项目级默认值，CLI 与 env 仍然可以继续覆盖。
-    config = applyString(config, object.get(loaded, "workspace"), "workspace")
-    config = applyString(config, object.get(loaded, "mode"), "mode")
-    config = applyString(config, object.get(loaded, "model"), "model")
-    config = applyString(config, object.get(loaded, "base_url"), "baseUrl")
-    config = applyString(config, object.get(loaded, "api_key"), "apiKey")
-    config = applyString(config, object.get(loaded, "task"), "task")
-    config = applyString(config, object.get(loaded, "session"), "sessionId")
-    config = applyString(config, object.get(loaded, "resume"), "resumeSession")
-    config = applyString(config, object.get(loaded, "approval"), "approval")
-    config = applyString(
+    config = this.applyString(config, object.get(loaded, "workspace"), "workspace")
+    config = this.applyString(config, object.get(loaded, "mode"), "mode")
+    config = this.applyString(config, object.get(loaded, "model"), "model")
+    config = this.applyString(config, object.get(loaded, "base_url"), "baseUrl")
+    config = this.applyString(config, object.get(loaded, "api_key"), "apiKey")
+    config = this.applyString(config, object.get(loaded, "task"), "task")
+    config = this.applyString(config, object.get(loaded, "session"), "sessionId")
+    config = this.applyString(config, object.get(loaded, "resume"), "resumeSession")
+    config = this.applyString(config, object.get(loaded, "approval"), "approval")
+    config = this.applyString(
       config,
-      resolvePathValue(configDir, object.get(loaded, "session_dir")),
+      this.resolvePathValue(configDir, object.get(loaded, "session_dir")),
       "sessionDir"
     )
-    config = applyString(
+    config = this.applyString(
       config,
-      resolvePathValue(configDir, object.get(loaded, "log_path")),
+      this.resolvePathValue(configDir, object.get(loaded, "log_path")),
       "logPath"
     )
-    config = applyInt(config, object.get(loaded, "max_turns"), "maxTurns")
-    config = applyInt(config, object.get(loaded, "max_files"), "maxFiles")
-    config = applyInt(config, object.get(loaded, "max_total_bytes"), "maxTotalBytes")
-    config = applyBool(config, object.get(loaded, "stream_final_answer"), "streamFinalAnswer")
-    config = applyString(config, object.get(loaded, "agent_name"), "agentName")
+    config = this.applyInt(config, object.get(loaded, "max_turns"), "maxTurns")
+    config = this.applyInt(config, object.get(loaded, "max_files"), "maxFiles")
+    config = this.applyInt(config, object.get(loaded, "max_total_bytes"), "maxTotalBytes")
+    config = this.applyBool(config, object.get(loaded, "stream_final_answer"), "streamFinalAnswer")
+    config = this.applyString(config, object.get(loaded, "agent_name"), "agentName")
 
     return config
   }
+}
 
-  return {
-    applyFile: applyFile,
-    resolveConfigPath: resolveConfigPath,
-    resolvePathValue: resolvePathValue
-  }
-}()
+let fileApi = ConfigFile()
 
 export const applyFile = fileApi.applyFile
 export const resolveConfigPath = fileApi.resolveConfigPath

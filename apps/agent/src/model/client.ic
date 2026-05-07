@@ -6,8 +6,8 @@ import std.data.json as json
 import "@/src/model/messages.ic" as messages
 import "@/src/model/parser.ic" as parser
 
-const clientApi = fn() {
-  fn shouldStreamFinalAnswer(config, builtMessages) {
+class ModelClient {
+  shouldStreamFinalAnswer(config, builtMessages) {
     if config.streamFinalAnswer != true {
       return false
     }
@@ -20,7 +20,7 @@ const clientApi = fn() {
     return false
   }
 
-  fn tryParseStreamLine(line) {
+  tryParseStreamLine(line) {
     if str.hasPrefix(line, "data: ") != true {
       return null
     }
@@ -41,7 +41,7 @@ const clientApi = fn() {
     }
   }
 
-  fn requestRemoteStream(config, payload) {
+  requestRemoteStream(config, payload) {
     let stream = http.requestStream({
       url: config.baseUrl + "/chat/completions",
       method: "POST",
@@ -74,7 +74,7 @@ const clientApi = fn() {
           continue
         }
 
-        let parsedLine = tryParseStreamLine(line)
+        let parsedLine = this.tryParseStreamLine(line)
         if parsedLine == null {
           continue
         }
@@ -115,7 +115,7 @@ const clientApi = fn() {
     }
   }
 
-  fn localFallback(context) {
+  localFallback(context) {
     return {
       mode: "local",
       text:
@@ -136,7 +136,7 @@ const clientApi = fn() {
     }
   }
 
-  fn requestRemote(config, payload) {
+  requestRemote(config, payload) {
     let response = http.requestJSON({
       url: config.baseUrl + "/chat/completions",
       method: "POST",
@@ -170,12 +170,12 @@ const clientApi = fn() {
     }
   }
 
-  fn request(config, context) {
+  request(config, context) {
     if config.apiKey == null || config.apiKey == "" {
-      return localFallback(context)
+      return this.localFallback(context)
     }
 
-    return requestRemote(config, {
+    return this.requestRemote(config, {
       model: config.model,
       temperature: 0.2,
       messages: messages.build(config, context),
@@ -183,7 +183,7 @@ const clientApi = fn() {
     })
   }
 
-  fn requestWithMessages(config, builtMessages) {
+  requestWithMessages(config, builtMessages) {
     if config.apiKey == null || config.apiKey == "" {
       return {
         mode: "local",
@@ -202,24 +202,22 @@ const clientApi = fn() {
       tools: messages.toolDefinitions()
     }
 
-    if shouldStreamFinalAnswer(config, builtMessages) == true {
+    if this.shouldStreamFinalAnswer(config, builtMessages) == true {
       try {
-        return requestRemoteStream(config, object.merge(payload, {
+        return this.requestRemoteStream(config, object.merge(payload, {
           stream: true
         }))
       } catch err {
-        return requestRemote(config, payload)
+        return this.requestRemote(config, payload)
       }
     }
 
-    return requestRemote(config, payload)
+    return this.requestRemote(config, payload)
   }
 
-  return {
-    request: request,
-    requestWithMessages: requestWithMessages
-  }
-}()
+}
+
+let clientApi = ModelClient()
 
 export const request = clientApi.request
 export const requestWithMessages = clientApi.requestWithMessages

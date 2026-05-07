@@ -1,7 +1,7 @@
 import std.core.object as object
 
-const parserApi = fn() {
-  fn appendDeltaToolCalls(toolCalls, rawToolCalls) {
+class ModelParser {
+  appendDeltaToolCalls(toolCalls, rawToolCalls) {
     if typeOf(rawToolCalls) != "array" {
       return toolCalls
     }
@@ -67,7 +67,7 @@ const parserApi = fn() {
     return toolCalls
   }
 
-  fn normalizeContent(content) {
+  normalizeContent(content) {
     if typeOf(content) == "string" {
       return content
     }
@@ -90,7 +90,7 @@ const parserApi = fn() {
     return ""
   }
 
-  fn normalizeToolCalls(rawToolCalls) {
+  normalizeToolCalls(rawToolCalls) {
     if typeOf(rawToolCalls) != "array" {
       return []
     }
@@ -113,9 +113,9 @@ const parserApi = fn() {
     return calls
   }
 
-  fn parseChoiceMessage(message) {
-    let content = normalizeContent(object.get(message, "content"))
-    let toolCalls = normalizeToolCalls(object.get(message, "tool_calls"))
+  parseChoiceMessage(message) {
+    let content = this.normalizeContent(object.get(message, "content"))
+    let toolCalls = this.normalizeToolCalls(object.get(message, "tool_calls"))
     // 部分 provider 会返回 reasoning_content，并要求下一轮 assistant 消息原样回放。
     let reasoningContent = object.get(message, "reasoning_content")
     return {
@@ -128,13 +128,13 @@ const parserApi = fn() {
     }
   }
 
-  fn parseResponse(payload) {
+  parseResponse(payload) {
     let choices = object.get(payload, "choices")
     if typeOf(choices) == "array" && len(choices) > 0 {
       let first = choices[0]
       let message = object.get(first, "message")
       if typeOf(message) == "object" {
-        let parsed = parseChoiceMessage(message)
+        let parsed = this.parseChoiceMessage(message)
         parsed.finishReason = object.get(first, "finish_reason")
         return parsed
       }
@@ -162,7 +162,7 @@ const parserApi = fn() {
     }
   }
 
-  fn parseStreamEvent(payload, state) {
+  parseStreamEvent(payload, state) {
     let choices = object.get(payload, "choices")
     if typeOf(choices) != "array" || len(choices) == 0 {
       return state
@@ -170,10 +170,10 @@ const parserApi = fn() {
 
     let first = choices[0]
     let delta = object.get(first, "delta", {})
-    let deltaContent = normalizeContent(object.get(delta, "content"))
-    let deltaReasoning = normalizeContent(object.get(delta, "reasoning_content"))
+    let deltaContent = this.normalizeContent(object.get(delta, "content"))
+    let deltaReasoning = this.normalizeContent(object.get(delta, "reasoning_content"))
     let rawToolCalls = object.get(delta, "tool_calls")
-    let nextToolCalls = appendDeltaToolCalls(
+    let nextToolCalls = this.appendDeltaToolCalls(
       object.get(state, "toolCalls", []),
       rawToolCalls
     )
@@ -189,11 +189,9 @@ const parserApi = fn() {
     }
   }
 
-  return {
-    parseResponse: parseResponse,
-    parseStreamEvent: parseStreamEvent
-  }
-}()
+}
+
+let parserApi = ModelParser()
 
 export const parseResponse = parserApi.parseResponse
 export const parseStreamEvent = parserApi.parseStreamEvent

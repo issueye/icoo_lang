@@ -1,12 +1,12 @@
 import std.data.json as json
 import "@/src/tools/registry.ic" as registry
 
-const messagesApi = fn() {
-  fn systemPrompt() {
+class ModelMessages {
+  systemPrompt() {
     return "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
   }
 
-  fn userPrompt(config, context) {
+  userPrompt(config, context) {
     let text = ""
     if config.task != null && config.task != "" {
       text = text + "Task:\n" + config.task + "\n\n"
@@ -22,28 +22,28 @@ const messagesApi = fn() {
     return text
   }
 
-  fn buildBase(config, context) {
+  buildBase(config, context) {
     return [
       {
         role: "system",
-        content: systemPrompt()
+        content: this.systemPrompt()
       },
       {
         role: "user",
-        content: userPrompt(config, context)
+        content: this.userPrompt(config, context)
       }
     ]
   }
 
-  fn build(config, context) {
-    return buildBase(config, context)
+  build(config, context) {
+    return this.buildBase(config, context)
   }
 
-  fn toolDefinitions() {
+  toolDefinitions() {
     return registry.definitions()
   }
 
-  fn appendAssistantToolCalls(messages, toolCalls, content, reasoningContent) {
+  appendAssistantToolCalls(messages, toolCalls, content, reasoningContent) {
     let assistantContent = content
     if assistantContent == null {
       assistantContent = ""
@@ -60,7 +60,7 @@ const messagesApi = fn() {
     return messages.append(assistantMessage)
   }
 
-  fn appendToolResult(messages, toolCallId, name, output) {
+  appendToolResult(messages, toolCallId, name, output) {
     return messages.append({
       role: "tool",
       tool_call_id: toolCallId,
@@ -69,16 +69,9 @@ const messagesApi = fn() {
     })
   }
 
-  return {
-    systemPrompt: systemPrompt,
-    userPrompt: userPrompt,
-    build: build,
-    buildBase: buildBase,
-    toolDefinitions: toolDefinitions,
-    appendAssistantToolCalls: appendAssistantToolCalls,
-    appendToolResult: appendToolResult
-  }
-}()
+}
+
+let messagesApi = ModelMessages()
 
 export const systemPrompt = messagesApi.systemPrompt
 export const userPrompt = messagesApi.userPrompt
