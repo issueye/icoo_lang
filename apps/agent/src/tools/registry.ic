@@ -3,8 +3,8 @@ import "@/src/tools/read_file.ic" as readFile
 import "@/src/tools/list_dir.ic" as listDir
 import "@/src/tools/search_text.ic" as searchText
 
-const registryApi = fn() {
-  fn build() {
+class ToolRegistry {
+  build() {
     // registry 统一维护本地 handler 与暴露给 LLM 的 function schema。
     return {
       readFile: {
@@ -59,13 +59,13 @@ const registryApi = fn() {
     }
   }
 
-  fn get(name) {
-    let tools = build()
+  get(name) {
+    let tools = this.build()
     return object.get(tools, name)
   }
 
-  fn definitions() {
-    let tools = build()
+  definitions() {
+    let tools = this.build()
     let names = ["readFile", "listDir", "searchText"]
     let definitions = []
     for i, name in names {
@@ -82,12 +82,9 @@ const registryApi = fn() {
     return definitions
   }
 
-  return {
-    build: build,
-    get: get,
-    definitions: definitions
-  }
-}()
+}
+
+let registryApi = ToolRegistry()
 
 export const build = registryApi.build
 export const get = registryApi.get

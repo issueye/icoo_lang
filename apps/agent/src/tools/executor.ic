@@ -2,8 +2,8 @@ import std.core.object as object
 import std.data.json as json
 import "@/src/tools/registry.ic" as registry
 
-const executorApi = fn() {
-  fn parseArguments(rawArguments) {
+class ToolExecutor {
+  parseArguments(rawArguments) {
     if typeOf(rawArguments) == "object" {
       return {
         ok: true,
@@ -30,7 +30,7 @@ const executorApi = fn() {
     }
   }
 
-  fn run(config, name, input) {
+  run(config, name, input) {
     let tool = registry.get(name)
     if tool == null {
       return {
@@ -43,11 +43,11 @@ const executorApi = fn() {
     return handler(config, input)
   }
 
-  fn runCall(config, call) {
+  runCall(config, call) {
     let callId = object.get(call, "id", "")
     let fnDef = object.get(call, "function", {})
     let name = object.get(fnDef, "name", "")
-    let parsedArgs = parseArguments(object.get(fnDef, "arguments"))
+    let parsedArgs = this.parseArguments(object.get(fnDef, "arguments"))
     if parsedArgs.ok != true {
       return {
         ok: false,
@@ -61,7 +61,7 @@ const executorApi = fn() {
       }
     }
 
-    let result = run(config, name, parsedArgs.value)
+    let result = this.run(config, name, parsedArgs.value)
     return {
       ok: result.ok,
       toolCallId: callId,
@@ -72,11 +72,9 @@ const executorApi = fn() {
     }
   }
 
-  return {
-    run: run,
-    runCall: runCall
-  }
-}()
+}
+
+let executorApi = ToolExecutor()
 
 export const run = executorApi.run
 export const runCall = executorApi.runCall

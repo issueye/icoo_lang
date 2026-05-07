@@ -4,8 +4,8 @@ import std.sys.os as os
 import std.time.basic as time
 import "@/src/session/schema.ic" as schema
 
-const storeApi = fn() {
-  fn validateTurnKinds(turns, filePath) {
+class SessionStore {
+  validateTurnKinds(turns, filePath) {
     let allowed = {
       user_message: true,
       request_snapshot: true,
@@ -31,20 +31,20 @@ const storeApi = fn() {
     }
   }
 
-  fn sessionPath(config, sessionId) {
+  sessionPath(config, sessionId) {
     return fs.join(config.sessionDir, sessionId + ".json")
   }
 
-  fn save(config, session) {
+  save(config, session) {
     os.mkdirAll(config.sessionDir)
     session.updatedAt = time.now()
-    let filePath = sessionPath(config, session.sessionId)
+    let filePath = this.sessionPath(config, session.sessionId)
     json.saveToFile(filePath, session)
     return filePath
   }
 
-  fn load(config, sessionId) {
-    let filePath = sessionPath(config, sessionId)
+  load(config, sessionId) {
+    let filePath = this.sessionPath(config, sessionId)
     if fs.exists(filePath) != true {
       return null
     }
@@ -78,17 +78,17 @@ const storeApi = fn() {
       }
     }
     // 旧 session schema 不再兼容读取，避免在恢复链路里继续堆积隐式分支。
-    validateTurnKinds(loaded.turns, filePath)
+    this.validateTurnKinds(loaded.turns, filePath)
 
     return loaded
   }
 
-  fn open(config) {
+  open(config) {
     let sessionId = schema.normalizeSessionId(config)
-    let loaded = load(config, sessionId)
+    let loaded = this.load(config, sessionId)
     if loaded != null {
       loaded.status = "running"
-      let loadedPath = save(config, loaded)
+      let loadedPath = this.save(config, loaded)
       return {
         session: loaded,
         path: loadedPath,
@@ -98,7 +98,7 @@ const storeApi = fn() {
 
     let created = schema.newSession(config, sessionId)
     created.status = "running"
-    let createdPath = save(config, created)
+    let createdPath = this.save(config, created)
     return {
       session: created,
       path: createdPath,
@@ -106,42 +106,42 @@ const storeApi = fn() {
     }
   }
 
-  fn appendTurn(config, session, turn) {
+  appendTurn(config, session, turn) {
     session.turns = session.turns.append(turn)
     session.budgets.turnCount = len(session.turns)
     if turn.kind == "tool_message" {
       session.budgets.toolCallCount = session.budgets.toolCallCount + 1
     }
-    save(config, session)
+    this.save(config, session)
     return turn
   }
 
-  fn appendUserMessage(config, session, message) {
-    return appendTurn(config, session, schema.userMessage(message))
+  appendUserMessage(config, session, message) {
+    return this.appendTurn(config, session, schema.userMessage(message))
   }
 
-  fn appendRequestSnapshot(config, session, messages) {
-    return appendTurn(config, session, schema.requestSnapshot(messages))
+  appendRequestSnapshot(config, session, messages) {
+    return this.appendTurn(config, session, schema.requestSnapshot(messages))
   }
 
-  fn appendAssistantMessage(config, session, response) {
-    return appendTurn(config, session, schema.assistantMessage(response))
+  appendAssistantMessage(config, session, response) {
+    return this.appendTurn(config, session, schema.assistantMessage(response))
   }
 
-  fn appendToolMessage(config, session, executed) {
-    return appendTurn(config, session, schema.toolMessage(executed))
+  appendToolMessage(config, session, executed) {
+    return this.appendTurn(config, session, schema.toolMessage(executed))
   }
 
-  fn markCompleted(config, session, summary) {
+  markCompleted(config, session, summary) {
     session.status = "completed"
     if summary != null {
       session.lastResult = summary
-      appendTurn(config, session, schema.runSummary(summary))
+      this.appendTurn(config, session, schema.runSummary(summary))
     }
-    return save(config, session)
+    return this.save(config, session)
   }
 
-  fn buildMessages(config, context, session) {
+  buildMessages(config, context, session) {
     let messages = [
       {
         role: "system",
@@ -195,20 +195,9 @@ const storeApi = fn() {
     return messages
   }
 
-  return {
-    sessionPath: sessionPath,
-    save: save,
-    load: load,
-    open: open,
-    appendTurn: appendTurn,
-    appendUserMessage: appendUserMessage,
-    appendRequestSnapshot: appendRequestSnapshot,
-    appendAssistantMessage: appendAssistantMessage,
-    appendToolMessage: appendToolMessage,
-    markCompleted: markCompleted,
-    buildMessages: buildMessages
-  }
-}()
+}
+
+let storeApi = SessionStore()
 
 export const sessionPath = storeApi.sessionPath
 export const save = storeApi.save

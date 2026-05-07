@@ -3,8 +3,8 @@ import std.core.string as str
 import "@/src/context/budget.ic" as budget
 import "@/src/context/ignore.ic" as ignore
 
-const builderApi = fn() {
-  fn isPreviewable(path) {
+class ContextBuilder {
+  isPreviewable(path) {
     return (
       str.hasSuffix(path, ".ic") ||
       str.hasSuffix(path, ".md") ||
@@ -19,7 +19,7 @@ const builderApi = fn() {
     )
   }
 
-  fn fileItem(path, size, included, preview, omittedReason) {
+  fileItem(path, size, included, preview, omittedReason) {
     return {
       path: path,
       size: size,
@@ -30,7 +30,7 @@ const builderApi = fn() {
     }
   }
 
-  fn pushOmitted(state, path, reason) {
+  pushOmitted(state, path, reason) {
     state.omittedCount = state.omittedCount + 1
     state.omitted = state.omitted.append({
       path: path,
@@ -38,7 +38,7 @@ const builderApi = fn() {
     })
   }
 
-  fn summarizeFile(path, info, state) {
+  summarizeFile(path, info, state) {
     if state.fileCount >= state.budget.maxFiles {
       return
     }
@@ -46,24 +46,24 @@ const builderApi = fn() {
     state.fileCount = state.fileCount + 1
 
     if state.totalBytes + info.size > state.budget.maxTotalBytes {
-      pushOmitted(state, path, "budget exceeded")
-      state.files = state.files.append(fileItem(path, info.size, false, null, "budget exceeded"))
+      this.pushOmitted(state, path, "budget exceeded")
+      state.files = state.files.append(this.fileItem(path, info.size, false, null, "budget exceeded"))
       return
     }
 
     let preview = null
-    if isPreviewable(path) == true {
+    if this.isPreviewable(path) == true {
       // 先直接读全文；后续如果大文件预览仍有成本问题，再补专门的截断读能力。
       preview = fs.readFile(path)
     }
 
     state.totalBytes = state.totalBytes + info.size
-    state.files = state.files.append(fileItem(path, info.size, true, preview, null))
+    state.files = state.files.append(this.fileItem(path, info.size, true, preview, null))
   }
 
-  fn scan(path, depth, state) {
+  scan(path, depth, state) {
     if depth > state.budget.maxDepth {
-      pushOmitted(state, path, "max depth reached")
+      this.pushOmitted(state, path, "max depth reached")
       return
     }
     if state.fileCount >= state.budget.maxFiles {
@@ -72,7 +72,7 @@ const builderApi = fn() {
 
     let info = fs.stat(path)
     if info.isFile {
-      summarizeFile(path, info, state)
+      this.summarizeFile(path, info, state)
       return
     }
 
@@ -82,20 +82,20 @@ const builderApi = fn() {
         break
       }
       if ignore.shouldIgnoreName(entry.name) == true {
-        pushOmitted(state, entry.path, "ignored by name")
+        this.pushOmitted(state, entry.path, "ignored by name")
         continue
       }
 
       if entry.isDir {
-        scan(entry.path, depth + 1, state)
+        this.scan(entry.path, depth + 1, state)
         continue
       }
 
-      summarizeFile(entry.path, fs.stat(entry.path), state)
+      this.summarizeFile(entry.path, fs.stat(entry.path), state)
     }
   }
 
-  fn build(config) {
+  build(config) {
     // 第一版优先保证结构清晰：summary + files + omitted，便于后续直接喂给 model 层。
     let state = {
       budget: budget.create(config),
@@ -106,7 +106,7 @@ const builderApi = fn() {
       omitted: []
     }
 
-    scan(config.workspace, 0, state)
+    this.scan(config.workspace, 0, state)
 
     return {
       workspace: config.workspace,
@@ -123,9 +123,8 @@ const builderApi = fn() {
     }
   }
 
-  return {
-    build: build
-  }
-}()
+}
+
+let builderApi = ContextBuilder()
 
 export const build = builderApi.build
