@@ -5,6 +5,32 @@ import std.time.basic as time
 import "@/src/session/schema.ic" as schema
 
 const storeApi = fn() {
+  fn validateTurnKinds(turns, filePath) {
+    let allowed = {
+      user_message: true,
+      request_snapshot: true,
+      assistant_message: true,
+      tool_message: true,
+      run_summary: true
+    }
+    let deprecated = {
+      user_prompt: true,
+      request_messages: true,
+      assistant_response: true,
+      tool_result: true
+    }
+
+    for i, turn in turns {
+      let kind = turn.kind
+      if deprecated[kind] == true {
+        panic("deprecated session turn kind: " + kind + " in " + filePath)
+      }
+      if allowed[kind] != true {
+        panic("unknown session turn kind in " + filePath)
+      }
+    }
+  }
+
   fn sessionPath(config, sessionId) {
     return fs.join(config.sessionDir, sessionId + ".json")
   }
@@ -30,6 +56,9 @@ const storeApi = fn() {
     if loaded.sessionId == null || loaded.sessionId == "" {
       panic("invalid session schema: missing sessionId")
     }
+    if loaded.sessionSchemaVersion != schema.sessionSchemaVersion() {
+      panic("unsupported session schema version: " + loaded.sessionSchemaVersion)
+    }
     if typeOf(loaded.turns) != "array" {
       loaded.turns = []
     }
@@ -48,6 +77,8 @@ const storeApi = fn() {
         toolCallCount: 0
       }
     }
+    // 旧 session schema 不再兼容读取，避免在恢复链路里继续堆积隐式分支。
+    validateTurnKinds(loaded.turns, filePath)
 
     return loaded
   }
@@ -78,7 +109,7 @@ const storeApi = fn() {
   fn appendTurn(config, session, turn) {
     session.turns = session.turns.append(turn)
     session.budgets.turnCount = len(session.turns)
-    if turn.kind == "tool_message" || turn.kind == "tool_result" {
+    if turn.kind == "tool_message" {
       session.budgets.toolCallCount = session.budgets.toolCallCount + 1
     }
     save(config, session)
@@ -121,42 +152,26 @@ const storeApi = fn() {
     let hasUserTurn = false
     for i, turn in session.turns {
       let payload = turn.payload
-      if turn.kind == "user_message" || turn.kind == "user_prompt" {
+      if turn.kind == "user_message" {
         hasUserTurn = true
         messages = messages.append(payload)
         continue
       }
-      if turn.kind == "request_snapshot" || turn.kind == "request_messages" {
+      if turn.kind == "request_snapshot" {
         continue
       }
       if turn.kind == "assistant_message" {
-        if payload.hasToolCalls == true {
-          messages = messages.append({
-            role: "assistant",
-            content: payload.content,
-            tool_calls: payload.toolCalls
-          })
-          continue
-        }
-        messages = messages.append({
+        let assistantMessage = {
           role: "assistant",
           content: payload.content
-        })
-        continue
-      }
-      if turn.kind == "assistant_response" {
-        if payload.hasToolCalls == true {
-          messages = messages.append({
-            role: "assistant",
-            content: payload.text,
-            tool_calls: payload.toolCalls
-          })
-          continue
         }
-        messages = messages.append({
-          role: "assistant",
-          content: payload.text
-        })
+        if payload.reasoningContent != null && payload.reasoningContent != "" {
+          assistantMessage.reasoning_content = payload.reasoningContent
+        }
+        if payload.hasToolCalls == true {
+          assistantMessage.tool_calls = payload.toolCalls
+        }
+        messages = messages.append(assistantMessage)
         continue
       }
       if turn.kind == "tool_message" {
@@ -167,14 +182,6 @@ const storeApi = fn() {
           content: json.encode(payload.output)
         })
         continue
-      }
-      if turn.kind == "tool_result" {
-        messages = messages.append({
-          role: "tool",
-          tool_call_id: payload.toolCallId,
-          name: payload.name,
-          content: json.encode(payload.output)
-        })
       }
     }
 

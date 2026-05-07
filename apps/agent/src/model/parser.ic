@@ -50,9 +50,12 @@ const parserApi = fn() {
   fn parseChoiceMessage(message) {
     let content = normalizeContent(object.get(message, "content"))
     let toolCalls = normalizeToolCalls(object.get(message, "tool_calls"))
+    // 部分 provider 会返回 reasoning_content，并要求下一轮 assistant 消息原样回放。
+    let reasoningContent = object.get(message, "reasoning_content")
     return {
       ok: true,
       text: content,
+      reasoningContent: reasoningContent,
       finishReason: null,
       toolCalls: toolCalls,
       hasToolCalls: len(toolCalls) > 0
@@ -76,6 +79,7 @@ const parserApi = fn() {
       return {
         ok: true,
         text: outputText,
+        reasoningContent: null,
         finishReason: null,
         toolCalls: [],
         hasToolCalls: false
@@ -85,6 +89,7 @@ const parserApi = fn() {
     return {
       ok: false,
       text: null,
+      reasoningContent: null,
       finishReason: null,
       toolCalls: [],
       hasToolCalls: false

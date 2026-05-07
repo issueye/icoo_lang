@@ -72,7 +72,12 @@ const runtimeApi = fn() {
         break
       }
 
-      messages = modelMessages.appendAssistantToolCalls(messages, response.toolCalls, response.text)
+      messages = modelMessages.appendAssistantToolCalls(
+        messages,
+        response.toolCalls,
+        response.text,
+        response.reasoningContent
+      )
       let appended = appendToolResults(config, session, messages, response.toolCalls, toolRuns)
       messages = appended.messages
       toolRuns = appended.toolRuns
@@ -84,6 +89,7 @@ const runtimeApi = fn() {
         final: {
           mode: "local",
           text: "No model request was executed.",
+          reasoningContent: null,
           toolCalls: [],
           hasToolCalls: false,
           finishReason: null

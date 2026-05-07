@@ -43,16 +43,21 @@ const messagesApi = fn() {
     return registry.definitions()
   }
 
-  fn appendAssistantToolCalls(messages, toolCalls, content) {
+  fn appendAssistantToolCalls(messages, toolCalls, content, reasoningContent) {
     let assistantContent = content
     if assistantContent == null {
       assistantContent = ""
     }
-    return messages.append({
+    let assistantMessage = {
       role: "assistant",
       content: assistantContent,
       tool_calls: toolCalls
-    })
+    }
+    // DeepSeek thinking mode 需要携带上一轮 reasoning_content。
+    if reasoningContent != null && reasoningContent != "" {
+      assistantMessage.reasoning_content = reasoningContent
+    }
+    return messages.append(assistantMessage)
   }
 
   fn appendToolResult(messages, toolCallId, name, output) {

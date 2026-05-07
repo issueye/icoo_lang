@@ -1,6 +1,10 @@
 import std.time.basic as time
 
 const schemaApi = fn() {
+  fn sessionSchemaVersion() {
+    return 2
+  }
+
   fn normalizeSessionId(config) {
     if config.resumeSession != null && config.resumeSession != "" {
       return config.resumeSession
@@ -16,6 +20,7 @@ const schemaApi = fn() {
 
     // Session 作为顶层状态容器，后续所有 turn / event / artifact 都挂在这里。
     return {
+      sessionSchemaVersion: sessionSchemaVersion(),
       sessionId: sessionId,
       workspace: config.workspace,
       mode: config.mode,
@@ -64,6 +69,7 @@ const schemaApi = fn() {
     return newTurn("assistant_message", {
       role: "assistant",
       content: response.text,
+      reasoningContent: response.reasoningContent,
       toolCalls: response.toolCalls,
       hasToolCalls: response.hasToolCalls,
       finishReason: response.finishReason,
@@ -87,6 +93,7 @@ const schemaApi = fn() {
   }
 
   return {
+    sessionSchemaVersion: sessionSchemaVersion,
     normalizeSessionId: normalizeSessionId,
     newSession: newSession,
     newTurn: newTurn,
@@ -98,6 +105,7 @@ const schemaApi = fn() {
   }
 }()
 
+export const sessionSchemaVersion = schemaApi.sessionSchemaVersion
 export const normalizeSessionId = schemaApi.normalizeSessionId
 export const newSession = schemaApi.newSession
 export const newTurn = schemaApi.newTurn

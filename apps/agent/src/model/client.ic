@@ -19,6 +19,7 @@ const clientApi = fn() {
         "- Keep extending tool coverage and session persistence on top of the current runtime loop.\n\n" +
         "Context Summary\n" +
         context.summaryJson,
+      reasoningContent: null,
       toolCalls: [],
       hasToolCalls: false
     }
@@ -39,6 +40,7 @@ const clientApi = fn() {
       return {
         mode: "remote",
         text: parsed.text,
+        reasoningContent: parsed.reasoningContent,
         raw: response.json,
         toolCalls: parsed.toolCalls,
         hasToolCalls: parsed.hasToolCalls,
@@ -50,6 +52,7 @@ const clientApi = fn() {
       mode: "remote",
       text: json.encode(response.json),
       raw: response.json,
+      reasoningContent: null,
       toolCalls: [],
       hasToolCalls: false,
       finishReason: null
@@ -74,6 +77,7 @@ const clientApi = fn() {
       return {
         mode: "local",
         text: "Local fallback does not emulate multi-turn tool calling.",
+        reasoningContent: null,
         toolCalls: [],
         hasToolCalls: false,
         finishReason: null
