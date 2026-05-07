@@ -2,6 +2,7 @@ package stdlib
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 
 	"icoo_lang/internal/runtime"
@@ -14,6 +15,7 @@ func RegisterBuiltins(machine *vm.VM) {
 	machine.DefineBuiltin("println", &runtime.NativeFunction{Name: "println", Arity: -1, Fn: builtinPrintln})
 	machine.DefineBuiltin("len", &runtime.NativeFunction{Name: "len", Arity: 1, Fn: builtinLen})
 	machine.DefineBuiltin("typeOf", &runtime.NativeFunction{Name: "typeOf", Arity: 1, Fn: builtinTypeOf})
+	machine.DefineBuiltin("argv", &runtime.NativeFunction{Name: "argv", Arity: 0, Fn: builtinArgv})
 	machine.DefineBuiltin("chan", &runtime.NativeFunction{Name: "chan", Arity: -1, Fn: builtinChan})
 	machine.DefineBuiltin("panic", &runtime.NativeFunction{Name: "panic", Arity: 1, Fn: builtinPanic})
 	machine.DefineBuiltin("error", &runtime.NativeFunction{Name: "error", Arity: -1, Fn: builtinError})
@@ -49,6 +51,14 @@ func builtinLen(args []runtime.Value) (runtime.Value, error) {
 
 func builtinTypeOf(args []runtime.Value) (runtime.Value, error) {
 	return runtime.StringValue{Value: runtime.KindName(args[0])}, nil
+}
+
+func builtinArgv(args []runtime.Value) (runtime.Value, error) {
+	items := make([]runtime.Value, 0, max(len(os.Args)-1, 0))
+	for _, arg := range os.Args[1:] {
+		items = append(items, runtime.StringValue{Value: arg})
+	}
+	return &runtime.ArrayValue{Elements: items}, nil
 }
 
 func builtinChan(args []runtime.Value) (runtime.Value, error) {
@@ -369,4 +379,11 @@ func builtinSuperGet(args []runtime.Value) (runtime.Value, error) {
 		Super:    owner.Super,
 		Init:     method.Init,
 	}, nil
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
