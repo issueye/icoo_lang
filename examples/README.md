@@ -38,6 +38,7 @@ go run ./cmd/icoo run examples/01_data_types.ic
 26. `26_config_file_tool.ic` - `std.fs`、`std.json`、`std.yaml` 组合成配置文件工具
 27. `27_db_open_driver.ic` - `std.db.open(...)` 的通用驱动入口
 28. `28_db_orm.ic` - `std.db.table(...)` 的轻量 ORM / 查询构造器
+29. `29_from_import.ic` - `from ... import ...` 选择性导入与别名导入
 
 示例使用到的辅助模块位于 `examples/lib`。
 

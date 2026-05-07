@@ -445,7 +445,11 @@ func (vm *VM) execGetProperty(name string) error {
 		}
 		field, ok := value.Exports[name]
 		if !ok {
-			return runtimeError("undefined export: %s", name)
+			moduleName := value.Path
+			if moduleName == "" {
+				moduleName = value.Name
+			}
+			return runtimeError("undefined export '%s' in module: %s", name, moduleName)
 		}
 		vm.Push(field)
 		return nil

@@ -205,6 +205,11 @@ export fn main() {
 - `from path import name as alias`：选择性导入并重命名
 - 暂不建议支持 `from path import *`
 
+错误约定：
+
+- 若 `from ... import ...` 请求的导出不存在，运行时会报出缺失导出名和模块路径
+- 示例：`undefined export 'missing' in module: ./math.ic`
+
 ### 2.8 错误与异常
 
 创建错误值：

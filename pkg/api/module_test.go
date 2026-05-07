@@ -75,6 +75,38 @@ let name = mathVersion
 	}
 }
 
+func TestRuntimeRunFile_FromImportRejectsMissingExport(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "math.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`export fn add(a, b) {
+  return a + b
+}
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`from "./math.ic" import missing
+
+missing()
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	_, err := rt.RunFile(mainPath)
+	if err == nil {
+		t.Fatal("expected from-import missing export to fail")
+	}
+	if !strings.Contains(err.Error(), "undefined export 'missing' in module:") {
+		t.Fatalf("expected missing export error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "math.ic") {
+		t.Fatalf("expected error to mention module path, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "src", "main.ic")

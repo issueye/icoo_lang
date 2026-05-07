@@ -1,0 +1,18 @@
+import std.io.console as io
+from std.data.json import encode, decode
+from "./lib/math_helpers.ic" import add, version as mathVersion
+
+let profile = {
+  name: "icoo",
+  version: 1,
+  tags: ["from-import", "modules"]
+}
+
+let text = encode(profile)
+let value = decode(text)
+
+io.println("== from import ==")
+io.println("math version:", mathVersion)
+io.println("math add:", add(7, 8))
+io.println("json text:", text)
+io.println("json name:", value.name)
