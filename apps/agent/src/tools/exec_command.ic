@@ -1,0 +1,54 @@
+import std.sys.exec as exec
+import std.core.object as object
+import "@/src/tools/tool_path.ic" as toolPath
+
+class ExecCommand {
+  run(config, input) {
+    let command = object.get(input, "command")
+    let args = object.get(input, "args", [])
+    let cwd = object.get(input, "cwd", config.workspace)
+    let shell = object.get(input, "shell", false)
+
+    if command == null || command == "" {
+      return {
+        ok: false,
+        error: "execCommand requires non-empty command"
+      }
+    }
+
+    cwd = toolPath.ToolPath.resolve(config, cwd)
+
+    // `std.sys.exec` 在 shell 模式下只消费 command，本层禁止同时传 args，
+    // 避免模型误以为 shell + argv 会一起生效。
+    if shell == true && typeOf(args) == "array" && len(args) > 0 {
+      return {
+        ok: false,
+        error: "execCommand does not support args when shell=true"
+      }
+    }
+
+    let result = exec.run({
+      command: command,
+      args: args,
+      cwd: cwd,
+      shell: shell
+    })
+
+    return {
+      ok: result.ok,
+      content: {
+        stdout: result.stdout,
+        stderr: result.stderr
+      },
+      meta: {
+        command: result.command,
+        exitCode: result.exitCode,
+        cwd: cwd,
+        shell: shell
+      },
+      error: result.ok == true ? null : result.stderr
+    }
+  }
+}
+
+export new ExecCommand()

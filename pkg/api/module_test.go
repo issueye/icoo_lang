@@ -333,6 +333,44 @@ if result.content[0].snippet != "First snippet text" {
 	}
 }
 
+func TestRuntimeRunFile_AgentExecCommandTool(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.ic")
+
+	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "apps", "agent"))
+	if err != nil {
+		t.Fatalf("resolve agent root: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "@/src/tools/exec_command.ic" as execCommand
+
+let result = execCommand.ExecCommand.run({
+  workspace: "."
+}, {
+  command: "go",
+  args: ["env", "GOOS"]
+})
+
+if result.ok != true {
+  panic("expected execCommand ok")
+}
+if typeOf(result.content.stdout) != "string" {
+  panic("expected execCommand stdout string")
+}
+if len(result.meta.cwd) == 0 {
+  panic("expected execCommand cwd")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	rt.SetProjectRoot(agentRoot, "@")
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected execCommand tool import to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "src", "main.ic")
