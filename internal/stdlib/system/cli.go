@@ -25,10 +25,12 @@ func LoadStdSysCLIModule() *langruntime.Module {
 
 type cliFlagSpec struct {
 	Name        string
+	Aliases     []string
 	Short       string
 	Description string
 	Kind        string
 	Default     langruntime.Value
+	Required    bool
 }
 
 type cliCommandBinding struct {
@@ -40,17 +42,19 @@ type cliCommandBinding struct {
 }
 
 type cliAppBinding struct {
-	name        string
-	description string
-	flags       []*cliFlagSpec
-	commands    map[string]*cliCommandBinding
-	handler     langruntime.Value
+	name             string
+	description      string
+	flags            []*cliFlagSpec
+	commands         map[string]*cliCommandBinding
+	handler          langruntime.Value
+	allowUnknownArgs bool
 }
 
 type cliRunState struct {
 	Flags    *langruntime.ObjectValue
 	Args     []langruntime.Value
 	Raw      []langruntime.Value
+	Unknown  []langruntime.Value
 	Help     bool
 	HelpText string
 	Command  string
@@ -70,12 +74,21 @@ func cliCreate(args []langruntime.Value) (langruntime.Value, error) {
 	if err != nil {
 		return nil, err
 	}
+	allowUnknownArgs := false
+	if rawAllowUnknown, ok := options.Fields["allowUnknownArgs"]; ok {
+		boolValue, ok := rawAllowUnknown.(langruntime.BoolValue)
+		if !ok {
+			return nil, fmt.Errorf("allowUnknownArgs must be bool")
+		}
+		allowUnknownArgs = boolValue.Value
+	}
 
 	binding := &cliAppBinding{
-		name:        name,
-		description: description,
-		flags:       []*cliFlagSpec{},
-		commands:    map[string]*cliCommandBinding{},
+		name:             name,
+		description:      description,
+		flags:            []*cliFlagSpec{},
+		commands:         map[string]*cliCommandBinding{},
+		allowUnknownArgs: allowUnknownArgs,
 	}
 	return binding.object(), nil
 }
@@ -241,6 +254,7 @@ func (binding *cliAppBinding) run(ctx *langruntime.NativeContext, args []langrun
 func (binding *cliAppBinding) parse(argv []string) (*cliRunState, langruntime.Value, error) {
 	rootFlags := defaultFlagObject(binding.flags)
 	rootArgs := []langruntime.Value{}
+	unknown := []langruntime.Value{}
 	raw := stringsToRuntimeArray(argv)
 	index := 0
 
@@ -254,15 +268,28 @@ func (binding *cliAppBinding) parse(argv []string) (*cliRunState, langruntime.Va
 			break
 		}
 		if token == "--help" || token == "-h" {
-			return &cliRunState{Flags: rootFlags, Args: rootArgs, Raw: raw, Help: true, HelpText: binding.helpText()}, nil, nil
+			return &cliRunState{Flags: rootFlags, Args: rootArgs, Raw: raw, Unknown: unknown, Help: true, HelpText: binding.helpText()}, nil, nil
 		}
 		if command, ok := binding.commands[token]; ok && len(rootArgs) == 0 {
-			return binding.parseCommand(command, argv[index+1:], raw, rootFlags, rootArgs)
+			return binding.parseCommand(command, argv[index+1:], raw, rootFlags, rootArgs, unknown)
 		}
 		if strings.HasPrefix(token, "-") {
-			nextIndex, err := parseFlagToken(binding.flags, rootFlags, argv, index)
+			nextIndex, known, err := parseFlagToken(binding.flags, rootFlags, argv, index)
 			if err != nil {
+				if binding.allowUnknownArgs {
+					unknown = appendUnknownArgs(unknown, argv[index:])
+					index = len(argv)
+					break
+				}
 				return nil, nil, err
+			}
+			if known != true {
+				if binding.allowUnknownArgs {
+					unknown = appendUnknownArgs(unknown, argv[index:])
+					index = len(argv)
+					break
+				}
+				return nil, nil, fmt.Errorf("unknown flag: %s", token)
 			}
 			index = nextIndex
 			continue
@@ -271,15 +298,20 @@ func (binding *cliAppBinding) parse(argv []string) (*cliRunState, langruntime.Va
 		index++
 	}
 
+	if err := ensureRequiredFlags(binding.flags, rootFlags); err != nil {
+		return nil, nil, err
+	}
+
 	state := &cliRunState{
-		Flags: rootFlags,
-		Args:  rootArgs,
-		Raw:   raw,
+		Flags:   rootFlags,
+		Args:    rootArgs,
+		Raw:     raw,
+		Unknown: unknown,
 	}
 	return state, binding.handler, nil
 }
 
-func (binding *cliAppBinding) parseCommand(command *cliCommandBinding, argv []string, raw []langruntime.Value, rootFlags *langruntime.ObjectValue, rootArgs []langruntime.Value) (*cliRunState, langruntime.Value, error) {
+func (binding *cliAppBinding) parseCommand(command *cliCommandBinding, argv []string, raw []langruntime.Value, rootFlags *langruntime.ObjectValue, rootArgs []langruntime.Value, unknown []langruntime.Value) (*cliRunState, langruntime.Value, error) {
 	flags := mergeFlagObjects(rootFlags, defaultFlagObject(command.flags))
 	specs := append([]*cliFlagSpec{}, binding.flags...)
 	specs = append(specs, command.flags...)
@@ -296,12 +328,25 @@ func (binding *cliAppBinding) parseCommand(command *cliCommandBinding, argv []st
 			break
 		}
 		if token == "--help" || token == "-h" {
-			return &cliRunState{Flags: flags, Args: args, Raw: raw, Help: true, HelpText: command.helpText(), Command: command.name}, nil, nil
+			return &cliRunState{Flags: flags, Args: args, Raw: raw, Unknown: unknown, Help: true, HelpText: command.helpText(), Command: command.name}, nil, nil
 		}
 		if strings.HasPrefix(token, "-") {
-			nextIndex, err := parseFlagToken(specs, flags, argv, index)
+			nextIndex, known, err := parseFlagToken(specs, flags, argv, index)
 			if err != nil {
+				if binding.allowUnknownArgs {
+					unknown = appendUnknownArgs(unknown, argv[index:])
+					index = len(argv)
+					break
+				}
 				return nil, nil, err
+			}
+			if known != true {
+				if binding.allowUnknownArgs {
+					unknown = appendUnknownArgs(unknown, argv[index:])
+					index = len(argv)
+					break
+				}
+				return nil, nil, fmt.Errorf("unknown flag: %s", token)
 			}
 			index = nextIndex
 			continue
@@ -310,10 +355,15 @@ func (binding *cliAppBinding) parseCommand(command *cliCommandBinding, argv []st
 		index++
 	}
 
+	if err := ensureRequiredFlags(specs, flags); err != nil {
+		return nil, nil, err
+	}
+
 	state := &cliRunState{
 		Flags:   flags,
 		Args:    args,
 		Raw:     raw,
+		Unknown: unknown,
 		Command: command.name,
 	}
 	return state, command.handler, nil
@@ -383,6 +433,7 @@ func (state *cliRunState) object() *langruntime.ObjectValue {
 		"flags":    state.Flags,
 		"args":     &langruntime.ArrayValue{Elements: append([]langruntime.Value{}, state.Args...)},
 		"raw":      &langruntime.ArrayValue{Elements: append([]langruntime.Value{}, state.Raw...)},
+		"unknown":  &langruntime.ArrayValue{Elements: append([]langruntime.Value{}, state.Unknown...)},
 		"help":     langruntime.BoolValue{Value: state.Help},
 		"helpText": helpTextValue,
 	}}
@@ -397,6 +448,13 @@ func parseCLIFlagSpec(value langruntime.Value, kind string) (*cliFlagSpec, error
 	if err != nil {
 		return nil, err
 	}
+	aliases, err := optionalStringArrayField(options, "aliases")
+	if err != nil {
+		return nil, err
+	}
+	for i, alias := range aliases {
+		aliases[i] = normalizeFlagToken(alias)
+	}
 	short, err := optionalStringField(options, "short")
 	if err != nil {
 		return nil, err
@@ -409,6 +467,14 @@ func parseCLIFlagSpec(value langruntime.Value, kind string) (*cliFlagSpec, error
 	if err != nil {
 		return nil, err
 	}
+	required := false
+	if rawRequired, ok := options.Fields["required"]; ok {
+		boolValue, ok := rawRequired.(langruntime.BoolValue)
+		if !ok {
+			return nil, fmt.Errorf("flag required must be bool")
+		}
+		required = boolValue.Value
+	}
 	defaultValue := defaultValueForKind(kind)
 	if rawDefault, ok := options.Fields["default"]; ok {
 		if err := validateFlagValue(kind, rawDefault); err != nil {
@@ -418,10 +484,12 @@ func parseCLIFlagSpec(value langruntime.Value, kind string) (*cliFlagSpec, error
 	}
 	return &cliFlagSpec{
 		Name:        name,
+		Aliases:     aliases,
 		Short:       short,
 		Description: description,
 		Kind:        kind,
 		Default:     defaultValue,
+		Required:    required,
 	}, nil
 }
 
@@ -449,13 +517,34 @@ func optionalStringField(options *langruntime.ObjectValue, field string) (string
 	return utils.RequireStringArg(field, value)
 }
 
+func optionalStringArrayField(options *langruntime.ObjectValue, field string) ([]string, error) {
+	value, ok := options.Fields[field]
+	if !ok {
+		return []string{}, nil
+	}
+	return requireCLIStringArrayArg(field, value)
+}
+
 func ensureUniqueFlag(specs []*cliFlagSpec, next *cliFlagSpec) error {
 	for _, current := range specs {
 		if current.Name == next.Name {
 			return fmt.Errorf("duplicate flag: %s", next.Name)
 		}
+		for _, alias := range next.Aliases {
+			if current.Name == alias || current.Short == alias || containsString(current.Aliases, alias) {
+				return fmt.Errorf("duplicate flag alias: %s", alias)
+			}
+		}
 		if current.Short != "" && current.Short == next.Short {
 			return fmt.Errorf("duplicate short flag: %s", next.Short)
+		}
+		if next.Short != "" && (current.Name == next.Short || containsString(current.Aliases, next.Short)) {
+			return fmt.Errorf("duplicate short flag: %s", next.Short)
+		}
+		for _, alias := range current.Aliases {
+			if alias == next.Name {
+				return fmt.Errorf("duplicate flag alias: %s", next.Name)
+			}
 		}
 	}
 	return nil
@@ -488,7 +577,14 @@ func stringsToRuntimeArray(items []string) []langruntime.Value {
 	return out
 }
 
-func parseFlagToken(specs []*cliFlagSpec, flags *langruntime.ObjectValue, argv []string, index int) (int, error) {
+func appendUnknownArgs(items []langruntime.Value, raw []string) []langruntime.Value {
+	for _, item := range raw {
+		items = append(items, langruntime.StringValue{Value: item})
+	}
+	return items
+}
+
+func parseFlagToken(specs []*cliFlagSpec, flags *langruntime.ObjectValue, argv []string, index int) (int, bool, error) {
 	token := argv[index]
 	nameToken := token
 	inlineValue := ""
@@ -501,14 +597,14 @@ func parseFlagToken(specs []*cliFlagSpec, flags *langruntime.ObjectValue, argv [
 	}
 	spec := findFlagSpec(specs, nameToken)
 	if spec == nil {
-		return 0, fmt.Errorf("unknown flag: %s", token)
+		return index, false, nil
 	}
 	value, nextIndex, err := parseFlagValue(spec, argv, index, inlineValue)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	flags.Fields[spec.Name] = value
-	return nextIndex, nil
+	return nextIndex, true, nil
 }
 
 func findFlagSpec(specs []*cliFlagSpec, token string) *cliFlagSpec {
@@ -518,6 +614,9 @@ func findFlagSpec(specs []*cliFlagSpec, token string) *cliFlagSpec {
 			return spec
 		}
 		if spec.Short != "" && spec.Short == normalized {
+			return spec
+		}
+		if containsString(spec.Aliases, normalized) {
 			return spec
 		}
 	}
@@ -593,6 +692,36 @@ func normalizeFlagToken(value string) string {
 	return value
 }
 
+func ensureRequiredFlags(specs []*cliFlagSpec, flags *langruntime.ObjectValue) error {
+	for _, spec := range specs {
+		if spec.Required != true {
+			continue
+		}
+		value, ok := flags.Fields[spec.Name]
+		if !ok || isMissingFlagValue(value) {
+			return fmt.Errorf("missing required flag: --%s", spec.Name)
+		}
+	}
+	return nil
+}
+
+func isMissingFlagValue(value langruntime.Value) bool {
+	if value == nil {
+		return true
+	}
+	_, isNull := value.(langruntime.NullValue)
+	return isNull
+}
+
+func containsString(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
 func writeFlagSection(sb *strings.Builder, specs []*cliFlagSpec) {
 	if len(specs) == 0 {
 		return
@@ -601,6 +730,17 @@ func writeFlagSection(sb *strings.Builder, specs []*cliFlagSpec) {
 	for _, spec := range specs {
 		sb.WriteString("  --")
 		sb.WriteString(spec.Name)
+		if len(spec.Aliases) > 0 {
+			sb.WriteString(" (")
+			for i, alias := range spec.Aliases {
+				if i > 0 {
+					sb.WriteString(", ")
+				}
+				sb.WriteString("--")
+				sb.WriteString(alias)
+			}
+			sb.WriteString(")")
+		}
 		if spec.Short != "" {
 			sb.WriteString(", -")
 			sb.WriteString(spec.Short)
@@ -614,6 +754,9 @@ func writeFlagSection(sb *strings.Builder, specs []*cliFlagSpec) {
 		if spec.Description != "" {
 			sb.WriteString("  ")
 			sb.WriteString(spec.Description)
+		}
+		if spec.Required {
+			sb.WriteString(" [required]")
 		}
 		if _, isNull := spec.Default.(langruntime.NullValue); !isNull {
 			sb.WriteString(" (default: ")
@@ -644,4 +787,20 @@ func writeCommandSection(sb *strings.Builder, commands map[string]*cliCommandBin
 		}
 		sb.WriteString("\n")
 	}
+}
+
+func requireCLIStringArrayArg(name string, v langruntime.Value) ([]string, error) {
+	arr, ok := v.(*langruntime.ArrayValue)
+	if !ok {
+		return nil, fmt.Errorf("%s expects array of strings", name)
+	}
+	out := make([]string, 0, len(arr.Elements))
+	for _, elem := range arr.Elements {
+		text, ok := elem.(langruntime.StringValue)
+		if !ok {
+			return nil, fmt.Errorf("%s expects array of strings", name)
+		}
+		out = append(out, text.Value)
+	}
+	return out, nil
 }

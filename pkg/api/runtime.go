@@ -112,6 +112,9 @@ func (r *Runtime) Close() error {
 }
 
 func (r *Runtime) InvokeGlobal(name string) (runtime.Value, error) {
+	restoreArgs := r.applyScriptArgs()
+	defer restoreArgs()
+
 	value, ok := r.vm.GetGlobal(name)
 	if !ok {
 		return nil, fmt.Errorf("undefined global: %s", name)

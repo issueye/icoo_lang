@@ -8,13 +8,19 @@ const mergeApi = fn() {
     // 配置优先级固定为 defaults -> env -> args -> explicit overrides。
     let config = defaults.defaultConfig()
     config = env.applyEnv(config)
-    config = args.applyArgs(config)
+
+    let argResult = args.applyArgs(config)
+    config = argResult.config
 
     if overrides != null {
       config = object.merge(config, overrides)
     }
 
-    return config
+    return {
+      config: config,
+      help: argResult.help,
+      helpText: argResult.helpText
+    }
   }
 
   return {

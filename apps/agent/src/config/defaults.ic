@@ -19,7 +19,8 @@ const defaultsApi = fn() {
       maxFiles: 24,
       maxTotalBytes: 32768,
       sessionDir: fs.join(stateDir, "sessions"),
-      logPath: fs.join(stateDir, "agent.log")
+      logPath: fs.join(stateDir, "agent.log"),
+      cliUnknownArgs: []
     }
   }
 

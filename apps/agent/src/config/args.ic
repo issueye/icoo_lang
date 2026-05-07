@@ -1,97 +1,126 @@
-import std.math.basic as math
+import std.sys.cli as cli
 
 const argsApi = fn() {
-  fn parseIntOr(value, fallback) {
-    try {
-      return math.parseInt(value)
-    } catch err {
-      return fallback
+  fn defineApp() {
+    // agent 的启动参数统一挂在原生 CLI 框架上，避免继续手写 argv 遍历。
+    let app = cli.create({
+      name: "icoo-agent",
+      description: "Pure Icoo agent entry with OpenAI-compatible tool-calling runtime",
+      allowUnknownArgs: true
+    })
+
+    app.flagString({
+      name: "workspace",
+      aliases: ["root"],
+      description: "Workspace root path for context collection",
+      required: true
+    })
+    app.flagString({
+      name: "mode",
+      description: "Runtime mode such as interactive or batch"
+    })
+    app.flagString({
+      name: "model",
+      description: "Remote model name"
+    })
+    app.flagString({
+      name: "base-url",
+      aliases: ["api-base"],
+      description: "OpenAI-compatible base URL"
+    })
+    app.flagString({
+      name: "api-key",
+      description: "Remote model API key"
+    })
+    app.flagString({
+      name: "task",
+      description: "Top-level engineering task prompt"
+    })
+    app.flagString({
+      name: "session",
+      description: "Explicit session id"
+    })
+    app.flagString({
+      name: "resume",
+      description: "Resume session id"
+    })
+    app.flagString({
+      name: "approval",
+      description: "Approval mode"
+    })
+    app.flagString({
+      name: "session-dir",
+      description: "Directory for session files"
+    })
+    app.flagString({
+      name: "log-path",
+      description: "Runtime log path"
+    })
+    app.flagInt({
+      name: "max-turns",
+      description: "Maximum model request turns"
+    })
+    app.flagInt({
+      name: "max-files",
+      description: "Maximum context files"
+    })
+    app.flagInt({
+      name: "max-total-bytes",
+      aliases: ["context-bytes"],
+      description: "Maximum context bytes"
+    })
+
+    return app
+  }
+
+  fn applyIfString(config, value, key) {
+    if typeOf(value) == "string" && value != "" {
+      config[key] = value
     }
+    return config
+  }
+
+  fn applyIfInt(config, value, key) {
+    if typeOf(value) == "int" {
+      config[key] = value
+    }
+    return config
   }
 
   fn applyArgs(config) {
-    let args = argv()
-    let i = 0
-
-    // `argv()` 只暴露脚本参数本体，应用层不需要再关心 CLI 可执行文件名。
-    for i < len(args) {
-      let current = args[i]
-
-      if current == "--workspace" && i + 1 < len(args) {
-        config.workspace = args[i + 1]
-        i = i + 2
-        continue
+    let parsed = defineApp().run()
+    if parsed.help == true {
+      return {
+        config: config,
+        help: true,
+        helpText: parsed.helpText
       }
-      if current == "--mode" && i + 1 < len(args) {
-        config.mode = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--model" && i + 1 < len(args) {
-        config.model = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--base-url" && i + 1 < len(args) {
-        config.baseUrl = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--api-key" && i + 1 < len(args) {
-        config.apiKey = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--task" && i + 1 < len(args) {
-        config.task = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--session" && i + 1 < len(args) {
-        config.sessionId = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--resume" && i + 1 < len(args) {
-        config.resumeSession = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--approval" && i + 1 < len(args) {
-        config.approval = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--session-dir" && i + 1 < len(args) {
-        config.sessionDir = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--log-path" && i + 1 < len(args) {
-        config.logPath = args[i + 1]
-        i = i + 2
-        continue
-      }
-      if current == "--max-turns" && i + 1 < len(args) {
-        config.maxTurns = parseIntOr(args[i + 1], config.maxTurns)
-        i = i + 2
-        continue
-      }
-      if current == "--max-files" && i + 1 < len(args) {
-        config.maxFiles = parseIntOr(args[i + 1], config.maxFiles)
-        i = i + 2
-        continue
-      }
-      if current == "--max-total-bytes" && i + 1 < len(args) {
-        config.maxTotalBytes = parseIntOr(args[i + 1], config.maxTotalBytes)
-        i = i + 2
-        continue
-      }
-
-      i = i + 1
     }
 
-    return config
+    let flags = parsed.flags
+    config = applyIfString(config, flags.workspace, "workspace")
+    config = applyIfString(config, flags.mode, "mode")
+    config = applyIfString(config, flags.model, "model")
+    config = applyIfString(config, flags["base-url"], "baseUrl")
+    config = applyIfString(config, flags["api-key"], "apiKey")
+    config = applyIfString(config, flags.task, "task")
+    config = applyIfString(config, flags.session, "sessionId")
+    config = applyIfString(config, flags.resume, "resumeSession")
+    config = applyIfString(config, flags.approval, "approval")
+    config = applyIfString(config, flags["session-dir"], "sessionDir")
+    config = applyIfString(config, flags["log-path"], "logPath")
+    config = applyIfInt(config, flags["max-turns"], "maxTurns")
+    config = applyIfInt(config, flags["max-files"], "maxFiles")
+    config = applyIfInt(config, flags["max-total-bytes"], "maxTotalBytes")
+
+    // 先把未知参数完整保留，后续可以转给更细的子工具链或模型层调试入口。
+    config.cliUnknownArgs = parsed.unknown
+
+    return {
+      config: config,
+      help: false,
+      helpText: null
+    }
   }
 
   return {
