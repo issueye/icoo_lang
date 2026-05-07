@@ -1,17 +1,73 @@
 import std.core.object as object
 
 const parserApi = fn() {
+  fn normalizeContent(content) {
+    if typeOf(content) == "string" {
+      return content
+    }
+    if typeOf(content) == "array" {
+      let text = ""
+      for i, part in content {
+        if typeOf(part) == "string" {
+          text = text + part
+          continue
+        }
+        if typeOf(part) != "object" {
+          continue
+        }
+        if object.get(part, "type") == "text" {
+          text = text + object.get(part, "text", "")
+        }
+      }
+      return text
+    }
+    return ""
+  }
+
+  fn normalizeToolCalls(rawToolCalls) {
+    if typeOf(rawToolCalls) != "array" {
+      return []
+    }
+
+    let calls = []
+    for i, rawCall in rawToolCalls {
+      if typeOf(rawCall) != "object" {
+        continue
+      }
+      let fnDef = object.get(rawCall, "function", {})
+      calls = calls.append({
+        id: object.get(rawCall, "id", ""),
+        type: object.get(rawCall, "type", "function"),
+        function: {
+          name: object.get(fnDef, "name", ""),
+          arguments: object.get(fnDef, "arguments", "")
+        }
+      })
+    }
+    return calls
+  }
+
+  fn parseChoiceMessage(message) {
+    let content = normalizeContent(object.get(message, "content"))
+    let toolCalls = normalizeToolCalls(object.get(message, "tool_calls"))
+    return {
+      ok: true,
+      text: content,
+      finishReason: null,
+      toolCalls: toolCalls,
+      hasToolCalls: len(toolCalls) > 0
+    }
+  }
+
   fn parseResponse(payload) {
     let choices = object.get(payload, "choices")
     if typeOf(choices) == "array" && len(choices) > 0 {
       let first = choices[0]
       let message = object.get(first, "message")
-      let content = object.get(message, "content")
-      if typeOf(content) == "string" {
-        return {
-          ok: true,
-          text: content
-        }
+      if typeOf(message) == "object" {
+        let parsed = parseChoiceMessage(message)
+        parsed.finishReason = object.get(first, "finish_reason")
+        return parsed
       }
     }
 
@@ -19,13 +75,19 @@ const parserApi = fn() {
     if typeOf(outputText) == "string" {
       return {
         ok: true,
-        text: outputText
+        text: outputText,
+        finishReason: null,
+        toolCalls: [],
+        hasToolCalls: false
       }
     }
 
     return {
       ok: false,
-      text: null
+      text: null,
+      finishReason: null,
+      toolCalls: [],
+      hasToolCalls: false
     }
   }
 

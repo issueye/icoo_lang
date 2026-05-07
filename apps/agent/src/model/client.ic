@@ -1,11 +1,10 @@
 import std.net.http.client as http
-import std.core.object as object
 import std.data.json as json
 import "@/src/model/messages.ic" as messages
 import "@/src/model/parser.ic" as parser
 
 const clientApi = fn() {
-  fn localFallback(config, context) {
+  fn localFallback(context) {
     return {
       mode: "local",
       text:
@@ -14,32 +13,25 @@ const clientApi = fn() {
         "- Workspace context was collected successfully.\n\n" +
         "Risks\n" +
         "- This fallback does not yet perform model-grade reasoning.\n" +
-        "- Context ranking is still shallow in the current build.\n\n" +
+        "- Tool-calling requires a remote OpenAI-compatible model endpoint.\n\n" +
         "Next Steps\n" +
         "- Configure `ICOO_AGENT_API_KEY` to enable remote model calls.\n" +
-        "- Add tool execution and turn persistence on top of the current session/context layers.\n\n" +
+        "- Keep extending tool coverage and session persistence on top of the current runtime loop.\n\n" +
         "Context Summary\n" +
-        context.summaryJson
+        context.summaryJson,
+      toolCalls: [],
+      hasToolCalls: false
     }
   }
 
-  fn request(config, context) {
-    if config.apiKey == null || config.apiKey == "" {
-      return localFallback(config, context)
-    }
-
-    let builtMessages = messages.build(config, context)
+  fn requestRemote(config, payload) {
     let response = http.requestJSON({
       url: config.baseUrl + "/chat/completions",
       method: "POST",
       headers: {
         Authorization: "Bearer " + config.apiKey
       },
-      json: {
-        model: config.model,
-        temperature: 0.2,
-        messages: builtMessages
-      }
+      json: payload
     })
 
     let parsed = parser.parseResponse(response.json)
@@ -47,20 +39,60 @@ const clientApi = fn() {
       return {
         mode: "remote",
         text: parsed.text,
-        raw: response.json
+        raw: response.json,
+        toolCalls: parsed.toolCalls,
+        hasToolCalls: parsed.hasToolCalls,
+        finishReason: parsed.finishReason
       }
     }
 
     return {
       mode: "remote",
       text: json.encode(response.json),
-      raw: response.json
+      raw: response.json,
+      toolCalls: [],
+      hasToolCalls: false,
+      finishReason: null
     }
   }
 
+  fn request(config, context) {
+    if config.apiKey == null || config.apiKey == "" {
+      return localFallback(context)
+    }
+
+    return requestRemote(config, {
+      model: config.model,
+      temperature: 0.2,
+      messages: messages.build(config, context),
+      tools: messages.toolDefinitions()
+    })
+  }
+
+  fn requestWithMessages(config, builtMessages) {
+    if config.apiKey == null || config.apiKey == "" {
+      return {
+        mode: "local",
+        text: "Local fallback does not emulate multi-turn tool calling.",
+        toolCalls: [],
+        hasToolCalls: false,
+        finishReason: null
+      }
+    }
+
+    return requestRemote(config, {
+      model: config.model,
+      temperature: 0.2,
+      messages: builtMessages,
+      tools: messages.toolDefinitions()
+    })
+  }
+
   return {
-    request: request
+    request: request,
+    requestWithMessages: requestWithMessages
   }
 }()
 
 export const request = clientApi.request
+export const requestWithMessages = clientApi.requestWithMessages

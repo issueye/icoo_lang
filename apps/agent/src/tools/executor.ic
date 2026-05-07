@@ -1,10 +1,37 @@
 import std.core.object as object
+import std.data.json as json
 import "@/src/tools/registry.ic" as registry
 
 const executorApi = fn() {
+  fn parseArguments(rawArguments) {
+    if typeOf(rawArguments) == "object" {
+      return {
+        ok: true,
+        value: rawArguments
+      }
+    }
+    if typeOf(rawArguments) != "string" || rawArguments == "" {
+      return {
+        ok: false,
+        error: "tool arguments must be a non-empty JSON string"
+      }
+    }
+
+    try {
+      return {
+        ok: true,
+        value: json.decode(rawArguments)
+      }
+    } catch err {
+      return {
+        ok: false,
+        error: "invalid tool arguments JSON"
+      }
+    }
+  }
+
   fn run(config, name, input) {
-    let tools = registry.build()
-    let tool = object.get(tools, name)
+    let tool = registry.get(name)
     if tool == null {
       return {
         ok: false,
@@ -16,9 +43,40 @@ const executorApi = fn() {
     return handler(config, input)
   }
 
+  fn runCall(config, call) {
+    let callId = object.get(call, "id", "")
+    let fnDef = object.get(call, "function", {})
+    let name = object.get(fnDef, "name", "")
+    let parsedArgs = parseArguments(object.get(fnDef, "arguments"))
+    if parsedArgs.ok != true {
+      return {
+        ok: false,
+        toolCallId: callId,
+        name: name,
+        error: parsedArgs.error,
+        output: {
+          ok: false,
+          error: parsedArgs.error
+        }
+      }
+    }
+
+    let result = run(config, name, parsedArgs.value)
+    return {
+      ok: result.ok,
+      toolCallId: callId,
+      name: name,
+      input: parsedArgs.value,
+      output: result,
+      error: object.get(result, "error")
+    }
+  }
+
   return {
-    run: run
+    run: run,
+    runCall: runCall
   }
 }()
 
 export const run = executorApi.run
+export const runCall = executorApi.runCall

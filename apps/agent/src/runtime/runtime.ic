@@ -2,6 +2,7 @@ import std.io.console as io
 import std.data.json as json
 import "@/src/context/builder.ic" as contextBuilder
 import "@/src/model/client.ic" as modelClient
+import "@/src/model/messages.ic" as modelMessages
 import "@/src/session/store.ic" as sessionStore
 import "@/src/tools/executor.ic" as toolExecutor
 
@@ -16,8 +17,80 @@ const runtimeApi = fn() {
     io.println(label + ":", json.encode(preview))
   }
 
+  fn appendToolResults(config, messages, toolCalls, toolRuns) {
+    // tool_calls 必须顺序回放为 tool 消息，模型下一轮才能继续基于结果推理。
+    for i, call in toolCalls {
+      let executed = toolExecutor.runCall(config, call)
+      toolRuns = toolRuns.append(executed)
+      messages = modelMessages.appendToolResult(
+        messages,
+        executed.toolCallId,
+        executed.name,
+        executed.output
+      )
+    }
+
+    return {
+      messages: messages,
+      toolRuns: toolRuns
+    }
+  }
+
+  fn runToolLoop(config, context) {
+    let messages = modelMessages.build(config, context)
+    let requests = []
+    let toolRuns = []
+    let finalResult = null
+    let stopReason = "max turns reached"
+    let turn = 0
+
+    // 多轮循环统一受 maxTurns 限制，避免模型持续请求工具导致无限运行。
+    while turn < config.maxTurns {
+      turn = turn + 1
+      let response = modelClient.requestWithMessages(config, messages)
+      requests = requests.append(response)
+      finalResult = response
+
+      if response.hasToolCalls != true {
+        stopReason = "assistant response completed"
+        break
+      }
+
+      messages = modelMessages.appendAssistantToolCalls(messages, response.toolCalls, response.text)
+      let appended = appendToolResults(config, messages, response.toolCalls, toolRuns)
+      messages = appended.messages
+      toolRuns = appended.toolRuns
+    }
+
+    if len(requests) == 0 {
+      return {
+        first: null,
+        final: {
+          mode: "local",
+          text: "No model request was executed.",
+          toolCalls: [],
+          hasToolCalls: false,
+          finishReason: null
+        },
+        toolRuns: [],
+        requests: [],
+        turnsUsed: 0,
+        stopReason: "no request"
+      }
+    }
+
+    return {
+      first: requests.first(),
+      final: finalResult,
+      toolRuns: toolRuns,
+      requests: requests,
+      turnsUsed: len(requests),
+      stopReason: stopReason
+    }
+  }
+
   fn start(config) {
-    // 运行时第一步先拿到 session，这样后续 context/tool/model 都能共享统一状态。
+    // session 先于 runtime 其他组件建立，后续可以在这里追加 turn 持久化。
     let opened = sessionStore.open(config)
     let session = opened.session
     let context = contextBuilder.build(config)
@@ -27,15 +100,8 @@ const runtimeApi = fn() {
       files: context.files,
       omitted: context.omitted
     }
-    let modelResult = modelClient.request(config, modelContext)
-    let readToolResult = toolExecutor.run(config, "readFile", {
-      path: "@/app.ic"
-    })
-    let listToolResult = toolExecutor.run(config, "listDir", {
-      path: config.workspace
-    })
+    let modelLoop = runToolLoop(config, modelContext)
 
-    // 这里先只做启动面板输出，后续再接 session/context/tool/runtime 主流程。
     io.println("== icoo agent ==")
     io.println("workspace:", config.workspace)
     io.println("mode:", config.mode)
@@ -53,23 +119,16 @@ const runtimeApi = fn() {
     io.println("context summary:", json.encode(context.summary))
     printListPreview("context files", context.files, 3)
     printListPreview("context omitted", context.omitted, 3)
-    io.println("tool readFile ok:", readToolResult.ok)
-    if readToolResult.ok == true {
-      io.println("tool readFile meta:", json.encode(readToolResult.meta))
-    } else {
-      io.println("tool readFile error:", readToolResult.error)
-    }
-    io.println("tool listDir ok:", listToolResult.ok)
-    if listToolResult.ok == true {
-      io.println("tool listDir meta:", json.encode(listToolResult.meta))
-      printListPreview("tool listDir content", listToolResult.content, 3)
-    } else {
-      io.println("tool listDir error:", listToolResult.error)
-    }
     io.println("")
-    io.println("model mode:", modelResult.mode)
+    io.println("model mode:", modelLoop.final.mode)
+    io.println("turns used:", modelLoop.turnsUsed)
+    io.println("stop reason:", modelLoop.stopReason)
+    io.println("tool calls:", len(modelLoop.toolRuns))
+    if len(modelLoop.toolRuns) > 0 {
+      printListPreview("tool run preview", modelLoop.toolRuns, 2)
+    }
     io.println("model output:")
-    io.println(modelResult.text)
+    io.println(modelLoop.final.text)
 
     return {
       ok: true,
@@ -77,7 +136,12 @@ const runtimeApi = fn() {
       session: session,
       sessionPath: opened.path,
       context: context,
-      model: modelResult
+      model: modelLoop.final,
+      toolRuns: modelLoop.toolRuns,
+      firstModel: modelLoop.first,
+      modelRequests: modelLoop.requests,
+      turnsUsed: modelLoop.turnsUsed,
+      stopReason: modelLoop.stopReason
     }
   }
 

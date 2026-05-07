@@ -1,6 +1,9 @@
+import std.data.json as json
+import "@/src/tools/registry.ic" as registry
+
 const messagesApi = fn() {
   fn systemPrompt() {
-    return "You are an Icoo agent. Be concise, repository-aware, and action-oriented."
+    return "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
   }
 
   fn userPrompt(config, context) {
@@ -15,8 +18,7 @@ const messagesApi = fn() {
     return text
   }
 
-  fn build(config, context) {
-    // 第一版先只发 system + user 两条消息，历史消息后续接 session/turn 层。
+  fn buildBase(config, context) {
     return [
       {
         role: "system",
@@ -29,9 +31,46 @@ const messagesApi = fn() {
     ]
   }
 
+  fn build(config, context) {
+    return buildBase(config, context)
+  }
+
+  fn toolDefinitions() {
+    return registry.definitions()
+  }
+
+  fn appendAssistantToolCalls(messages, toolCalls, content) {
+    let assistantContent = content
+    if assistantContent == null {
+      assistantContent = ""
+    }
+    return messages.append({
+      role: "assistant",
+      content: assistantContent,
+      tool_calls: toolCalls
+    })
+  }
+
+  fn appendToolResult(messages, toolCallId, name, output) {
+    return messages.append({
+      role: "tool",
+      tool_call_id: toolCallId,
+      name: name,
+      content: json.encode(output)
+    })
+  }
+
   return {
-    build: build
+    build: build,
+    buildBase: buildBase,
+    toolDefinitions: toolDefinitions,
+    appendAssistantToolCalls: appendAssistantToolCalls,
+    appendToolResult: appendToolResult
   }
 }()
 
 export const build = messagesApi.build
+export const buildBase = messagesApi.buildBase
+export const toolDefinitions = messagesApi.toolDefinitions
+export const appendAssistantToolCalls = messagesApi.appendAssistantToolCalls
+export const appendToolResult = messagesApi.appendToolResult
