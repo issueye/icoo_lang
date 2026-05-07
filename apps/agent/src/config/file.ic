@@ -3,7 +3,7 @@ import std.core.string as str
 import std.data.toml as toml
 import std.io.fs as fs
 
-class ConfigFile {
+export class ConfigFile {
   applyString(config, value, key) {
     if typeOf(value) == "string" && value != "" {
       config[key] = value
@@ -70,7 +70,6 @@ class ConfigFile {
       return config
     }
 
-    // config.toml 只承载项目级默认值，CLI 与 env 仍然可以继续覆盖。
     config = this.applyString(config, object.get(loaded, "workspace"), "workspace")
     config = this.applyString(config, object.get(loaded, "mode"), "mode")
     config = this.applyString(config, object.get(loaded, "model"), "model")
@@ -106,4 +105,5 @@ export {
   applyFile: fileApi.applyFile,
   resolveConfigPath: fileApi.resolveConfigPath,
   resolvePathValue: fileApi.resolvePathValue,
+  ConfigFile: ConfigFile
 }

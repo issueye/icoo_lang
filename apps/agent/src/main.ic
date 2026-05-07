@@ -1,33 +1,27 @@
-import std.io.console as io
-import "@/src/config/merge.ic" as config
-import "@/src/runtime/runtime.ic" as runtime
+import "@/src/app/app.ic" as appModule
 
-// 代理
-export class Agent {
-  init() {
-    this.config = config.MergeConfig()
-    this.runtime = runtime.Runtime()
+const runtimeApi = fn() {
+  let app = appModule.App()
+
+  fn startImpl(overrides) {
+    return app.start(overrides)
   }
 
-  // 启动代理
-  startImpl(overrides) {
-    // 启动层先收敛配置和 help 分支，再决定是否进入 runtime。
-    let loaded = config.MergeConfig().loadConfig(overrides)
-    // 合并配置
-    let cfg = loaded.config
-    if loaded.help == true {
-      io.println(loaded.helpText)
-      return {
-        ok: true,
-        help: true,
-        config: cfg
-      }
-    }
-    return runtime.Runtime().start(cfg)
+  fn stopImpl(runtimeApp) {
+    return app.stop(runtimeApp)
   }
 
-  // 主函数
-  mainImpl() {
-    return this.startImpl(null)
+  fn mainImpl() {
+    return app.main()
   }
-}
+
+  return {
+    start: startImpl,
+    stop: stopImpl,
+    main: mainImpl
+  }
+}()
+
+export const start = runtimeApi.start
+export const stop = runtimeApi.stop
+export const main = runtimeApi.main

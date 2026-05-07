@@ -3,18 +3,13 @@ import std.io.console as io
 import std.core.object as object
 import std.core.string as str
 import std.data.json as json
-import "@/src/model/messages.ic" as messages
-import "@/src/model/parser.ic" as parser
 
-// 模型客户端
-class ModelClient {
-  // 初始化模型客户端
-  init() {
-    this.messages = messages.ModelMessages()
-    this.parser = parser.ModelParser()
+export class ModelClient {
+  init(modelMessages, modelParser) {
+    this.messages = modelMessages
+    this.parser = modelParser
   }
 
-  // 是否应该流式输出最终答案
   shouldStreamFinalAnswer(config, builtMessages) {
     if config.streamFinalAnswer != true {
       return false
@@ -28,7 +23,6 @@ class ModelClient {
     return false
   }
 
-  // 尝试解析流式响应行
   tryParseStreamLine(line) {
     if str.hasPrefix(line, "data: ") != true {
       return null
@@ -50,7 +44,6 @@ class ModelClient {
     }
   }
 
-  // 请求远程模型流式响应
   requestRemoteStream(config, payload) {
     let stream = http.requestStream({
       url: config.baseUrl + "/chat/completions",
@@ -71,9 +64,8 @@ class ModelClient {
       hasToolCalls: false,
       deltaText: ""
     }
-    let done = false
-    let startedOutput = false
     let printed = false
+    let startedOutput = false
 
     try {
       let text = stream.readAll()
@@ -89,7 +81,6 @@ class ModelClient {
           continue
         }
         if parsedLine.done == true {
-          done = true
           break
         }
 
@@ -125,7 +116,6 @@ class ModelClient {
     }
   }
 
-  // 本地回退响应
   localFallback(context) {
     return {
       mode: "local",
@@ -147,7 +137,6 @@ class ModelClient {
     }
   }
 
-  // 请求远程模型响应
   requestRemote(config, payload) {
     let response = http.requestJSON({
       url: config.baseUrl + "/chat/completions",
@@ -182,7 +171,6 @@ class ModelClient {
     }
   }
 
-  // 请求远程模型
   request(config, context) {
     if config.apiKey == null || config.apiKey == "" {
       return this.localFallback(context)
@@ -196,7 +184,6 @@ class ModelClient {
     })
   }
 
-  // 请求远程模型，使用已构建的消息列表
   requestWithMessages(config, builtMessages) {
     if config.apiKey == null || config.apiKey == "" {
       return {
@@ -228,6 +215,4 @@ class ModelClient {
 
     return this.requestRemote(config, payload)
   }
-
 }
-

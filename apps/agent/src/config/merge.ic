@@ -1,26 +1,20 @@
 import std.core.object as object
-import "@/src/config/defaults.ic" as defaults
-import "@/src/config/file.ic" as file
-import "@/src/config/env.ic" as env
-import "@/src/config/args.ic" as args
 
 export class MergeConfig {
-  // 初始化合并配置器
-  init() {
-    // 初始化默认配置
-    this.defaults = defaults.Defaults()
+  init(defaultsConfig, argsConfig, envConfig, configFile) {
+    this.defaults = defaultsConfig
+    this.argsConfig = argsConfig
+    this.envConfig = envConfig
+    this.configFile = configFile
   }
 
-  // 加载配置
   loadConfig(overrides) {
-    // 先预解析 workspace，再加载项目级 config.toml。
-    // 完整优先级保持为 defaults -> preview-workspace -> file -> env -> args -> explicit overrides。
     let config = this.defaults.defaultConfig()
-    config = args.previewWorkspace(config)
-    config = file.applyFile(config)
-    config = env.applyEnv(config)
+    config = this.argsConfig.previewWorkspace(config)
+    config = this.configFile.applyFile(config)
+    config = this.envConfig.applyEnv(config)
 
-    let argResult = args.applyArgs(config)
+    let argResult = this.argsConfig.applyArgs(config)
     config = argResult.config
 
     if overrides != null {
@@ -34,4 +28,3 @@ export class MergeConfig {
     }
   }
 }
-

@@ -3,17 +3,12 @@ import std.core.string as str
 import "@/src/context/budget.ic" as budget
 import "@/src/context/ignore.ic" as ignore
 
-// 上下文构建器
 export class ContextBuilder {
-  // 初始化上下文构建器
-  init() {
-    // 初始化忽略规则
-    this.ignore = ignore.Ignore()
-    // 初始化上下文预算
-    this.budget = budget.Budget()
+  init(ignoreRule, contextBudget) {
+    this.ignore = ignoreRule
+    this.budget = contextBudget
   }
 
-  // 是否可预览
   isPreviewable(path) {
     return (
       str.hasSuffix(path, ".ic") ||
@@ -29,7 +24,6 @@ export class ContextBuilder {
     )
   }
 
-  // 文件项
   fileItem(path, size, included, preview, omittedReason) {
     return {
       path: path,
@@ -41,7 +35,6 @@ export class ContextBuilder {
     }
   }
 
-  // 添加省略项
   pushOmitted(state, path, reason) {
     state.omittedCount = state.omittedCount + 1
     state.omitted = state.omitted.append({
@@ -50,7 +43,6 @@ export class ContextBuilder {
     })
   }
 
-  // 摘要文件
   summarizeFile(path, info, state) {
     if state.fileCount >= state.budget.maxFiles {
       return
@@ -66,7 +58,6 @@ export class ContextBuilder {
 
     let preview = null
     if this.isPreviewable(path) == true {
-      // 先直接读全文；后续如果大文件预览仍有成本问题，再补专门的截断读能力。
       preview = fs.readFile(path)
     }
 
@@ -74,7 +65,6 @@ export class ContextBuilder {
     state.files = state.files.append(this.fileItem(path, info.size, true, preview, null))
   }
 
-  // 扫描上下文
   scan(path, depth, state) {
     if depth > state.budget.maxDepth {
       this.pushOmitted(state, path, "max depth reached")
@@ -109,9 +99,7 @@ export class ContextBuilder {
     }
   }
 
-  // 构建上下文
   build(config) {
-    // 第一版优先保证结构清晰：summary + files + omitted，便于后续直接喂给 model 层。
     let state = {
       budget: this.budget.create(config),
       fileCount: 0,
@@ -138,4 +126,3 @@ export class ContextBuilder {
     }
   }
 }
-

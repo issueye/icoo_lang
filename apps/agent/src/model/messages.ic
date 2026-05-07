@@ -1,18 +1,14 @@
 import std.data.json as json
-import "@/src/tools/registry.ic" as registry
 
-// 模型消息构建器
 export class ModelMessages {
-  // 初始化模型消息构建器
-  init() {
-    this.toolRegistry = registry.ToolRegistry()
+  init(toolRegistry) {
+    this.toolRegistry = toolRegistry
   }
 
   systemPrompt() {
     return "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
   }
 
-  // 构建用户提示
   userPrompt(config, context) {
     let text = ""
     if config.task != null && config.task != "" {
@@ -22,14 +18,12 @@ export class ModelMessages {
     }
     text = text + "Workspace:\n" + context.workspace + "\n\n"
     if typeOf(context.cliUnknownArgs) == "array" && len(context.cliUnknownArgs) > 0 {
-      // 把 CLI passthrough 参数显式暴露给模型，便于后续接子工具链或调试分支。
       text = text + "CLI Unknown Args:\n" + json.encode(context.cliUnknownArgs) + "\n\n"
     }
     text = text + "Context Summary:\n" + context.summaryJson + "\n"
     return text
   }
 
-  // 构建基础消息列表
   buildBase(config, context) {
     return [
       {
@@ -43,17 +37,14 @@ export class ModelMessages {
     ]
   }
 
-  // 构建完整消息列表
   build(config, context) {
     return this.buildBase(config, context)
   }
 
-  // 获取工具定义
   toolDefinitions() {
     return this.toolRegistry.definitions()
   }
 
-  // 追加助手工具调用消息
   appendAssistantToolCalls(messages, toolCalls, content, reasoningContent) {
     let assistantContent = content
     if assistantContent == null {
@@ -64,14 +55,12 @@ export class ModelMessages {
       content: assistantContent,
       tool_calls: toolCalls
     }
-    // DeepSeek thinking mode 需要携带上一轮 reasoning_content。
     if reasoningContent != null && reasoningContent != "" {
       assistantMessage.reasoning_content = reasoningContent
     }
     return messages.append(assistantMessage)
   }
 
-  // 追加工具结果消息
   appendToolResult(messages, toolCallId, name, output) {
     return messages.append({
       role: "tool",

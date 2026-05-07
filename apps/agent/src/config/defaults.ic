@@ -1,9 +1,8 @@
 import std.io.fs as fs
 import std.sys.os as os
 
-class Defaults {
+export class Defaults {
   defaultConfig() {
-    // 所有运行期状态默认落在当前工作区下，先保证最小可运行。
     let stateDir = fs.join(os.cwd(), ".agent")
     return {
       workspace: os.cwd(),

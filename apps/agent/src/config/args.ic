@@ -1,14 +1,11 @@
 import std.sys.cli as cli
 import std.core.string as str
 
-// Agent 启动参数配置
-class ArgsConfig {
-  // 获取所有启动参数
+export class ArgsConfig {
   argvList() {
     return argv()
   }
 
-  // 是否请求帮助
   isHelpRequest() {
     let values = this.argvList()
     for i, value in values {
@@ -35,9 +32,7 @@ class ArgsConfig {
     return false
   }
 
-  // 定义应用参数
   defineApp() {
-    // agent 的启动参数统一挂在原生 CLI 框架上，避免继续手写 argv 遍历。
     let app = cli.create({
       name: "icoo-agent",
       description: "Pure Icoo agent entry with OpenAI-compatible tool-calling runtime",
@@ -172,7 +167,6 @@ class ArgsConfig {
       panic("missing required flag: --workspace")
     }
 
-    // 先把未知参数完整保留，后续可以转给更细的子工具链或模型层调试入口。
     config.cliUnknownArgs = parsed.unknown
 
     return {
@@ -211,7 +205,6 @@ class ArgsConfig {
     }
     return config
   }
-
 }
 
 let argsApi = ArgsConfig()
@@ -219,4 +212,5 @@ let argsApi = ArgsConfig()
 export {
   applyArgs: argsApi.applyArgs,
   previewWorkspace: argsApi.previewWorkspace,
+  ArgsConfig: ArgsConfig
 }

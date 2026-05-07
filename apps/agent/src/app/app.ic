@@ -1,22 +1,82 @@
-import "@/config/args.ic" as args
-import "@/config/merge.ic" as config
-import "@/config/env.ic" as env
+import std.io.console as io
+import "@/src/config/args.ic" as args
+import "@/src/config/defaults.ic" as defaults
+import "@/src/config/env.ic" as env
+import "@/src/config/file.ic" as file
+import "@/src/config/merge.ic" as config
+import "@/src/context/budget.ic" as budget
+import "@/src/context/builder.ic" as contextBuilder
+import "@/src/context/ignore.ic" as ignore
+import "@/src/model/client.ic" as modelClient
+import "@/src/model/messages.ic" as modelMessages
+import "@/src/model/parser.ic" as modelParser
+import "@/src/runtime/runtime.ic" as runtime
+import "@/src/session/schema.ic" as schema
+import "@/src/session/store.ic" as sessionStore
+import "@/src/tools/executor.ic" as toolExecutor
+import "@/src/tools/registry.ic" as registry
+import "@/src/tools/tool_path.ic" as toolPath
+import "@/src/tools/web_common.ic" as webCommon
 
-// 应用
 export class App {
-    // 初始化应用参数
-    init() {
-        this.args = args.ArgsConfig()
-        this.config = config.MergeConfig()
-        this.env = env.EnvConfig()
-    }
+  init() {
+    this.argsConfig = args.ArgsConfig()
+    this.defaultsConfig = defaults.Defaults()
+    this.envConfig = env.EnvConfig()
+    this.configFile = file.ConfigFile()
+    this.mergeConfig = config.MergeConfig(
+      this.defaultsConfig,
+      this.argsConfig,
+      this.envConfig,
+      this.configFile
+    )
 
-    // start 启动应用
-    start() {
+    this.toolPath = toolPath.ToolPath()
+    this.ignore = ignore.Ignore()
+    this.webCommon = webCommon.WebCommon()
+    this.toolRegistry = registry.ToolRegistry(this.toolPath, this.ignore, this.webCommon)
+    this.toolExecutor = toolExecutor.ToolExecutor(this.toolRegistry)
 
-    }
+    this.modelMessages = modelMessages.ModelMessages(this.toolRegistry)
+    this.modelParser = modelParser.ModelParser()
+    this.modelClient = modelClient.ModelClient(this.modelMessages, this.modelParser)
 
-    // stop 停止应用
-    stop() {
+    this.budget = budget.Budget()
+    this.contextBuilder = contextBuilder.ContextBuilder(this.ignore, this.budget)
+    this.sessionSchema = schema.Schema()
+    this.sessionStore = sessionStore.SessionStore(this.sessionSchema)
+    this.runtime = runtime.Runtime(
+      this.contextBuilder,
+      this.modelClient,
+      this.modelMessages,
+      this.sessionStore,
+      this.toolExecutor
+    )
+  }
+
+  loadConfig(overrides) {
+    return this.mergeConfig.loadConfig(overrides)
+  }
+
+  start(overrides) {
+    let loaded = this.loadConfig(overrides)
+    let cfg = loaded.config
+    if loaded.help == true {
+      io.println(loaded.helpText)
+      return {
+        ok: true,
+        help: true,
+        config: cfg
+      }
     }
+    return this.runtime.start(cfg)
+  }
+
+  stop(runtimeApp) {
+    return runtimeApp
+  }
+
+  main() {
+    return this.start(null)
+  }
 }

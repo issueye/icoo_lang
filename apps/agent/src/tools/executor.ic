@@ -1,10 +1,9 @@
 import std.core.object as object
 import std.data.json as json
-import "@/src/tools/registry.ic" as registry
 
 export class ToolExecutor {
-  init() {
-    this.toolRegistry = registry.ToolRegistry()
+  init(toolRegistry) {
+    this.toolRegistry = toolRegistry
   }
 
   parseArguments(rawArguments) {

@@ -5,31 +5,21 @@ import "@/src/tools/list_dir.ic" as listDir
 import "@/src/tools/search_text.ic" as searchText
 import "@/src/tools/web_fetch.ic" as webFetch
 import "@/src/tools/web_search.ic" as webSearch
-import "@/src/tools/tool_path.ic" as toolPath
-import "@/src/tools/web_common.ic" as webCommon
-import "@/src/context/ignore.ic" as ignore
 
-// ToolRegistry 是一个工具注册器。
 export class ToolRegistry {
-  init() {
-    // 初始化执行命令工具。
-    this.execCommand = execCommand.ExecCommand(this.toolsPath)
-
-    // 初始化工具路径。
-    this.toolsPath = toolPath.ToolPath()
-    this.ignore = ignore.Ignore()
-    this.readFile = readFile.ReadFile(this.toolsPath)
-    this.listDir = listDir.ListDir(this.toolsPath)
-    this.searchText = searchText.SearchText(this.toolsPath, this.ignore)
-    
-    // 初始化网络工具。
-    this.webCommon = webCommon.WebCommon(this.toolsPath)
+  init(toolPath, ignore, webCommon) {
+    this.toolPath = toolPath
+    this.ignore = ignore
+    this.webCommon = webCommon
+    this.execCommand = execCommand.ExecCommand(this.toolPath)
+    this.readFile = readFile.ReadFile(this.toolPath)
+    this.listDir = listDir.ListDir(this.toolPath)
+    this.searchText = searchText.SearchText(this.toolPath, this.ignore)
     this.webFetch = webFetch.WebFetch(this.webCommon)
     this.webSearch = webSearch.WebSearch(this.webCommon)
   }
 
   build() {
-    // registry 统一维护本地 handler 与暴露给 LLM 的 function schema。
     return {
       readFile: {
         name: "readFile",
