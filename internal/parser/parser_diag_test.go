@@ -130,3 +130,38 @@ func TestFromImportParsesSpecs(t *testing.T) {
 		t.Fatalf("unexpected second spec: %+v", importDecl.Specs[1])
 	}
 }
+
+func TestNamedExportParsesSpecs(t *testing.T) {
+	input := `export { version, add as plus }`
+	tokens := lexer.LexAll(input)
+
+	p := New(tokens)
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) > 0 {
+		t.Fatalf("expected no parser errors, got: %v", errs)
+	}
+	if len(prog.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(prog.Nodes))
+	}
+
+	decl, ok := prog.Nodes[0].(ast.Decl)
+	if !ok {
+		t.Fatalf("expected decl node, got %T", prog.Nodes[0])
+	}
+	exportDecl, ok := decl.(*ast.ExportDecl)
+	if !ok {
+		t.Fatalf("expected ExportDecl, got %T", decl)
+	}
+	if exportDecl.NamedExport != true {
+		t.Fatal("expected NamedExport to be true")
+	}
+	if len(exportDecl.Specs) != 2 {
+		t.Fatalf("expected 2 export specs, got %d", len(exportDecl.Specs))
+	}
+	if exportDecl.Specs[0].Name != "version" || exportDecl.Specs[0].Alias != "version" {
+		t.Fatalf("unexpected first spec: %+v", exportDecl.Specs[0])
+	}
+	if exportDecl.Specs[1].Name != "add" || exportDecl.Specs[1].Alias != "plus" {
+		t.Fatalf("unexpected second spec: %+v", exportDecl.Specs[1])
+	}
+}

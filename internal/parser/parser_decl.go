@@ -115,6 +115,32 @@ func (p *Parser) parseFromImportDecl() ast.Decl {
 
 func (p *Parser) parseExportDecl() ast.Decl {
 	startTok := p.expect(token.Export, "expected 'export'")
+	if p.match(token.LBrace) {
+		specs := make([]ast.ExportSpec, 0, 2)
+		end := startTok.Span.End
+		for !p.check(token.RBrace) && !p.atEnd() {
+			nameTok := p.expect(token.Ident, "expected exported name")
+			alias := nameTok.Lexeme
+			end = nameTok.Span.End
+			if p.match(token.As) {
+				aliasTok := p.expect(token.Ident, "expected export alias")
+				alias = aliasTok.Lexeme
+				end = aliasTok.Span.End
+			}
+			specs = append(specs, ast.ExportSpec{Name: nameTok.Lexeme, Alias: alias})
+			if !p.match(token.Comma) {
+				break
+			}
+		}
+		endTok := p.expect(token.RBrace, "expected '}' after export list")
+		end = endTok.Span.End
+		return &ast.ExportDecl{
+			Specs:       specs,
+			NamedExport: true,
+			Span_:       token.Span{Start: startTok.Span.Start, End: end},
+		}
+	}
+
 	var decl ast.Decl
 	switch p.current().Type {
 	case token.Const, token.Let:

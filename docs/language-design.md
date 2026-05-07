@@ -392,7 +392,9 @@ ImportDecl      = "import" ImportPath [ "as" Identifier ]
 ImportSpec      = Identifier [ "as" Identifier ] ;
 ImportPath      = Identifier { "." Identifier } | String ;
 
-ExportDecl      = "export" ( FnDecl | VarDecl | TypeDecl | InterfaceDecl ) ;
+ExportDecl      = "export" ( FnDecl | VarDecl | TypeDecl | InterfaceDecl )
+                | "export" "{" ExportSpec { "," ExportSpec } "}" ;
+ExportSpec      = Identifier [ "as" Identifier ] ;
 ```
 
 ### 变量与函数声�?

@@ -107,6 +107,41 @@ missing()
 	}
 }
 
+func TestRuntimeRunFile_NamedExportListSupportsAlias(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "math.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`const version = "icoo"
+
+fn add(a, b) {
+  return a + b
+}
+
+export { version, add as plus }
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`from "./math.ic" import version, plus
+
+let total = plus(2, 3)
+if total != 5 {
+  panic("unexpected named export alias result")
+}
+if version != "icoo" {
+  panic("unexpected named export value")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected named export list to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "src", "main.ic")

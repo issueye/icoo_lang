@@ -64,14 +64,21 @@ type ImportSpec struct {
 }
 
 type ExportDecl struct {
-	Decl  Decl
-	Span_ token.Span
+	Decl        Decl
+	Specs       []ExportSpec
+	NamedExport bool
+	Span_       token.Span
 }
 
 func (*ExportDecl) node() {}
 func (*ExportDecl) decl() {}
 func (d *ExportDecl) Span() token.Span {
 	return d.Span_
+}
+
+type ExportSpec struct {
+	Name  string
+	Alias string
 }
 
 type DecoratedDecl struct {

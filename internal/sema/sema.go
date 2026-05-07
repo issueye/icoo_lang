@@ -122,6 +122,14 @@ func (a *Analyzer) visitImportDecl(d *ast.ImportDecl) {
 }
 
 func (a *Analyzer) visitExportDecl(d *ast.ExportDecl) {
+	if d.NamedExport {
+		for _, spec := range d.Specs {
+			if _, ok := a.scope.Resolve(spec.Name); !ok {
+				a.report(d.Span(), "undefined identifier: "+spec.Name)
+			}
+		}
+		return
+	}
 	if d.Decl != nil {
 		a.visitDecl(d.Decl)
 	}

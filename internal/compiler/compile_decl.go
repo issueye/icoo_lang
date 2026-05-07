@@ -140,6 +140,20 @@ func (c *Compiler) defineModuleImportName(name string) {
 
 func (c *Compiler) compileExportDecl(d *ast.ExportDecl) {
 	if d.Decl == nil {
+		if d.NamedExport {
+			for _, spec := range d.Specs {
+				ref, ok := c.resolve(spec.Name)
+				if !ok {
+					c.errorf("undefined identifier: %s", spec.Name)
+					continue
+				}
+				c.emitNamedRefGet(ref)
+				nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: spec.Alias})
+				c.emit(bytecode.OpExport)
+				c.emitShort(nameIdx)
+			}
+			return
+		}
 		c.errorf("export requires declaration")
 		return
 	}

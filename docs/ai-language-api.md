@@ -188,6 +188,14 @@ export let version = "1.0.0"
 export fn main() {
   io.println(version)
 }
+
+const localVersion = "1.0.1"
+
+fn add(a, b) {
+  return a + b
+}
+
+export { localVersion as version, add }
 ```
 
 说明：
@@ -203,6 +211,7 @@ export fn main() {
 - `import path as alias`：导入整个模块
 - `from path import name`：只导入单个导出
 - `from path import name as alias`：选择性导入并重命名
+- `export { name, other as alias }`：批量导出已有符号，并支持导出别名
 - 暂不建议支持 `from path import *`
 
 错误约定：
