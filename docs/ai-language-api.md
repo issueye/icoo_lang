@@ -196,6 +196,13 @@ fn add(a, b) {
 }
 
 export { localVersion as version, add }
+
+let clientApi = ModelClient()
+
+export {
+  request: clientApi.request,
+  requestWithMessages: clientApi.requestWithMessages,
+}
 ```
 
 说明：
@@ -212,6 +219,7 @@ export { localVersion as version, add }
 - `from path import name`：只导入单个导出
 - `from path import name as alias`：选择性导入并重命名
 - `export { name, other as alias }`：批量导出已有符号，并支持导出别名
+- `export { exportName: expression }`：导出表达式结果，适合导出实例方法或聚合后的 API
 - 暂不建议支持 `from path import *`
 
 错误约定：

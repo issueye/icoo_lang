@@ -28,7 +28,9 @@ const agentApi = fn() {
   }
 }()
 
-const start = agentApi.start
 const main = agentApi.main
 
-export { start, main }
+export {
+  start: agentApi.start,
+  main,
+}

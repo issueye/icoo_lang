@@ -142,6 +142,68 @@ if version != "icoo" {
 	}
 }
 
+func TestRuntimeRunFile_NamedExportListSupportsExpressionBinding(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "math.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`const api = {
+  plus: fn(a, b) {
+    return a + b
+  }
+}
+
+export { plus: api.plus }
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`from "./math.ic" import plus
+
+if plus(4, 6) != 10 {
+  panic("unexpected expression export result")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected expression export binding to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunFile_ModuleAliasReadsExpressionExport(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "math.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`const api = {
+  plus: fn(a, b) {
+    return a + b
+  }
+}
+
+export { plus: api.plus }
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "./math.ic" as math
+
+if math.plus(3, 4) != 7 {
+  panic("unexpected module alias expression export result")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected module alias expression export to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "src", "main.ic")

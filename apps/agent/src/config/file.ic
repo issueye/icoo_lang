@@ -102,8 +102,8 @@ class ConfigFile {
 
 let fileApi = ConfigFile()
 
-const applyFile = fileApi.applyFile
-const resolveConfigPath = fileApi.resolveConfigPath
-const resolvePathValue = fileApi.resolvePathValue
-
-export { applyFile, resolveConfigPath, resolvePathValue }
+export {
+  applyFile: fileApi.applyFile,
+  resolveConfigPath: fileApi.resolveConfigPath,
+  resolvePathValue: fileApi.resolvePathValue,
+}

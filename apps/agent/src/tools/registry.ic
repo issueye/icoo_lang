@@ -86,8 +86,8 @@ class ToolRegistry {
 
 let registryApi = ToolRegistry()
 
-const build = registryApi.build
-const get = registryApi.get
-const definitions = registryApi.definitions
-
-export { build, get, definitions }
+export {
+  build: registryApi.build,
+  get: registryApi.get,
+  definitions: registryApi.definitions,
+}

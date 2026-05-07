@@ -73,12 +73,12 @@ class ModelMessages {
 
 let messagesApi = ModelMessages()
 
-const systemPrompt = messagesApi.systemPrompt
-const userPrompt = messagesApi.userPrompt
-const build = messagesApi.build
-const buildBase = messagesApi.buildBase
-const toolDefinitions = messagesApi.toolDefinitions
-const appendAssistantToolCalls = messagesApi.appendAssistantToolCalls
-const appendToolResult = messagesApi.appendToolResult
-
-export { systemPrompt, userPrompt, build, buildBase, toolDefinitions, appendAssistantToolCalls, appendToolResult }
+export {
+  systemPrompt: messagesApi.systemPrompt,
+  userPrompt: messagesApi.userPrompt,
+  build: messagesApi.build,
+  buildBase: messagesApi.buildBase,
+  toolDefinitions: messagesApi.toolDefinitions,
+  appendAssistantToolCalls: messagesApi.appendAssistantToolCalls,
+  appendToolResult: messagesApi.appendToolResult,
+}

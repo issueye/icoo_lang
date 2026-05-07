@@ -29,6 +29,6 @@ class Defaults {
 
 let defaultsApi = Defaults()
 
-const defaultConfig = defaultsApi.defaultConfig
-
-export { defaultConfig }
+export {
+  defaultConfig: defaultsApi.defaultConfig,
+}

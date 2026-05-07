@@ -182,7 +182,7 @@ class ArgsConfig {
 
 let argsApi = ArgsConfig()
 
-const applyArgs = argsApi.applyArgs
-const previewWorkspace = argsApi.previewWorkspace
-
-export { applyArgs, previewWorkspace }
+export {
+  applyArgs: argsApi.applyArgs,
+  previewWorkspace: argsApi.previewWorkspace,
+}

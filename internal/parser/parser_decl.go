@@ -122,12 +122,18 @@ func (p *Parser) parseExportDecl() ast.Decl {
 			nameTok := p.expect(token.Ident, "expected exported name")
 			alias := nameTok.Lexeme
 			end = nameTok.Span.End
-			if p.match(token.As) {
+			var value ast.Expr
+			if p.match(token.Colon) {
+				value = p.parseExpression(PrecLowest)
+				if value != nil {
+					end = value.Span().End
+				}
+			} else if p.match(token.As) {
 				aliasTok := p.expect(token.Ident, "expected export alias")
 				alias = aliasTok.Lexeme
 				end = aliasTok.Span.End
 			}
-			specs = append(specs, ast.ExportSpec{Name: nameTok.Lexeme, Alias: alias})
+			specs = append(specs, ast.ExportSpec{Name: nameTok.Lexeme, Alias: alias, Value: value})
 			if !p.match(token.Comma) {
 				break
 			}

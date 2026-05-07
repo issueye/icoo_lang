@@ -79,6 +79,7 @@ func (d *ExportDecl) Span() token.Span {
 type ExportSpec struct {
 	Name  string
 	Alias string
+	Value Expr
 }
 
 type DecoratedDecl struct {

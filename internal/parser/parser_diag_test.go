@@ -165,3 +165,25 @@ func TestNamedExportParsesSpecs(t *testing.T) {
 		t.Fatalf("unexpected second spec: %+v", exportDecl.Specs[1])
 	}
 }
+
+func TestNamedExportParsesExpressionBinding(t *testing.T) {
+	input := `export { request: clientApi.request }`
+	tokens := lexer.LexAll(input)
+
+	p := New(tokens)
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) > 0 {
+		t.Fatalf("expected no parser errors, got: %v", errs)
+	}
+	decl := prog.Nodes[0].(ast.Decl)
+	exportDecl := decl.(*ast.ExportDecl)
+	if len(exportDecl.Specs) != 1 {
+		t.Fatalf("expected 1 export spec, got %d", len(exportDecl.Specs))
+	}
+	if exportDecl.Specs[0].Name != "request" {
+		t.Fatalf("expected export name request, got %q", exportDecl.Specs[0].Name)
+	}
+	if exportDecl.Specs[0].Value == nil {
+		t.Fatal("expected export expression value")
+	}
+}

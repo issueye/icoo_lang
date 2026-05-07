@@ -394,7 +394,8 @@ ImportPath      = Identifier { "." Identifier } | String ;
 
 ExportDecl      = "export" ( FnDecl | VarDecl | TypeDecl | InterfaceDecl )
                 | "export" "{" ExportSpec { "," ExportSpec } "}" ;
-ExportSpec      = Identifier [ "as" Identifier ] ;
+ExportSpec      = Identifier [ "as" Identifier ]
+                | Identifier ":" Expression ;
 ```
 
 ### 变量与函数声�?

@@ -76,7 +76,7 @@ class ToolExecutor {
 
 let executorApi = ToolExecutor()
 
-const run = executorApi.run
-const runCall = executorApi.runCall
-
-export { run, runCall }
+export {
+  run: executorApi.run,
+  runCall: executorApi.runCall,
+}

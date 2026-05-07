@@ -124,6 +124,10 @@ func (a *Analyzer) visitImportDecl(d *ast.ImportDecl) {
 func (a *Analyzer) visitExportDecl(d *ast.ExportDecl) {
 	if d.NamedExport {
 		for _, spec := range d.Specs {
+			if spec.Value != nil {
+				a.visitExpr(spec.Value)
+				continue
+			}
 			if _, ok := a.scope.Resolve(spec.Name); !ok {
 				a.report(d.Span(), "undefined identifier: "+spec.Name)
 			}

@@ -142,6 +142,13 @@ func (c *Compiler) compileExportDecl(d *ast.ExportDecl) {
 	if d.Decl == nil {
 		if d.NamedExport {
 			for _, spec := range d.Specs {
+				if spec.Value != nil {
+					c.compileExpr(spec.Value)
+					nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: spec.Name})
+					c.emit(bytecode.OpExport)
+					c.emitShort(nameIdx)
+					continue
+				}
 				ref, ok := c.resolve(spec.Name)
 				if !ok {
 					c.errorf("undefined identifier: %s", spec.Name)
