@@ -180,6 +180,9 @@ import std.io.console as io
 import std.io.fs as fs
 import app/lib/util.ic as util
 
+from std.io.console import println, print as log
+from app/lib/util.ic import normalizePath, joinPath as join
+
 export let version = "1.0.0"
 
 export fn main() {
@@ -192,6 +195,15 @@ export fn main() {
 - 标准库使用 `std.*`
 - 文件模块使用路径导入
 - 项目根别名导入是否可用，取决于项目配置的 `root_alias`
+- 推荐优先使用 `from ... import ...` 做选择性导入，减少无意义的模块别名
+- `import ... as ...` 仍保留为整模块导入方式，适合导出较多的模块
+
+约定：
+
+- `import path as alias`：导入整个模块
+- `from path import name`：只导入单个导出
+- `from path import name as alias`：选择性导入并重命名
+- 暂不建议支持 `from path import *`
 
 ### 2.8 错误与异常
 
