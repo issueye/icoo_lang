@@ -1,0 +1,186 @@
+import std.core.string as str
+import std.data.json as json
+
+class WebCommon {
+  after(text, marker) {
+    let parts = str.split(text, marker)
+    if len(parts) < 2 {
+      return ""
+    }
+    return parts[1]
+  }
+
+  between(text, startMarker, endMarker) {
+    let tail = this.after(text, startMarker)
+    if tail == "" {
+      return ""
+    }
+    return str.split(tail, endMarker)[0]
+  }
+
+  decodeEntities(text) {
+    text = str.replace(text, "&amp;", "&")
+    text = str.replace(text, "&lt;", "<")
+    text = str.replace(text, "&gt;", ">")
+    text = str.replace(text, "&quot;", "\"")
+    text = str.replace(text, "&#39;", "'")
+    text = str.replace(text, "&nbsp;", " ")
+    return text
+  }
+
+  quoteChar() {
+    return this.decodeEntities("&quot;")
+  }
+
+  decodeJSONString(text) {
+    try {
+      let decoded = json.decode(text)
+      if typeOf(decoded) == "string" {
+        return decoded
+      }
+    } catch err {
+      return text
+    }
+    return text
+  }
+
+  normalizeSpaces(text) {
+    text = str.replace(text, "\r", " ")
+    text = str.replace(text, "\n", " ")
+    text = str.replace(text, "\t", " ")
+
+    let parts = str.split(text, " ")
+    let compact = []
+    for i, part in parts {
+      part = str.trimSpace(part)
+      if part == "" {
+        continue
+      }
+      compact = compact.append(part)
+    }
+    return str.join(compact, " ")
+  }
+
+  htmlToText(html) {
+    html = this.decodeEntities(html)
+
+    let parts = str.split(html, "<")
+    let chunks = []
+    for i, part in parts {
+      if i == 0 {
+        chunks = chunks.append(part)
+        continue
+      }
+
+      let inner = str.split(part, ">")
+      let j = 1
+      while j < len(inner) {
+        chunks = chunks.append(inner[j])
+        j = j + 1
+      }
+    }
+
+    return this.normalizeSpaces(str.join(chunks, " "))
+  }
+
+  clipText(text, maxChars) {
+    if typeOf(maxChars) != "int" || maxChars <= 0 {
+      return text
+    }
+    if len(text) <= maxChars {
+      return text
+    }
+
+    let parts = str.split(text, " ")
+    let clipped = ""
+    for i, part in parts {
+      part = str.trimSpace(part)
+      if part == "" {
+        continue
+      }
+
+      let next = part
+      if clipped != "" {
+        next = clipped + " " + part
+      }
+      if len(next) > maxChars {
+        break
+      }
+      clipped = next
+    }
+
+    if clipped == "" {
+      return text
+    }
+    return clipped
+  }
+
+  extractTitle(html) {
+    let title = this.between(html, "<title>", "</title>")
+    if title == "" {
+      title = this.between(html, "<TITLE>", "</TITLE>")
+    }
+    return this.normalizeSpaces(this.decodeEntities(title))
+  }
+
+  extractSnippet(chunk) {
+    let tail = this.after(chunk, "result__snippet")
+    if tail == "" {
+      return ""
+    }
+
+    let parts = str.split(tail, ">")
+    if len(parts) < 2 {
+      return ""
+    }
+    return this.htmlToText(parts[1])
+  }
+
+  parseDuckDuckGoResults(html, maxResults) {
+    let results = []
+    let limit = maxResults
+    if typeOf(limit) != "int" || limit <= 0 {
+      limit = 5
+    }
+
+    // DuckDuckGo HTML results are anchor-heavy. Split on `<a ` first, then
+    // keep only anchors that carry the `result__a` class.
+    let parts = str.split(html, "<a ")
+    let i = 0
+    while i < len(parts) && len(results) < limit {
+      let chunk = parts[i]
+      if str.contains(chunk, "result__a") != true {
+        i = i + 1
+        continue
+      }
+
+      let hrefTail = this.after(chunk, "href=")
+      if hrefTail == "" {
+        i = i + 1
+        continue
+      }
+      let anchorParts = str.split(hrefTail, ">")
+      if len(anchorParts) < 2 {
+        i = i + 1
+        continue
+      }
+      let url = this.decodeJSONString(anchorParts[0])
+
+      let titleHtml = str.split(anchorParts[1], "</a>")[0]
+      let title = this.htmlToText(titleHtml)
+      let snippet = this.extractSnippet(chunk)
+      if title != "" && url != "" {
+        results = results.append({
+          title: title,
+          url: url,
+          snippet: snippet
+        })
+      }
+      i = i + 1
+    }
+
+    return results
+  }
+}
+
+export new WebCommon()

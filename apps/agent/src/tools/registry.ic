@@ -2,6 +2,8 @@ import std.core.object as object
 import "@/src/tools/read_file.ic" as readFile
 import "@/src/tools/list_dir.ic" as listDir
 import "@/src/tools/search_text.ic" as searchText
+import "@/src/tools/web_fetch.ic" as webFetch
+import "@/src/tools/web_search.ic" as webSearch
 
 class ToolRegistry {
   build() {
@@ -55,6 +57,44 @@ class ToolRegistry {
           required: ["path", "query"]
         },
         handler: searchText.SearchText.run
+      },
+      webFetch: {
+        name: "webFetch",
+        description: "Fetch a web page URL and return cleaned text content.",
+        parameters: {
+          type: "object",
+          properties: {
+            url: {
+              type: "string",
+              description: "Absolute HTTP or HTTPS URL to fetch."
+            },
+            maxChars: {
+              type: "integer",
+              description: "Optional maximum number of characters to keep from the cleaned page text."
+            }
+          },
+          required: ["url"]
+        },
+        handler: webFetch.WebFetch.run
+      },
+      webSearch: {
+        name: "webSearch",
+        description: "Search the web with DuckDuckGo and return a short result list.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Search query text."
+            },
+            maxResults: {
+              type: "integer",
+              description: "Optional maximum number of results to return."
+            }
+          },
+          required: ["query"]
+        },
+        handler: webSearch.WebSearch.run
       }
     }
   }
@@ -66,7 +106,7 @@ class ToolRegistry {
 
   definitions() {
     let tools = this.build()
-    let names = ["readFile", "listDir", "searchText"]
+    let names = ["readFile", "listDir", "searchText", "webFetch", "webSearch"]
     let definitions = []
     for i, name in names {
       let tool = object.get(tools, name)

@@ -235,6 +235,104 @@ if tool.Tool.run() != 7 {
 	}
 }
 
+func TestRuntimeRunFile_AgentWebFetchTool(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.ic")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte("<html><head><title>Go TUI</title></head><body><h1>Hello</h1><p>Terminal UI library</p></body></html>"))
+	}))
+	defer server.Close()
+
+	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "apps", "agent"))
+	if err != nil {
+		t.Fatalf("resolve agent root: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "@/src/tools/web_fetch.ic" as webFetch
+
+let result = webFetch.WebFetch.run({}, {
+  url: "`+quoteICString(server.URL)+`",
+  maxChars: 120
+})
+
+if result.ok != true {
+  panic("expected webFetch ok")
+}
+if result.meta.title != "Go TUI" {
+  panic("unexpected webFetch title")
+}
+if typeOf(result.content) != "string" {
+  panic("expected webFetch string content")
+}
+if len(result.content) == 0 {
+  panic("expected non-empty webFetch content")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	rt.SetProjectRoot(agentRoot, "@")
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected webFetch tool import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunFile_AgentWebSearchTool(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.ic")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`
+<html><body>
+  <a class="result__a" href="https://example.com/a">First Result</a>
+  <div class="result__snippet">First snippet text</div>
+  <a class="result__a" href="https://example.com/b">Second Result</a>
+  <div class="result__snippet">Second snippet text</div>
+</body></html>`))
+	}))
+	defer server.Close()
+
+	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "apps", "agent"))
+	if err != nil {
+		t.Fatalf("resolve agent root: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "@/src/tools/web_search.ic" as webSearch
+
+let result = webSearch.WebSearch.run({}, {
+  query: "icoo",
+  maxResults: 2,
+  endpoint: "`+quoteICString(server.URL)+`"
+})
+
+if result.ok != true {
+  panic("expected webSearch ok")
+}
+if len(result.content) != 2 {
+  panic("expected two webSearch results")
+}
+if result.content[0].title != "First Result" {
+  panic("unexpected first webSearch title")
+}
+if result.content[1].url != "https://example.com/b" {
+  panic("unexpected second webSearch url")
+}
+if result.content[0].snippet != "First snippet text" {
+  panic("unexpected first webSearch snippet")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	rt.SetProjectRoot(agentRoot, "@")
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected webSearch tool import to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "src", "main.ic")

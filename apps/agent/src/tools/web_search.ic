@@ -1,0 +1,51 @@
+import std.net.http.client as http
+import std.core.object as object
+import "@/src/tools/web_common.ic" as webCommon
+
+class WebSearch {
+  run(config, input) {
+    let query = object.get(input, "query")
+    let maxResults = object.get(input, "maxResults", 5)
+    let endpoint = object.get(input, "endpoint", "https://html.duckduckgo.com/html/")
+    if query == null || query == "" {
+      return {
+        ok: false,
+        error: "webSearch requires non-empty query"
+      }
+    }
+
+    let response = http.request({
+      url: endpoint,
+      method: "GET",
+      query: {
+        q: query
+      },
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "icoo-agent/1.0"
+      },
+      followRedirects: true
+    })
+    if response.ok != true {
+      return {
+        ok: false,
+        error: "webSearch http request failed: " + response.statusText
+      }
+    }
+
+    let body = object.get(response, "body", "")
+    let results = webCommon.WebCommon.parseDuckDuckGoResults(body, maxResults)
+    return {
+      ok: true,
+      content: results,
+      meta: {
+        engine: "duckduckgo",
+        query: query,
+        count: len(results),
+        url: object.get(response, "url", endpoint)
+      }
+    }
+  }
+}
+
+export new WebSearch()

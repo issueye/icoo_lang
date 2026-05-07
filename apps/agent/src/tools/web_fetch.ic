@@ -1,0 +1,51 @@
+import std.net.http.client as http
+import std.core.object as object
+import "@/src/tools/web_common.ic" as webCommon
+
+class WebFetch {
+  run(config, input) {
+    let url = object.get(input, "url")
+    let maxChars = object.get(input, "maxChars", 4000)
+    if url == null || url == "" {
+      return {
+        ok: false,
+        error: "webFetch requires non-empty url"
+      }
+    }
+
+    let response = http.request({
+      url: url,
+      method: "GET",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "icoo-agent/1.0"
+      },
+      followRedirects: true
+    })
+    if response.ok != true {
+      return {
+        ok: false,
+        error: "webFetch http request failed: " + response.statusText
+      }
+    }
+
+    let body = object.get(response, "body", "")
+    let title = webCommon.WebCommon.extractTitle(body)
+    let text = webCommon.WebCommon.clipText(
+      webCommon.WebCommon.htmlToText(body),
+      maxChars
+    )
+    return {
+      ok: true,
+      content: text,
+      meta: {
+        url: object.get(response, "url", url),
+        title: title,
+        status: response.status,
+        contentLength: response.contentLength
+      }
+    }
+  }
+}
+
+export new WebFetch()
