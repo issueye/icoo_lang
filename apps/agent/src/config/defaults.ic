@@ -19,6 +19,7 @@ const defaultsApi = fn() {
       maxFiles: 24,
       maxTotalBytes: 32768,
       streamFinalAnswer: true,
+      agentName: "icoo_agent",
       sessionDir: fs.join(stateDir, "sessions"),
       logPath: fs.join(stateDir, "agent.log"),
       cliUnknownArgs: []

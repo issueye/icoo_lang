@@ -130,7 +130,7 @@ const runtimeApi = fn() {
       mode: modelLoop.final.mode
     })
 
-    io.println("== icoo agent ==")
+    io.println("== " + config.agentName + " ==")
     io.println("workspace:", config.workspace)
     io.println("mode:", config.mode)
     io.println("model:", config.model)

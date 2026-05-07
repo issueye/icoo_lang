@@ -18,6 +18,13 @@ const fileApi = fn() {
     return config
   }
 
+  fn applyBool(config, value, key) {
+    if typeOf(value) == "bool" {
+      config[key] = value
+    }
+    return config
+  }
+
   fn resolveConfigPath(config) {
     let workspace = config.workspace
     if typeOf(workspace) != "string" || workspace == "" {
@@ -86,6 +93,8 @@ const fileApi = fn() {
     config = applyInt(config, object.get(loaded, "max_turns"), "maxTurns")
     config = applyInt(config, object.get(loaded, "max_files"), "maxFiles")
     config = applyInt(config, object.get(loaded, "max_total_bytes"), "maxTotalBytes")
+    config = applyBool(config, object.get(loaded, "stream_final_answer"), "streamFinalAnswer")
+    config = applyString(config, object.get(loaded, "agent_name"), "agentName")
 
     return config
   }

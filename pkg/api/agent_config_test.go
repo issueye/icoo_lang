@@ -30,6 +30,12 @@ fn main() {
 	if cfg.maxTurns != 12 {
 		panic("expected config.toml max_turns default")
 	}
+  if cfg.streamFinalAnswer != true {
+    panic("expected config.toml stream_final_answer default")
+  }
+  if cfg.agentName != "icoo_agent" {
+    panic("expected config.toml agent_name default")
+  }
   if cfg.sessionDir != "` + filepath.Join(agentRoot, ".agent", "sessions") + `" {
     panic("expected config.toml session_dir to resolve from config file directory")
   }

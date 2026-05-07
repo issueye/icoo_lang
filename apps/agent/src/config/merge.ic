@@ -6,8 +6,10 @@ import "@/src/config/args.ic" as args
 
 const mergeApi = fn() {
   fn loadConfig(overrides) {
-    // 配置优先级固定为 defaults -> file -> env -> args -> explicit overrides。
+    // 先预解析 workspace，再加载项目级 config.toml。
+    // 完整优先级保持为 defaults -> preview-workspace -> file -> env -> args -> explicit overrides。
     let config = defaults.defaultConfig()
+    config = args.previewWorkspace(config)
     config = file.applyFile(config)
     config = env.applyEnv(config)
 

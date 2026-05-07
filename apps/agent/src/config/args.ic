@@ -1,6 +1,11 @@
 import std.sys.cli as cli
+import std.core.string as str
 
 const argsApi = fn() {
+  fn argvList() {
+    return argv()
+  }
+
   fn defineApp() {
     // agent 的启动参数统一挂在原生 CLI 框架上，避免继续手写 argv 遍历。
     let app = cli.create({
@@ -73,6 +78,10 @@ const argsApi = fn() {
       name: "stream-final-answer",
       description: "Enable or disable streaming for the final assistant answer"
     })
+    app.flagString({
+      name: "agent-name",
+      description: "Display name for the agent runtime"
+    })
 
     return app
   }
@@ -127,6 +136,7 @@ const argsApi = fn() {
     config = applyIfInt(config, flags["max-files"], "maxFiles")
     config = applyIfInt(config, flags["max-total-bytes"], "maxTotalBytes")
     config = applyIfBoolString(config, flags["stream-final-answer"], "streamFinalAnswer")
+    config = applyIfString(config, flags["agent-name"], "agentName")
 
     // 先把未知参数完整保留，后续可以转给更细的子工具链或模型层调试入口。
     config.cliUnknownArgs = parsed.unknown
@@ -138,9 +148,41 @@ const argsApi = fn() {
     }
   }
 
+  fn previewWorkspace(config) {
+    let values = argvList()
+    let index = 0
+    while index < len(values) {
+      let value = values[index]
+      if value == "--workspace" || value == "--root" {
+        if index + 1 < len(values) {
+          config.workspace = values[index + 1]
+        }
+        break
+      }
+      if str.hasPrefix(value, "--workspace=") {
+        let parts = str.split(value, "=")
+        if len(parts) > 1 {
+          config.workspace = parts[1]
+        }
+        break
+      }
+      if str.hasPrefix(value, "--root=") {
+        let parts = str.split(value, "=")
+        if len(parts) > 1 {
+          config.workspace = parts[1]
+        }
+        break
+      }
+      index = index + 1
+    }
+    return config
+  }
+
   return {
-    applyArgs: applyArgs
+    applyArgs: applyArgs,
+    previewWorkspace: previewWorkspace
   }
 }()
 
 export const applyArgs = argsApi.applyArgs
+export const previewWorkspace = argsApi.previewWorkspace
