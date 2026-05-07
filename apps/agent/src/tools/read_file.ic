@@ -2,11 +2,9 @@ import std.io.fs as fs
 import std.core.object as object
 import "@/src/tools/tool_path.ic" as toolPath
 
-// ReadFile 是一个读取文件内容的类。
-class ReadFile {
-  // run 读取文件内容。
-  // 如果文件不存在，则返回错误。
-  run(config, input) {
+const readFileApi = fn() {
+  // run 读取工作区中的文本文件。
+  fn run(config, input) {
     let path = object.get(input, "path")
     if path == null || path == "" {
       return {
@@ -14,6 +12,7 @@ class ReadFile {
         error: "readFile requires non-empty path"
       }
     }
+
     path = toolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
@@ -30,6 +29,12 @@ class ReadFile {
       }
     }
   }
-}
 
-export ReadFile()
+  return {
+    run: run
+  }
+}()
+
+export {
+  run: readFileApi.run,
+}

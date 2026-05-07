@@ -2,11 +2,9 @@ import std.io.fs as fs
 import std.core.object as object
 import "@/src/tools/tool_path.ic" as toolPath
 
-// ListDir 是一个列出目录下的所有文件和子目录的类。
-class ListDir {
-  // run 列出目录下的所有文件和子目录。
-  // 如果目录不存在，则返回错误。
-  run(config, input) {
+const listDirApi = fn() {
+  // run 列出工作区目录内容。
+  fn run(config, input) {
     let path = object.get(input, "path")
     if path == null || path == "" {
       return {
@@ -14,6 +12,7 @@ class ListDir {
         error: "listDir requires non-empty path"
       }
     }
+
     path = toolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
@@ -39,6 +38,12 @@ class ListDir {
       }
     }
   }
-}
 
-export ListDir()
+  return {
+    run: run
+  }
+}()
+
+export {
+  run: listDirApi.run,
+}

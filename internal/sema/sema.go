@@ -134,6 +134,10 @@ func (a *Analyzer) visitExportDecl(d *ast.ExportDecl) {
 		}
 		return
 	}
+	if d.Expr != nil {
+		a.visitExpr(d.Expr)
+		return
+	}
 	if d.Decl != nil {
 		a.visitDecl(d.Decl)
 	}

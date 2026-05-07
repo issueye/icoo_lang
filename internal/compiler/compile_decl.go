@@ -161,6 +161,18 @@ func (c *Compiler) compileExportDecl(d *ast.ExportDecl) {
 			}
 			return
 		}
+		if d.Expr != nil {
+			c.compileExpr(d.Expr)
+			name, err := exportExprName(d.Expr)
+			if err != nil {
+				c.errorf("%s", err.Error())
+				return
+			}
+			nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: name})
+			c.emit(bytecode.OpExport)
+			c.emitShort(nameIdx)
+			return
+		}
 		c.errorf("export requires declaration")
 		return
 	}
@@ -177,6 +189,20 @@ func (c *Compiler) compileExportDecl(d *ast.ExportDecl) {
 	c.emitShort(nameIdx)
 	c.emit(bytecode.OpExport)
 	c.emitShort(nameIdx)
+}
+
+func exportExprName(expr ast.Expr) (string, error) {
+	switch e := expr.(type) {
+	case *ast.IdentExpr:
+		return e.Name, nil
+	case *ast.CallExpr:
+		if ident, ok := e.Callee.(*ast.IdentExpr); ok {
+			return ident.Name, nil
+		}
+		return "", fmt.Errorf("export expression call requires identifier callee")
+	default:
+		return "", fmt.Errorf("unsupported export expression")
+	}
 }
 
 func exportDeclName(decl ast.Decl) (string, error) {

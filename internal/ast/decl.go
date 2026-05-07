@@ -67,6 +67,7 @@ type ExportDecl struct {
 	Decl        Decl
 	Specs       []ExportSpec
 	NamedExport bool
+	Expr        Expr
 	Span_       token.Span
 }
 

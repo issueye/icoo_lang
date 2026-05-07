@@ -187,3 +187,33 @@ func TestNamedExportParsesExpressionBinding(t *testing.T) {
 		t.Fatal("expected export expression value")
 	}
 }
+
+func TestExportCallExprParses(t *testing.T) {
+	input := `export ListDir()`
+	tokens := lexer.LexAll(input)
+
+	p := New(tokens)
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) > 0 {
+		t.Fatalf("expected no parser errors, got: %v", errs)
+	}
+	exportDecl := prog.Nodes[0].(ast.Decl).(*ast.ExportDecl)
+	if exportDecl.Expr == nil {
+		t.Fatal("expected export expression")
+	}
+}
+
+func TestExportNewCallExprParses(t *testing.T) {
+	input := `export new ListDir()`
+	tokens := lexer.LexAll(input)
+
+	p := New(tokens)
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) > 0 {
+		t.Fatalf("expected no parser errors, got: %v", errs)
+	}
+	exportDecl := prog.Nodes[0].(ast.Decl).(*ast.ExportDecl)
+	if exportDecl.Expr == nil {
+		t.Fatal("expected export expression")
+	}
+}

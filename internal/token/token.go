@@ -72,6 +72,7 @@ const (
 	Interface
 	TypeKw
 	Class
+	New
 	This
 	Super
 	Null
@@ -107,6 +108,7 @@ var Keywords = map[string]Type{
 	"interface": Interface,
 	"type":      TypeKw,
 	"class":     Class,
+	"new":       New,
 	"this":      This,
 	"super":     Super,
 	"null":      Null,

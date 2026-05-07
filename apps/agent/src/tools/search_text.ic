@@ -4,11 +4,12 @@ import std.core.string as str
 import "@/src/context/ignore.ic" as ignore
 import "@/src/tools/tool_path.ic" as toolPath
 
-// SearchText 是一个搜索文本的类。
-class SearchText {
-  // run 搜索文本。
-  // 如果目录不存在，则返回错误。
-  run(config, input) {
+const searchTextApi = fn() {
+  // isSearchable 判断文件是否适合文本搜索。
+  fn isSearchable(path) {
+    return (
+      str.hasSuffix(path, ".ic") ||
+      str.hasSuffix(path, ".md") ||
       str.hasSuffix(path, ".txt") ||
       str.hasSuffix(path, ".json") ||
       str.hasSuffix(path, ".toml") ||
@@ -17,16 +18,17 @@ class SearchText {
       str.hasSuffix(path, ".go") ||
       str.hasSuffix(path, ".js") ||
       str.hasSuffix(path, ".ts")
+    )
   }
 
-  // scan 搜索目录下的所有文件。
-  // 如果文件包含查询字符串，则将其路径添加到匹配列表中。
-  scan(path, needle, matches) {
+  // scan 递归搜索目录或单文件。
+  fn scan(path, needle, matches) {
     let info = fs.stat(path)
     if info.isFile {
       if isSearchable(path) != true {
         return matches
       }
+
       let text = fs.readFile(path)
       if str.contains(text, needle) == true {
         return matches.append({
@@ -46,9 +48,8 @@ class SearchText {
     return matches
   }
 
-  // run 搜索文本。
-  // 如果目录不存在，则返回错误。
-  run(config, input) {
+  // run 执行文本搜索工具。
+  fn run(config, input) {
     let path = object.get(input, "path")
     let query = object.get(input, "query")
     if path == null || path == "" {
@@ -63,6 +64,7 @@ class SearchText {
         error: "searchText requires non-empty query"
       }
     }
+
     path = toolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
@@ -82,6 +84,12 @@ class SearchText {
       }
     }
   }
-}
 
-export SearchText()
+  return {
+    run: run
+  }
+}()
+
+export {
+  run: searchTextApi.run,
+}

@@ -204,6 +204,37 @@ if math.plus(3, 4) != 7 {
 	}
 }
 
+func TestRuntimeRunFile_ExportCallExprInstance(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "tool.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`class Tool {
+  run() {
+    return 7
+  }
+}
+
+export Tool()
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "./tool.ic" as tool
+
+if tool.Tool.run() != 7 {
+  panic("unexpected exported instance result")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected export call expression to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "src", "main.ic")
