@@ -2,8 +2,11 @@ import std.io.fs as fs
 import std.core.object as object
 import "@/src/tools/tool_path.ic" as toolPath
 
-const readFileApi = fn() {
-  fn run(config, input) {
+// ReadFile 是一个读取文件内容的类。
+class ReadFile {
+  // run 读取文件内容。
+  // 如果文件不存在，则返回错误。
+  run(config, input) {
     let path = object.get(input, "path")
     if path == null || path == "" {
       return {
@@ -27,12 +30,6 @@ const readFileApi = fn() {
       }
     }
   }
-
-  return {
-    run: run
-  }
-}()
-
-export {
-  run: readFileApi.run,
 }
+
+export ReadFile()
