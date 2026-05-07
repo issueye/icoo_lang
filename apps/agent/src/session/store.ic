@@ -30,6 +30,24 @@ const storeApi = fn() {
     if loaded.sessionId == null || loaded.sessionId == "" {
       panic("invalid session schema: missing sessionId")
     }
+    if typeOf(loaded.turns) != "array" {
+      loaded.turns = []
+    }
+    if typeOf(loaded.events) != "array" {
+      loaded.events = []
+    }
+    if typeOf(loaded.artifacts) != "array" {
+      loaded.artifacts = []
+    }
+    if typeOf(loaded.approvals) != "array" {
+      loaded.approvals = []
+    }
+    if typeOf(loaded.budgets) != "object" {
+      loaded.budgets = {
+        turnCount: 0,
+        toolCallCount: 0
+      }
+    }
 
     return loaded
   }
@@ -38,6 +56,7 @@ const storeApi = fn() {
     let sessionId = schema.normalizeSessionId(config)
     let loaded = load(config, sessionId)
     if loaded != null {
+      loaded.status = "running"
       let loadedPath = save(config, loaded)
       return {
         session: loaded,
@@ -47,6 +66,7 @@ const storeApi = fn() {
     }
 
     let created = schema.newSession(config, sessionId)
+    created.status = "running"
     let createdPath = save(config, created)
     return {
       session: created,
@@ -55,11 +75,131 @@ const storeApi = fn() {
     }
   }
 
+  fn appendTurn(config, session, turn) {
+    session.turns = session.turns.append(turn)
+    session.budgets.turnCount = len(session.turns)
+    if turn.kind == "tool_message" || turn.kind == "tool_result" {
+      session.budgets.toolCallCount = session.budgets.toolCallCount + 1
+    }
+    save(config, session)
+    return turn
+  }
+
+  fn appendUserMessage(config, session, message) {
+    return appendTurn(config, session, schema.userMessage(message))
+  }
+
+  fn appendRequestSnapshot(config, session, messages) {
+    return appendTurn(config, session, schema.requestSnapshot(messages))
+  }
+
+  fn appendAssistantMessage(config, session, response) {
+    return appendTurn(config, session, schema.assistantMessage(response))
+  }
+
+  fn appendToolMessage(config, session, executed) {
+    return appendTurn(config, session, schema.toolMessage(executed))
+  }
+
+  fn markCompleted(config, session, summary) {
+    session.status = "completed"
+    if summary != null {
+      session.lastResult = summary
+      appendTurn(config, session, schema.runSummary(summary))
+    }
+    return save(config, session)
+  }
+
+  fn buildMessages(config, context, session) {
+    let messages = [
+      {
+        role: "system",
+        content: "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
+      }
+    ]
+
+    let hasUserTurn = false
+    for i, turn in session.turns {
+      let payload = turn.payload
+      if turn.kind == "user_message" || turn.kind == "user_prompt" {
+        hasUserTurn = true
+        messages = messages.append(payload)
+        continue
+      }
+      if turn.kind == "request_snapshot" || turn.kind == "request_messages" {
+        continue
+      }
+      if turn.kind == "assistant_message" {
+        if payload.hasToolCalls == true {
+          messages = messages.append({
+            role: "assistant",
+            content: payload.content,
+            tool_calls: payload.toolCalls
+          })
+          continue
+        }
+        messages = messages.append({
+          role: "assistant",
+          content: payload.content
+        })
+        continue
+      }
+      if turn.kind == "assistant_response" {
+        if payload.hasToolCalls == true {
+          messages = messages.append({
+            role: "assistant",
+            content: payload.text,
+            tool_calls: payload.toolCalls
+          })
+          continue
+        }
+        messages = messages.append({
+          role: "assistant",
+          content: payload.text
+        })
+        continue
+      }
+      if turn.kind == "tool_message" {
+        messages = messages.append({
+          role: "tool",
+          tool_call_id: payload.toolCallId,
+          name: payload.name,
+          content: json.encode(payload.output)
+        })
+        continue
+      }
+      if turn.kind == "tool_result" {
+        messages = messages.append({
+          role: "tool",
+          tool_call_id: payload.toolCallId,
+          name: payload.name,
+          content: json.encode(payload.output)
+        })
+      }
+    }
+
+    if hasUserTurn != true {
+      messages = messages.append({
+        role: "user",
+        content: context.userPrompt
+      })
+    }
+
+    return messages
+  }
+
   return {
     sessionPath: sessionPath,
     save: save,
     load: load,
-    open: open
+    open: open,
+    appendTurn: appendTurn,
+    appendUserMessage: appendUserMessage,
+    appendRequestSnapshot: appendRequestSnapshot,
+    appendAssistantMessage: appendAssistantMessage,
+    appendToolMessage: appendToolMessage,
+    markCompleted: markCompleted,
+    buildMessages: buildMessages
   }
 }()
 
@@ -67,3 +207,10 @@ export const sessionPath = storeApi.sessionPath
 export const save = storeApi.save
 export const load = storeApi.load
 export const open = storeApi.open
+export const appendTurn = storeApi.appendTurn
+export const appendUserMessage = storeApi.appendUserMessage
+export const appendRequestSnapshot = storeApi.appendRequestSnapshot
+export const appendAssistantMessage = storeApi.appendAssistantMessage
+export const appendToolMessage = storeApi.appendToolMessage
+export const markCompleted = storeApi.markCompleted
+export const buildMessages = storeApi.buildMessages

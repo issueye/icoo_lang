@@ -620,9 +620,11 @@ println(args)
 flag `options` 常用字段：
 
 - `name`
+- `aliases`
 - `short`
 - `description`
 - `default`
+- `required`
 
 `run()` 返回上下文对象，常用字段：
 
@@ -630,6 +632,7 @@ flag `options` 常用字段：
 - `flags`
 - `args`
 - `raw`
+- `unknown`
 - `help`
 - `helpText`
 
@@ -650,6 +653,12 @@ app.flagBool({
   description: "Enable verbose output"
 })
 
+app.flagString({
+  name: "workspace",
+  aliases: ["root"],
+  required: true
+})
+
 let greet = app.command({
   name: "greet",
   description: "Print greeting"
@@ -663,6 +672,9 @@ greet.flagString({
 
 greet.action(fn(ctx) {
   io.println("hello", ctx.flags.name)
+  if len(ctx.unknown) > 0 {
+    io.println("unknown:", ctx.unknown)
+  }
   if ctx.flags.verbose {
     io.println("args:", ctx.args)
   }
@@ -680,13 +692,15 @@ if result.help {
 - 支持子命令
 - 支持 `bool / string / int` 三种 flag
 - 支持帮助文本生成
+- 支持 `aliases` 长别名
+- 支持 `required` 必填校验
+- 支持 unknown args passthrough 到 `ctx.unknown`
 - 支持 `--` 后透传为剩余位置参数
 
 当前还没有内置：
 
-- flag alias 别名体系
-- required 标记
-- unknown args passthrough 策略
+- 自动短别名推导
+- 更细粒度的子命令级 passthrough 策略
 - 自动子命令嵌套树
 
 ## 5.4 database

@@ -41,11 +41,68 @@ const schemaApi = fn() {
     }
   }
 
+  fn newTurn(kind, payload) {
+    let now = time.now()
+    return {
+      kind: kind,
+      createdAt: now,
+      payload: payload
+    }
+  }
+
+  fn userMessage(message) {
+    return newTurn("user_message", message)
+  }
+
+  fn requestSnapshot(messages) {
+    return newTurn("request_snapshot", {
+      messages: messages
+    })
+  }
+
+  fn assistantMessage(response) {
+    return newTurn("assistant_message", {
+      role: "assistant",
+      content: response.text,
+      toolCalls: response.toolCalls,
+      hasToolCalls: response.hasToolCalls,
+      finishReason: response.finishReason,
+      mode: response.mode
+    })
+  }
+
+  fn toolMessage(executed) {
+    return newTurn("tool_message", {
+      role: "tool",
+      toolCallId: executed.toolCallId,
+      name: executed.name,
+      output: executed.output,
+      ok: executed.ok,
+      error: executed.error
+    })
+  }
+
+  fn runSummary(summary) {
+    return newTurn("run_summary", summary)
+  }
+
   return {
     normalizeSessionId: normalizeSessionId,
-    newSession: newSession
+    newSession: newSession,
+    newTurn: newTurn,
+    userMessage: userMessage,
+    requestSnapshot: requestSnapshot,
+    assistantMessage: assistantMessage,
+    toolMessage: toolMessage,
+    runSummary: runSummary
   }
 }()
 
 export const normalizeSessionId = schemaApi.normalizeSessionId
 export const newSession = schemaApi.newSession
+export const newTurn = schemaApi.newTurn
+export const userMessage = schemaApi.userMessage
+export const requestSnapshot = schemaApi.requestSnapshot
+export const assistantMessage = schemaApi.assistantMessage
+export const toolMessage = schemaApi.toolMessage
+export const runSummary = schemaApi.runSummary

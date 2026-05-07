@@ -60,3 +60,37 @@ app.run()
 		t.Fatal("expected std.sys.cli to reject missing required flag")
 	}
 }
+
+func TestRuntimeRunSource_StdCLICommandCanOverrideAllowUnknownArgs(t *testing.T) {
+	rt := NewRuntime()
+	rt.SetScriptArgs([]string{"ship", "--unknown", "cargo"})
+
+	src := `
+import std.sys.cli as cli
+
+let app = cli.create({
+  name: "demo",
+  allowUnknownArgs: false
+})
+
+let ship = app.command({
+  name: "ship",
+  allowUnknownArgs: true
+})
+
+ship.action(fn(ctx) {
+  if len(ctx.unknown) != 2 {
+    panic("expected command unknown args")
+  }
+  if ctx.unknown[0] != "--unknown" || ctx.unknown[1] != "cargo" {
+    panic("unexpected command unknown args payload")
+  }
+})
+
+app.run()
+`
+
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected command allowUnknownArgs override to succeed, got: %v", err)
+	}
+}

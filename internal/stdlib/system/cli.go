@@ -34,11 +34,12 @@ type cliFlagSpec struct {
 }
 
 type cliCommandBinding struct {
-	app         *cliAppBinding
-	name        string
-	description string
-	flags       []*cliFlagSpec
-	handler     langruntime.Value
+	app              *cliAppBinding
+	name             string
+	description      string
+	flags            []*cliFlagSpec
+	handler          langruntime.Value
+	allowUnknownArgs bool
 }
 
 type cliAppBinding struct {
@@ -74,13 +75,9 @@ func cliCreate(args []langruntime.Value) (langruntime.Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	allowUnknownArgs := false
-	if rawAllowUnknown, ok := options.Fields["allowUnknownArgs"]; ok {
-		boolValue, ok := rawAllowUnknown.(langruntime.BoolValue)
-		if !ok {
-			return nil, fmt.Errorf("allowUnknownArgs must be bool")
-		}
-		allowUnknownArgs = boolValue.Value
+	allowUnknownArgs, err := optionalBoolField(options, "allowUnknownArgs")
+	if err != nil {
+		return nil, err
 	}
 
 	binding := &cliAppBinding{
@@ -200,11 +197,20 @@ func (binding *cliAppBinding) command(args []langruntime.Value) (langruntime.Val
 	if err != nil {
 		return nil, err
 	}
+	allowUnknownArgs := binding.allowUnknownArgs
+	allowUnknownOverride, hasAllowUnknown, err := optionalBoolFieldWithPresence(options, "allowUnknownArgs")
+	if err != nil {
+		return nil, err
+	}
+	if hasAllowUnknown {
+		allowUnknownArgs = allowUnknownOverride
+	}
 	cmd := &cliCommandBinding{
-		app:         binding,
-		name:        name,
-		description: description,
-		flags:       []*cliFlagSpec{},
+		app:              binding,
+		name:             name,
+		description:      description,
+		flags:            []*cliFlagSpec{},
+		allowUnknownArgs: allowUnknownArgs,
 	}
 	if len(args) == 2 {
 		cmd.handler = args[1]
@@ -333,7 +339,7 @@ func (binding *cliAppBinding) parseCommand(command *cliCommandBinding, argv []st
 		if strings.HasPrefix(token, "-") {
 			nextIndex, known, err := parseFlagToken(specs, flags, argv, index)
 			if err != nil {
-				if binding.allowUnknownArgs {
+				if command.allowUnknownArgs {
 					unknown = appendUnknownArgs(unknown, argv[index:])
 					index = len(argv)
 					break
@@ -341,7 +347,7 @@ func (binding *cliAppBinding) parseCommand(command *cliCommandBinding, argv []st
 				return nil, nil, err
 			}
 			if known != true {
-				if binding.allowUnknownArgs {
+				if command.allowUnknownArgs {
 					unknown = appendUnknownArgs(unknown, argv[index:])
 					index = len(argv)
 					break
@@ -467,13 +473,9 @@ func parseCLIFlagSpec(value langruntime.Value, kind string) (*cliFlagSpec, error
 	if err != nil {
 		return nil, err
 	}
-	required := false
-	if rawRequired, ok := options.Fields["required"]; ok {
-		boolValue, ok := rawRequired.(langruntime.BoolValue)
-		if !ok {
-			return nil, fmt.Errorf("flag required must be bool")
-		}
-		required = boolValue.Value
+	required, err := optionalBoolField(options, "required")
+	if err != nil {
+		return nil, err
 	}
 	defaultValue := defaultValueForKind(kind)
 	if rawDefault, ok := options.Fields["default"]; ok {
@@ -523,6 +525,23 @@ func optionalStringArrayField(options *langruntime.ObjectValue, field string) ([
 		return []string{}, nil
 	}
 	return requireCLIStringArrayArg(field, value)
+}
+
+func optionalBoolField(options *langruntime.ObjectValue, field string) (bool, error) {
+	value, _, err := optionalBoolFieldWithPresence(options, field)
+	return value, err
+}
+
+func optionalBoolFieldWithPresence(options *langruntime.ObjectValue, field string) (bool, bool, error) {
+	value, ok := options.Fields[field]
+	if !ok {
+		return false, false, nil
+	}
+	boolValue, ok := value.(langruntime.BoolValue)
+	if !ok {
+		return false, false, fmt.Errorf("%s must be bool", field)
+	}
+	return boolValue.Value, true, nil
 }
 
 func ensureUniqueFlag(specs []*cliFlagSpec, next *cliFlagSpec) error {

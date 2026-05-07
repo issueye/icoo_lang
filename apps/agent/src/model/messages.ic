@@ -14,6 +14,10 @@ const messagesApi = fn() {
       text = text + "Task:\nSummarize the repository state and suggest the next concrete engineering step.\n\n"
     }
     text = text + "Workspace:\n" + context.workspace + "\n\n"
+    if typeOf(context.cliUnknownArgs) == "array" && len(context.cliUnknownArgs) > 0 {
+      // 把 CLI passthrough 参数显式暴露给模型，便于后续接子工具链或调试分支。
+      text = text + "CLI Unknown Args:\n" + json.encode(context.cliUnknownArgs) + "\n\n"
+    }
     text = text + "Context Summary:\n" + context.summaryJson + "\n"
     return text
   }
@@ -61,6 +65,8 @@ const messagesApi = fn() {
   }
 
   return {
+    systemPrompt: systemPrompt,
+    userPrompt: userPrompt,
     build: build,
     buildBase: buildBase,
     toolDefinitions: toolDefinitions,
@@ -69,6 +75,8 @@ const messagesApi = fn() {
   }
 }()
 
+export const systemPrompt = messagesApi.systemPrompt
+export const userPrompt = messagesApi.userPrompt
 export const build = messagesApi.build
 export const buildBase = messagesApi.buildBase
 export const toolDefinitions = messagesApi.toolDefinitions

@@ -17,11 +17,12 @@ const runtimeApi = fn() {
     io.println(label + ":", json.encode(preview))
   }
 
-  fn appendToolResults(config, messages, toolCalls, toolRuns) {
+  fn appendToolResults(config, session, messages, toolCalls, toolRuns) {
     // tool_calls 必须顺序回放为 tool 消息，模型下一轮才能继续基于结果推理。
     for i, call in toolCalls {
       let executed = toolExecutor.runCall(config, call)
       toolRuns = toolRuns.append(executed)
+      sessionStore.appendToolMessage(config, session, executed)
       messages = modelMessages.appendToolResult(
         messages,
         executed.toolCallId,
@@ -36,8 +37,21 @@ const runtimeApi = fn() {
     }
   }
 
-  fn runToolLoop(config, context) {
-    let messages = modelMessages.build(config, context)
+  fn runToolLoop(config, session, context) {
+    let userPrompt = modelMessages.userPrompt(config, context)
+    let builtContext = {
+      userPrompt: userPrompt
+    }
+    let messages = sessionStore.buildMessages(config, builtContext, session)
+    if len(session.turns) == 0 {
+      let userMessage = {
+        role: "user",
+        content: userPrompt
+      }
+      sessionStore.appendUserMessage(config, session, userMessage)
+      messages = sessionStore.buildMessages(config, builtContext, session)
+    }
+
     let requests = []
     let toolRuns = []
     let finalResult = null
@@ -47,7 +61,9 @@ const runtimeApi = fn() {
     // 多轮循环统一受 maxTurns 限制，避免模型持续请求工具导致无限运行。
     while turn < config.maxTurns {
       turn = turn + 1
+      sessionStore.appendRequestSnapshot(config, session, messages)
       let response = modelClient.requestWithMessages(config, messages)
+      sessionStore.appendAssistantMessage(config, session, response)
       requests = requests.append(response)
       finalResult = response
 
@@ -57,7 +73,7 @@ const runtimeApi = fn() {
       }
 
       messages = modelMessages.appendAssistantToolCalls(messages, response.toolCalls, response.text)
-      let appended = appendToolResults(config, messages, response.toolCalls, toolRuns)
+      let appended = appendToolResults(config, session, messages, response.toolCalls, toolRuns)
       messages = appended.messages
       toolRuns = appended.toolRuns
     }
@@ -90,7 +106,7 @@ const runtimeApi = fn() {
   }
 
   fn start(config) {
-    // session 先于 runtime 其他组件建立，后续可以在这里追加 turn 持久化。
+    // session 先于 runtime 其他组件建立，后续会把 turn 持久化也挂在同一个 session 上。
     let opened = sessionStore.open(config)
     let session = opened.session
     let context = contextBuilder.build(config)
@@ -98,9 +114,15 @@ const runtimeApi = fn() {
       workspace: context.workspace,
       summaryJson: json.encode(context.summary),
       files: context.files,
-      omitted: context.omitted
+      omitted: context.omitted,
+      cliUnknownArgs: config.cliUnknownArgs
     }
-    let modelLoop = runToolLoop(config, modelContext)
+    let modelLoop = runToolLoop(config, session, modelContext)
+    sessionStore.markCompleted(config, session, {
+      turnsUsed: modelLoop.turnsUsed,
+      stopReason: modelLoop.stopReason,
+      mode: modelLoop.final.mode
+    })
 
     io.println("== icoo agent ==")
     io.println("workspace:", config.workspace)
@@ -116,6 +138,8 @@ const runtimeApi = fn() {
     io.println("max turns:", config.maxTurns)
     io.println("max files:", config.maxFiles)
     io.println("max total bytes:", config.maxTotalBytes)
+    // unknown args 会被 CLI 层完整保留，便于后续接子工具链或调试入口。
+    printListPreview("cli unknown args", config.cliUnknownArgs, 6)
     io.println("context summary:", json.encode(context.summary))
     printListPreview("context files", context.files, 3)
     printListPreview("context omitted", context.omitted, 3)
@@ -124,6 +148,7 @@ const runtimeApi = fn() {
     io.println("turns used:", modelLoop.turnsUsed)
     io.println("stop reason:", modelLoop.stopReason)
     io.println("tool calls:", len(modelLoop.toolRuns))
+    io.println("session stored turns:", len(session.turns))
     if len(modelLoop.toolRuns) > 0 {
       printListPreview("tool run preview", modelLoop.toolRuns, 2)
     }
