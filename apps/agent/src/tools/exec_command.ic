@@ -8,6 +8,7 @@ class ExecCommand {
     let args = object.get(input, "args", [])
     let cwd = object.get(input, "cwd", config.workspace)
     let shell = object.get(input, "shell", false)
+    let env = object.get(input, "env", {})
 
     if command == null || command == "" {
       return {
@@ -31,7 +32,8 @@ class ExecCommand {
       command: command,
       args: args,
       cwd: cwd,
-      shell: shell
+      shell: shell,
+      env: env
     })
 
     return {

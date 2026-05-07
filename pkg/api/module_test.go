@@ -1025,6 +1025,46 @@ if result.ok != true {
 	}
 }
 
+func TestRuntimeRunSource_StdExecRunWithEnvOptions(t *testing.T) {
+	envKey := "ICOO_STD_EXEC_ENV_TEST"
+	src := `
+import std.sys.exec as exec
+import std.core.string as str
+import std.sys.host as host
+
+let result = null
+if host.goos() == "windows" {
+  result = exec.run({
+    command: "cmd",
+    args: ["/c", "echo %` + envKey + `%"],
+    env: {
+      ` + envKey + `: "from-exec-env"
+    }
+  })
+} else {
+  result = exec.run({
+    command: "sh",
+    args: ["-lc", "printf $` + envKey + `"],
+    env: {
+      ` + envKey + `: "from-exec-env"
+    }
+  })
+}
+
+if result.ok != true {
+  panic("expected exec.run env success")
+}
+if str.contains(result.stdout, "from-exec-env") != true {
+  panic("expected exec.run env stdout to contain injected env value")
+}
+`
+
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("expected exec.run env options to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunSource_ImportsStdTemplateModule(t *testing.T) {
 	src := `
 import std.io.template as template

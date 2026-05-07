@@ -83,6 +83,13 @@ class ToolRegistry {
             shell: {
               type: "boolean",
               description: "Run command through the system shell. When true, omit args."
+            },
+            env: {
+              type: "object",
+              description: "Optional environment variable overrides merged on top of the current host environment.",
+              additionalProperties: {
+                type: "string"
+              }
             }
           },
           required: ["command"]
