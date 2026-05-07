@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"icoo_lang/internal/ast"
 	"icoo_lang/internal/lexer"
 )
 
@@ -89,5 +90,43 @@ class Child <- Base {
 	errs := p.Errors()
 	if len(errs) > 0 {
 		t.Fatalf("expected no parser errors, got: %v", errs)
+	}
+}
+
+func TestFromImportParsesSpecs(t *testing.T) {
+	input := `from "./math.ic" import add, version as mathVersion`
+	tokens := lexer.LexAll(input)
+
+	p := New(tokens)
+	prog := p.ParseProgram()
+	if errs := p.Errors(); len(errs) > 0 {
+		t.Fatalf("expected no parser errors, got: %v", errs)
+	}
+	if len(prog.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %d", len(prog.Nodes))
+	}
+
+	decl, ok := prog.Nodes[0].(ast.Decl)
+	if !ok {
+		t.Fatalf("expected decl node, got %T", prog.Nodes[0])
+	}
+	importDecl, ok := decl.(*ast.ImportDecl)
+	if !ok {
+		t.Fatalf("expected ImportDecl, got %T", decl)
+	}
+	if importDecl.FromImport != true {
+		t.Fatal("expected FromImport to be true")
+	}
+	if importDecl.Path != "./math.ic" {
+		t.Fatalf("expected path ./math.ic, got %q", importDecl.Path)
+	}
+	if len(importDecl.Specs) != 2 {
+		t.Fatalf("expected 2 import specs, got %d", len(importDecl.Specs))
+	}
+	if importDecl.Specs[0].Name != "add" || importDecl.Specs[0].Alias != "add" {
+		t.Fatalf("unexpected first spec: %+v", importDecl.Specs[0])
+	}
+	if importDecl.Specs[1].Name != "version" || importDecl.Specs[1].Alias != "mathVersion" {
+		t.Fatalf("unexpected second spec: %+v", importDecl.Specs[1])
 	}
 }

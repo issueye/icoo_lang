@@ -47,6 +47,34 @@ let name = math.version
 	}
 }
 
+func TestRuntimeRunFile_FromImportsExportedSymbols(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "math.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`export fn add(a, b) {
+  return a + b
+}
+
+export const version = "icoo"
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`from "./math.ic" import add, version as mathVersion
+
+let total = add(1, 2)
+let name = mathVersion
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected from-import run to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_ImportsProjectRootAliasModule(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "src", "main.ic")

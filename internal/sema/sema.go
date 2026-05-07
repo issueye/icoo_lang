@@ -108,6 +108,14 @@ func (a *Analyzer) visitFnDecl(d *ast.FnDecl) {
 }
 
 func (a *Analyzer) visitImportDecl(d *ast.ImportDecl) {
+	if d.FromImport {
+		for _, spec := range d.Specs {
+			if !a.scope.Define(Symbol{Name: spec.Alias, IsConst: true}) {
+				a.report(d.Span(), "duplicate declaration: "+spec.Alias)
+			}
+		}
+		return
+	}
 	if !a.scope.Define(Symbol{Name: d.Alias, IsConst: true}) {
 		a.report(d.Span(), "duplicate declaration: "+d.Alias)
 	}

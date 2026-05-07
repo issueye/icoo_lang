@@ -18,6 +18,8 @@ func (p *Parser) parseTopLevelNode() ast.Node {
 		return p.parseDecoratedDecl()
 	case token.Import:
 		return p.parseImportDecl()
+	case token.From:
+		return p.parseFromImportDecl()
 	case token.Export:
 		return p.parseExportDecl()
 	case token.Class:
@@ -79,6 +81,35 @@ func (p *Parser) parseImportDecl() ast.Decl {
 		Path:  path,
 		Alias: alias,
 		Span_: token.Span{Start: startTok.Span.Start, End: end},
+	}
+}
+
+func (p *Parser) parseFromImportDecl() ast.Decl {
+	startTok := p.expect(token.From, "expected 'from'")
+	path, end := p.parseImportPath()
+	p.expect(token.Import, "expected 'import'")
+
+	specs := make([]ast.ImportSpec, 0, 2)
+	for {
+		nameTok := p.expect(token.Ident, "expected imported name")
+		alias := nameTok.Lexeme
+		end = nameTok.Span.End
+		if p.match(token.As) {
+			aliasTok := p.expect(token.Ident, "expected import alias")
+			alias = aliasTok.Lexeme
+			end = aliasTok.Span.End
+		}
+		specs = append(specs, ast.ImportSpec{Name: nameTok.Lexeme, Alias: alias})
+		if !p.match(token.Comma) {
+			break
+		}
+	}
+
+	return &ast.ImportDecl{
+		Path:       path,
+		Specs:      specs,
+		FromImport: true,
+		Span_:      token.Span{Start: startTok.Span.Start, End: end},
 	}
 }
 

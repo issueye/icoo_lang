@@ -61,6 +61,7 @@ const (
 	Const
 	Let
 	Import
+	From
 	Export
 	Try
 	Catch
@@ -95,6 +96,7 @@ var Keywords = map[string]Type{
 	"const":     Const,
 	"let":       Let,
 	"import":    Import,
+	"from":      From,
 	"export":    Export,
 	"try":       Try,
 	"catch":     Catch,

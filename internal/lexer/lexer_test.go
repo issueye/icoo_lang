@@ -454,3 +454,24 @@ func TestLexer_ImportPath(t *testing.T) {
 		t.Errorf("expected As, got %s", tokens[2].Type)
 	}
 }
+
+func TestLexer_FromImportKeyword(t *testing.T) {
+	input := `from std.io.console import println as log`
+	tokens := LexAll(input)
+
+	if len(tokens) < 10 {
+		t.Fatalf("expected at least 10 tokens, got %d", len(tokens))
+	}
+	if tokens[0].Type != token.From {
+		t.Errorf("expected From, got %s", tokens[0].Type)
+	}
+	if tokens[1].Type != token.Ident || tokens[2].Type != token.Dot || tokens[3].Type != token.Ident {
+		t.Errorf("expected module path tokens, got %s %s %s", tokens[1].Type, tokens[2].Type, tokens[3].Type)
+	}
+	if tokens[4].Type != token.Dot || tokens[5].Type != token.Ident {
+		t.Errorf("expected module path continuation, got %s %s", tokens[4].Type, tokens[5].Type)
+	}
+	if tokens[6].Type != token.Import {
+		t.Errorf("expected Import, got %s", tokens[6].Type)
+	}
+}

@@ -45,15 +45,22 @@ func (d *FnDecl) Span() token.Span {
 }
 
 type ImportDecl struct {
-	Path  string
-	Alias string
-	Span_ token.Span
+	Path       string
+	Alias      string
+	Specs      []ImportSpec
+	FromImport bool
+	Span_      token.Span
 }
 
 func (*ImportDecl) node() {}
 func (*ImportDecl) decl() {}
 func (d *ImportDecl) Span() token.Span {
 	return d.Span_
+}
+
+type ImportSpec struct {
+	Name  string
+	Alias string
 }
 
 type ExportDecl struct {

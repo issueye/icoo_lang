@@ -92,18 +92,48 @@ func (c *Compiler) compileFnDecl(d *ast.FnDecl) {
 
 func (c *Compiler) compileImportDecl(d *ast.ImportDecl) {
 	pathIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: d.Path})
-	c.emit(bytecode.OpImportModule)
-	c.emitShort(pathIdx)
-
-	if c.current.scopeDepth > 0 {
-		c.addLocal(d.Alias, true)
+	if d.FromImport == true {
+		for _, spec := range d.Specs {
+			c.emit(bytecode.OpImportModule)
+			c.emitShort(pathIdx)
+			nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: spec.Name})
+			c.emit(bytecode.OpGetProperty)
+			c.emitShort(nameIdx)
+			c.defineImportedName(spec.Alias)
+		}
 		return
 	}
 
-	slot := c.addLocal(d.Alias, true)
+	c.emit(bytecode.OpImportModule)
+	c.emitShort(pathIdx)
+	c.defineModuleImportName(d.Alias)
+}
+
+func (c *Compiler) defineImportedName(name string) {
+	if c.current.scopeDepth > 0 {
+		c.addLocal(name, true)
+		slot := len(c.current.locals) - 1
+		c.emit(bytecode.OpSetLocal)
+		c.emitShort(uint16(slot))
+		c.emit(bytecode.OpPop)
+		return
+	}
+
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: name})
+	c.emit(bytecode.OpDefineGlobal)
+	c.emitShort(nameIdx)
+}
+
+func (c *Compiler) defineModuleImportName(name string) {
+	if c.current.scopeDepth > 0 {
+		c.addLocal(name, true)
+		return
+	}
+
+	slot := c.addLocal(name, true)
 	c.emit(bytecode.OpGetLocal)
 	c.emitShort(uint16(slot))
-	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: d.Alias})
+	nameIdx := c.current.chunk.AddConstant(runtime.StringValue{Value: name})
 	c.emit(bytecode.OpDefineGlobal)
 	c.emitShort(nameIdx)
 }
