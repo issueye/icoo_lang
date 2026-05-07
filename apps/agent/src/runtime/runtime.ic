@@ -20,10 +20,10 @@ class Runtime {
   appendToolResults(config, session, messages, toolCalls, toolRuns) {
     // tool_calls 必须顺序回放为 tool 消息，模型下一轮才能继续基于结果推理。
     for i, call in toolCalls {
-      let executed = toolExecutor.runCall(config, call)
+      let executed = toolExecutor.ToolExecutor.runCall(config, call)
       toolRuns = toolRuns.append(executed)
       sessionStore.appendToolMessage(config, session, executed)
-      messages = modelMessages.appendToolResult(
+      messages = modelMessages.ModelMessages.appendToolResult(
         messages,
         executed.toolCallId,
         executed.name,
@@ -38,7 +38,7 @@ class Runtime {
   }
 
   runToolLoop(config, session, context) {
-    let userPrompt = modelMessages.userPrompt(config, context)
+    let userPrompt = modelMessages.ModelMessages.userPrompt(config, context)
     let builtContext = {
       userPrompt: userPrompt
     }
@@ -72,7 +72,7 @@ class Runtime {
         break
       }
 
-      messages = modelMessages.appendAssistantToolCalls(
+      messages = modelMessages.ModelMessages.appendAssistantToolCalls(
         messages,
         response.toolCalls,
         response.text,
@@ -115,7 +115,7 @@ class Runtime {
     // session 先于 runtime 其他组件建立，后续会把 turn 持久化也挂在同一个 session 上。
     let opened = sessionStore.open(config)
     let session = opened.session
-    let context = contextBuilder.build(config)
+    let context = contextBuilder.ContextBuilder.build(config)
     let modelContext = {
       workspace: context.workspace,
       summaryJson: json.encode(context.summary),
@@ -178,8 +178,4 @@ class Runtime {
 
 }
 
-let runtimeApi = Runtime()
-
-export {
-  start: runtimeApi.start,
-}
+export new Runtime()

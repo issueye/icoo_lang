@@ -6,7 +6,7 @@ class ToolPath {
   // resolve 解析工具路径。
   // 如果路径以"@/"开头，则将其解析为工作空间路径的子路径。
   // 否则，返回路径本身。
-  fn resolve(config, path) {
+  resolve(config, path) {
     if path == null || path == "" {
       return path
     }
@@ -19,4 +19,4 @@ class ToolPath {
   }
 }
 
-export ToolPath()
+export new ToolPath()

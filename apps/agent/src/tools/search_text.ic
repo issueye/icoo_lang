@@ -4,9 +4,9 @@ import std.core.string as str
 import "@/src/context/ignore.ic" as ignore
 import "@/src/tools/tool_path.ic" as toolPath
 
-const searchTextApi = fn() {
+class SearchText {
   // isSearchable 判断文件是否适合文本搜索。
-  fn isSearchable(path) {
+  isSearchable(path) {
     return (
       str.hasSuffix(path, ".ic") ||
       str.hasSuffix(path, ".md") ||
@@ -22,10 +22,10 @@ const searchTextApi = fn() {
   }
 
   // scan 递归搜索目录或单文件。
-  fn scan(path, needle, matches) {
+  scan(path, needle, matches) {
     let info = fs.stat(path)
     if info.isFile {
-      if isSearchable(path) != true {
+      if this.isSearchable(path) != true {
         return matches
       }
 
@@ -43,13 +43,13 @@ const searchTextApi = fn() {
       if ignore.shouldIgnoreName(entry.name) == true {
         continue
       }
-      matches = scan(entry.path, needle, matches)
+      matches = this.scan(entry.path, needle, matches)
     }
     return matches
   }
 
   // run 执行文本搜索工具。
-  fn run(config, input) {
+  run(config, input) {
     let path = object.get(input, "path")
     let query = object.get(input, "query")
     if path == null || path == "" {
@@ -65,7 +65,7 @@ const searchTextApi = fn() {
       }
     }
 
-    path = toolPath.resolve(config, path)
+    path = toolPath.ToolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
         ok: false,
@@ -73,7 +73,7 @@ const searchTextApi = fn() {
       }
     }
 
-    let matches = scan(path, query, [])
+    let matches = this.scan(path, query, [])
     return {
       ok: true,
       content: matches,
@@ -84,12 +84,6 @@ const searchTextApi = fn() {
       }
     }
   }
-
-  return {
-    run: run
-  }
-}()
-
-export {
-  run: searchTextApi.run,
 }
+
+export new SearchText()

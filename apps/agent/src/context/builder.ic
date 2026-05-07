@@ -125,8 +125,4 @@ class ContextBuilder {
 
 }
 
-let builderApi = ContextBuilder()
-
-export {
-  build: builderApi.build,
-}
+export new ContextBuilder()

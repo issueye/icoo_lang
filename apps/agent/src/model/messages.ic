@@ -40,7 +40,7 @@ class ModelMessages {
   }
 
   toolDefinitions() {
-    return registry.definitions()
+    return registry.ToolRegistry.definitions()
   }
 
   appendAssistantToolCalls(messages, toolCalls, content, reasoningContent) {
@@ -71,14 +71,4 @@ class ModelMessages {
 
 }
 
-let messagesApi = ModelMessages()
-
-export {
-  systemPrompt: messagesApi.systemPrompt,
-  userPrompt: messagesApi.userPrompt,
-  build: messagesApi.build,
-  buildBase: messagesApi.buildBase,
-  toolDefinitions: messagesApi.toolDefinitions,
-  appendAssistantToolCalls: messagesApi.appendAssistantToolCalls,
-  appendToolResult: messagesApi.appendToolResult,
-}
+export new ModelMessages()

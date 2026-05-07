@@ -2,9 +2,9 @@ import std.io.fs as fs
 import std.core.object as object
 import "@/src/tools/tool_path.ic" as toolPath
 
-const listDirApi = fn() {
+class ListDir {
   // run 列出工作区目录内容。
-  fn run(config, input) {
+  run(config, input) {
     let path = object.get(input, "path")
     if path == null || path == "" {
       return {
@@ -13,7 +13,7 @@ const listDirApi = fn() {
       }
     }
 
-    path = toolPath.resolve(config, path)
+    path = toolPath.ToolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
         ok: false,
@@ -38,12 +38,6 @@ const listDirApi = fn() {
       }
     }
   }
-
-  return {
-    run: run
-  }
-}()
-
-export {
-  run: listDirApi.run,
 }
+
+export new ListDir()

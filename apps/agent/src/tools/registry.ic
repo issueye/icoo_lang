@@ -20,7 +20,7 @@ class ToolRegistry {
           },
           required: ["path"]
         },
-        handler: readFile.run
+        handler: readFile.ReadFile.run
       },
       listDir: {
         name: "listDir",
@@ -35,7 +35,7 @@ class ToolRegistry {
           },
           required: ["path"]
         },
-        handler: listDir.run
+        handler: listDir.ListDir.run
       },
       searchText: {
         name: "searchText",
@@ -54,7 +54,7 @@ class ToolRegistry {
           },
           required: ["path", "query"]
         },
-        handler: searchText.run
+        handler: searchText.SearchText.run
       }
     }
   }
@@ -84,10 +84,4 @@ class ToolRegistry {
 
 }
 
-let registryApi = ToolRegistry()
-
-export {
-  build: registryApi.build,
-  get: registryApi.get,
-  definitions: registryApi.definitions,
-}
+export new ToolRegistry()

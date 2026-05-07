@@ -28,8 +28,4 @@ class MergeConfig {
   }
 }
 
-let mergeApi = MergeConfig()
-
-export {
-  loadConfig: mergeApi.loadConfig,
-}
+export new MergeConfig()

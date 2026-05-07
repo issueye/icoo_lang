@@ -147,16 +147,6 @@ func (p *Parser) parseExportDecl() ast.Decl {
 		}
 	}
 
-	if p.check(token.New) || p.startsExpression(p.current().Type) {
-		expr := p.parseExportExpr()
-		if expr != nil {
-			return &ast.ExportDecl{
-				Expr:  expr,
-				Span_: token.Span{Start: startTok.Span.Start, End: expr.Span().End},
-			}
-		}
-	}
-
 	var decl ast.Decl
 	switch p.current().Type {
 	case token.Const, token.Let:
@@ -168,7 +158,16 @@ func (p *Parser) parseExportDecl() ast.Decl {
 	case token.At:
 		decl = p.parseDecoratedDecl()
 	default:
-		p.errorAtCurrent("expected declaration after export")
+		if p.check(token.New) || p.startsExpression(p.current().Type) {
+			expr := p.parseExportExpr()
+			if expr != nil {
+				return &ast.ExportDecl{
+					Expr:  expr,
+					Span_: token.Span{Start: startTok.Span.Start, End: expr.Span().End},
+				}
+			}
+		}
+		p.errorAtCurrent("expected declaration or expression after export")
 		return nil
 	}
 	return &ast.ExportDecl{

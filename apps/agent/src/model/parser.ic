@@ -191,9 +191,4 @@ class ModelParser {
 
 }
 
-let parserApi = ModelParser()
-
-export {
-  parseResponse: parserApi.parseResponse,
-  parseStreamEvent: parserApi.parseStreamEvent,
-}
+export new ModelParser()

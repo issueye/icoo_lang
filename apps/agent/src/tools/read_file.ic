@@ -2,9 +2,9 @@ import std.io.fs as fs
 import std.core.object as object
 import "@/src/tools/tool_path.ic" as toolPath
 
-const readFileApi = fn() {
+class ReadFile {
   // run 读取工作区中的文本文件。
-  fn run(config, input) {
+  run(config, input) {
     let path = object.get(input, "path")
     if path == null || path == "" {
       return {
@@ -13,7 +13,7 @@ const readFileApi = fn() {
       }
     }
 
-    path = toolPath.resolve(config, path)
+    path = toolPath.ToolPath.resolve(config, path)
     if fs.exists(path) != true {
       return {
         ok: false,
@@ -29,12 +29,6 @@ const readFileApi = fn() {
       }
     }
   }
-
-  return {
-    run: run
-  }
-}()
-
-export {
-  run: readFileApi.run,
 }
+
+export new ReadFile()

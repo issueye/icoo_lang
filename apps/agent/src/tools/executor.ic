@@ -31,7 +31,7 @@ class ToolExecutor {
   }
 
   run(config, name, input) {
-    let tool = registry.get(name)
+    let tool = registry.ToolRegistry.get(name)
     if tool == null {
       return {
         ok: false,
@@ -74,9 +74,4 @@ class ToolExecutor {
 
 }
 
-let executorApi = ToolExecutor()
-
-export {
-  run: executorApi.run,
-  runCall: executorApi.runCall,
-}
+export new ToolExecutor()
