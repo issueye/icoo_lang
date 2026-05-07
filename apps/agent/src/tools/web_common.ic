@@ -1,7 +1,7 @@
 import std.core.string as str
 import std.data.json as json
 
-class WebCommon {
+export class WebCommon {
   after(text, marker) {
     let parts = str.split(text, marker)
     if len(parts) < 2 {
@@ -183,4 +183,3 @@ class WebCommon {
   }
 }
 
-export new WebCommon()

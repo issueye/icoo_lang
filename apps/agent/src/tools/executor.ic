@@ -2,7 +2,7 @@ import std.core.object as object
 import std.data.json as json
 import "@/src/tools/registry.ic" as registry
 
-class ToolExecutor {
+export class ToolExecutor {
   parseArguments(rawArguments) {
     if typeOf(rawArguments) == "object" {
       return {
@@ -31,7 +31,7 @@ class ToolExecutor {
   }
 
   run(config, name, input) {
-    let tool = registry.ToolRegistry.get(name)
+    let tool = registry.ToolRegistry().get(name)
     if tool == null {
       return {
         ok: false,
@@ -73,5 +73,3 @@ class ToolExecutor {
   }
 
 }
-
-export new ToolExecutor()

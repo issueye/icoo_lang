@@ -1,6 +1,6 @@
 import std.core.object as object
 
-class ModelParser {
+export class ModelParser {
   appendDeltaToolCalls(toolCalls, rawToolCalls) {
     if typeOf(rawToolCalls) != "array" {
       return toolCalls
@@ -191,4 +191,3 @@ class ModelParser {
 
 }
 
-export new ModelParser()

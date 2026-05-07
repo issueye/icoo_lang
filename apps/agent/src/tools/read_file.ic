@@ -2,7 +2,7 @@ import std.io.fs as fs
 import std.core.object as object
 import "@/src/tools/tool_path.ic" as toolPath
 
-class ReadFile {
+export class ReadFile {
   // run 读取工作区中的文本文件。
   run(config, input) {
     let path = object.get(input, "path")
@@ -13,7 +13,7 @@ class ReadFile {
       }
     }
 
-    path = toolPath.ToolPath.resolve(config, path)
+    path = toolPath.ToolPath().resolve(config, path)
     if fs.exists(path) != true {
       return {
         ok: false,
@@ -37,5 +37,3 @@ class ReadFile {
     }
   }
 }
-
-export new ReadFile()

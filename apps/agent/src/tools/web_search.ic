@@ -2,7 +2,7 @@ import std.net.http.client as http
 import std.core.object as object
 import "@/src/tools/web_common.ic" as webCommon
 
-class WebSearch {
+export class WebSearch {
   run(config, input) {
     let query = object.get(input, "query")
     let maxResults = object.get(input, "maxResults", 5)
@@ -34,7 +34,7 @@ class WebSearch {
     }
 
     let body = object.get(response, "body", "")
-    let results = webCommon.WebCommon.parseDuckDuckGoResults(body, maxResults)
+    let results = webCommon.WebCommon().parseDuckDuckGoResults(body, maxResults)
     return {
       ok: true,
       content: results,
@@ -47,5 +47,3 @@ class WebSearch {
     }
   }
 }
-
-export new WebSearch()

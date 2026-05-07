@@ -235,6 +235,35 @@ if tool.Tool.run() != 7 {
 	}
 }
 
+func TestRuntimeRunFile_ExportClassDecl(t *testing.T) {
+	dir := t.TempDir()
+	modPath := filepath.Join(dir, "tool.ic")
+	mainPath := filepath.Join(dir, "main.ic")
+
+	if err := os.WriteFile(modPath, []byte(`export class Tool {
+  run() {
+    return 7
+  }
+}
+`), 0o644); err != nil {
+		t.Fatalf("write module: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "./tool.ic" as tool
+
+if tool.Tool().run() != 7 {
+  panic("unexpected exported class result")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected export class declaration to succeed, got: %v", err)
+	}
+}
+
 func TestRuntimeRunFile_AgentWebFetchTool(t *testing.T) {
 	dir := t.TempDir()
 	mainPath := filepath.Join(dir, "main.ic")
@@ -251,7 +280,7 @@ func TestRuntimeRunFile_AgentWebFetchTool(t *testing.T) {
 
 	if err := os.WriteFile(mainPath, []byte(`import "@/src/tools/web_fetch.ic" as webFetch
 
-let result = webFetch.WebFetch.run({}, {
+let result = webFetch.WebFetch().run({}, {
   url: "`+quoteICString(server.URL)+`",
   maxChars: 120
 })
@@ -301,7 +330,7 @@ func TestRuntimeRunFile_AgentWebSearchTool(t *testing.T) {
 
 	if err := os.WriteFile(mainPath, []byte(`import "@/src/tools/web_search.ic" as webSearch
 
-let result = webSearch.WebSearch.run({}, {
+let result = webSearch.WebSearch().run({}, {
   query: "icoo",
   maxResults: 2,
   endpoint: "`+quoteICString(server.URL)+`"
@@ -344,7 +373,7 @@ func TestRuntimeRunFile_AgentExecCommandTool(t *testing.T) {
 
 	if err := os.WriteFile(mainPath, []byte(`import "@/src/tools/exec_command.ic" as execCommand
 
-let result = execCommand.ExecCommand.run({
+let result = execCommand.ExecCommand().run({
   workspace: "."
 }, {
   command: "go",
@@ -368,6 +397,40 @@ if len(result.meta.cwd) == 0 {
 	rt.SetProjectRoot(agentRoot, "@")
 	if _, err := rt.RunFile(mainPath); err != nil {
 		t.Fatalf("expected execCommand tool import to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunFile_AgentMainStartHelp(t *testing.T) {
+	dir := t.TempDir()
+	mainPath := filepath.Join(dir, "main.ic")
+
+	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "apps", "agent"))
+	if err != nil {
+		t.Fatalf("resolve agent root: %v", err)
+	}
+
+	if err := os.WriteFile(mainPath, []byte(`import "@/src/main.ic" as agent
+
+let result = agent.start({
+  help: true,
+  workspace: "."
+})
+
+if result.ok != true {
+  panic("expected agent start ok")
+}
+if typeOf(result.config) != "object" {
+  panic("expected config object")
+}
+`), 0o644); err != nil {
+		t.Fatalf("write main module: %v", err)
+	}
+
+	rt := NewRuntime()
+	rt.SetProjectRoot(agentRoot, "@")
+	rt.SetScriptArgs([]string{"--workspace", "."})
+	if _, err := rt.RunFile(mainPath); err != nil {
+		t.Fatalf("expected agent main start help to succeed, got: %v", err)
 	}
 }
 

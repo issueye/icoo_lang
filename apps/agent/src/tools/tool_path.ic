@@ -2,7 +2,7 @@ import std.io.fs as fs
 import std.core.string as str
 
 // ToolPath 是一个解析工具路径的类。
-class ToolPath {
+export class ToolPath {
   // resolve 解析工具路径。
   // 如果路径以"@/"开头，则将其解析为工作空间路径的子路径。
   // 否则，返回路径本身。
@@ -19,4 +19,3 @@ class ToolPath {
   }
 }
 
-export new ToolPath()

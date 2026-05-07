@@ -1,7 +1,7 @@
 import std.data.json as json
 import "@/src/tools/registry.ic" as registry
 
-class ModelMessages {
+export class ModelMessages {
   systemPrompt() {
     return "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
   }
@@ -40,7 +40,7 @@ class ModelMessages {
   }
 
   toolDefinitions() {
-    return registry.ToolRegistry.definitions()
+    return registry.ToolRegistry().definitions()
   }
 
   appendAssistantToolCalls(messages, toolCalls, content, reasoningContent) {
@@ -70,5 +70,3 @@ class ModelMessages {
   }
 
 }
-
-export new ModelMessages()

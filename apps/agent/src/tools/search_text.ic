@@ -4,7 +4,7 @@ import std.core.string as str
 import "@/src/context/ignore.ic" as ignore
 import "@/src/tools/tool_path.ic" as toolPath
 
-class SearchText {
+export class SearchText {
   // isSearchable 判断文件是否适合文本搜索。
   isSearchable(path) {
     return (
@@ -65,7 +65,7 @@ class SearchText {
       }
     }
 
-    path = toolPath.ToolPath.resolve(config, path)
+    path = toolPath.ToolPath().resolve(config, path)
     if fs.exists(path) != true {
       return {
         ok: false,
@@ -85,5 +85,3 @@ class SearchText {
     }
   }
 }
-
-export new SearchText()

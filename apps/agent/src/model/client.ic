@@ -83,7 +83,7 @@ class ModelClient {
           break
         }
 
-        state = parser.ModelParser.parseStreamEvent(parsedLine.json, state)
+        state = parser.ModelParser().parseStreamEvent(parsedLine.json, state)
         if state.sawToolCallDelta == true {
           panic("stream emitted tool_calls; fallback to non-streaming response")
         }
@@ -146,7 +146,7 @@ class ModelClient {
       json: payload
     })
 
-    let parsed = parser.ModelParser.parseResponse(response.json)
+    let parsed = parser.ModelParser().parseResponse(response.json)
     if parsed.ok == true {
       return {
         mode: "remote",
@@ -178,8 +178,8 @@ class ModelClient {
     return this.requestRemote(config, {
       model: config.model,
       temperature: 0.2,
-      messages: messages.ModelMessages.build(config, context),
-      tools: messages.ModelMessages.toolDefinitions()
+      messages: messages.ModelMessages().build(config, context),
+      tools: messages.ModelMessages().toolDefinitions()
     })
   }
 
@@ -199,7 +199,7 @@ class ModelClient {
       model: config.model,
       temperature: 0.2,
       messages: builtMessages,
-      tools: messages.ModelMessages.toolDefinitions()
+      tools: messages.ModelMessages().toolDefinitions()
     }
 
     if this.shouldStreamFinalAnswer(config, builtMessages) == true {

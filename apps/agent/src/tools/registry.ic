@@ -6,7 +6,7 @@ import "@/src/tools/search_text.ic" as searchText
 import "@/src/tools/web_fetch.ic" as webFetch
 import "@/src/tools/web_search.ic" as webSearch
 
-class ToolRegistry {
+export class ToolRegistry {
   build() {
     // registry 统一维护本地 handler 与暴露给 LLM 的 function schema。
     return {
@@ -162,4 +162,3 @@ class ToolRegistry {
 
 }
 
-export new ToolRegistry()

@@ -2,7 +2,7 @@ import std.net.http.client as http
 import std.core.object as object
 import "@/src/tools/web_common.ic" as webCommon
 
-class WebFetch {
+export class WebFetch {
   run(config, input) {
     let url = object.get(input, "url")
     let maxChars = object.get(input, "maxChars", 4000)
@@ -30,9 +30,9 @@ class WebFetch {
     }
 
     let body = object.get(response, "body", "")
-    let title = webCommon.WebCommon.extractTitle(body)
-    let text = webCommon.WebCommon.clipText(
-      webCommon.WebCommon.htmlToText(body),
+    let title = webCommon.WebCommon().extractTitle(body)
+    let text = webCommon.WebCommon().clipText(
+      webCommon.WebCommon().htmlToText(body),
       maxChars
     )
     return {
@@ -47,5 +47,3 @@ class WebFetch {
     }
   }
 }
-
-export new WebFetch()

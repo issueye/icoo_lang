@@ -4,7 +4,7 @@ import "@/src/config/file.ic" as file
 import "@/src/config/env.ic" as env
 import "@/src/config/args.ic" as args
 
-class MergeConfig {
+export class MergeConfig {
   loadConfig(overrides) {
     // 先预解析 workspace，再加载项目级 config.toml。
     // 完整优先级保持为 defaults -> preview-workspace -> file -> env -> args -> explicit overrides。
@@ -28,4 +28,3 @@ class MergeConfig {
   }
 }
 
-export new MergeConfig()

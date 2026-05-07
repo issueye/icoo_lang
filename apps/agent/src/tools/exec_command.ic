@@ -2,7 +2,7 @@ import std.sys.exec as exec
 import std.core.object as object
 import "@/src/tools/tool_path.ic" as toolPath
 
-class ExecCommand {
+export class ExecCommand {
   run(config, input) {
     let command = object.get(input, "command")
     let args = object.get(input, "args", [])
@@ -17,7 +17,7 @@ class ExecCommand {
       }
     }
 
-    cwd = toolPath.ToolPath.resolve(config, cwd)
+    cwd = toolPath.ToolPath().resolve(config, cwd)
 
     // `std.sys.exec` 在 shell 模式下只消费 command，本层禁止同时传 args，
     // 避免模型误以为 shell + argv 会一起生效。
@@ -52,5 +52,3 @@ class ExecCommand {
     }
   }
 }
-
-export new ExecCommand()

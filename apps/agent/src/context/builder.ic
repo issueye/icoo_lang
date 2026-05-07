@@ -3,7 +3,7 @@ import std.core.string as str
 import "@/src/context/budget.ic" as budget
 import "@/src/context/ignore.ic" as ignore
 
-class ContextBuilder {
+export class ContextBuilder {
   isPreviewable(path) {
     return (
       str.hasSuffix(path, ".ic") ||
@@ -125,4 +125,3 @@ class ContextBuilder {
 
 }
 
-export new ContextBuilder()
