@@ -1,0 +1,297 @@
+import std.io.fs as fs
+import std.sys.os as os
+import std.core.string as str
+
+export class SkillCatalog {
+  primaryDir(config) {
+    let dirs = this.configuredDirs(config)
+    if len(dirs) == 0 {
+      return null
+    }
+    return dirs[0]
+  }
+
+  defaultDir(config) {
+    let agentHome = os.getEnv("ICOO_AGENTS_HOME")
+    if typeOf(agentHome) == "string" && agentHome != "" {
+      return fs.join(agentHome, "skills")
+    }
+
+    let userProfile = os.getEnv("USERPROFILE")
+    if typeOf(userProfile) == "string" && userProfile != "" {
+      return fs.join(fs.join(userProfile, ".agents"), "skills")
+    }
+
+    return fs.join(fs.join(config.workspace, ".agents"), "skills")
+  }
+
+  configuredDirs(config) {
+    let dirs = []
+
+    let explicit = config.skillsDir
+    if typeOf(explicit) == "string" && explicit != "" {
+      dirs = dirs.append(explicit)
+    }
+
+    let workspaceDir = fs.join(fs.join(config.workspace, ".agents"), "skills")
+    if this.hasDir(dirs, workspaceDir) != true {
+      dirs = dirs.append(workspaceDir)
+    }
+
+    let defaultDir = this.defaultDir(config)
+    if this.hasDir(dirs, defaultDir) != true {
+      dirs = dirs.append(defaultDir)
+    }
+
+    return dirs
+  }
+
+  hasDir(dirs, path) {
+    for i, dir in dirs {
+      if dir == path {
+        return true
+      }
+    }
+    return false
+  }
+
+  stripQuotes(value) {
+    if typeOf(value) != "string" {
+      return value
+    }
+    let text = str.trimSpace(value)
+    if len(text) >= 2 && str.hasPrefix(text, "\"") && str.hasSuffix(text, "\"") {
+      let parts = str.split(text, "\"")
+      if len(parts) >= 3 {
+        return str.join(parts.slice(1, len(parts) - 1), "\"")
+      }
+    }
+    if len(text) >= 2 && str.hasPrefix(text, "'") && str.hasSuffix(text, "'") {
+      let parts = str.split(text, "'")
+      if len(parts) >= 3 {
+        return str.join(parts.slice(1, len(parts) - 1), "'")
+      }
+    }
+    return text
+  }
+
+  extractQuoted(line, quote) {
+    let parts = str.split(line, quote)
+    if len(parts) >= 3 {
+      return str.join(parts.slice(1, len(parts) - 1), quote)
+    }
+    return null
+  }
+
+  extractBody(content) {
+    let lines = str.split(content, "\n")
+    if len(lines) == 0 || str.trimSpace(lines[0]) != "---" {
+      return content
+    }
+
+    let index = 1
+    while index < len(lines) {
+      if str.trimSpace(lines[index]) == "---" {
+        let bodyLines = lines.slice(index + 1)
+        return str.join(bodyLines, "\n")
+      }
+      index = index + 1
+    }
+
+    return content
+  }
+
+  isValidSkillId(skillId) {
+    if typeOf(skillId) != "string" || skillId == "" {
+      return false
+    }
+    if str.indexOf(skillId, "/") >= 0 || str.indexOf(skillId, "\\") >= 0 {
+      return false
+    }
+    if str.indexOf(skillId, ":") >= 0 || str.indexOf(skillId, "..") >= 0 {
+      return false
+    }
+    if str.indexOf(skillId, " ") >= 0 || str.hasPrefix(skillId, ".") {
+      return false
+    }
+    return true
+  }
+
+  buildSkillDocument(skillId, name, description, body) {
+    let finalName = name
+    if typeOf(finalName) != "string" || finalName == "" {
+      finalName = skillId
+    }
+
+    let finalBody = body
+    if typeOf(finalBody) != "string" || finalBody == "" {
+      finalBody = "# " + finalName + "\n"
+    }
+
+    return (
+      "---\n" +
+      "name: " + finalName + "\n" +
+      "description: " + description + "\n" +
+      "---\n\n" +
+      finalBody
+    )
+  }
+
+  parseFrontmatter(content) {
+    let lines = str.split(content, "\n")
+    if len(lines) == 0 || str.trimSpace(lines[0]) != "---" {
+      return {
+        hasFrontmatter: false,
+        name: null,
+        description: null
+      }
+    }
+
+    let name = null
+    let description = null
+    let index = 1
+    while index < len(lines) {
+      let line = str.trimSpace(lines[index])
+      if line == "---" {
+        break
+      }
+      if str.hasPrefix(line, "name:") {
+        let quoted = this.extractQuoted(line, "\"")
+        if quoted != null {
+          name = quoted
+        } else {
+          quoted = this.extractQuoted(line, "'")
+          if quoted != null {
+            name = quoted
+          } else {
+            let parts = str.split(line, ":")
+            if len(parts) > 1 {
+              name = this.stripQuotes(str.join(parts.slice(1, len(parts)), ":"))
+            }
+          }
+        }
+      }
+      if str.hasPrefix(line, "description:") {
+        let quoted = this.extractQuoted(line, "\"")
+        if quoted != null {
+          description = quoted
+        } else {
+          quoted = this.extractQuoted(line, "'")
+          if quoted != null {
+            description = quoted
+          } else {
+            let parts = str.split(line, ":")
+            if len(parts) > 1 {
+              description = this.stripQuotes(str.join(parts.slice(1, len(parts)), ":"))
+            }
+          }
+        }
+      }
+      index = index + 1
+    }
+
+    return {
+      hasFrontmatter: true,
+      name: name,
+      description: description
+    }
+  }
+
+  buildSkill(dirPath) {
+    let skillFile = fs.join(dirPath, "SKILL.md")
+    if fs.exists(skillFile) != true {
+      return null
+    }
+    let info = fs.stat(skillFile)
+    if info.isFile != true {
+      return null
+    }
+
+    let content = fs.readFile(skillFile)
+    let parsed = this.parseFrontmatter(content)
+    let slug = fs.base(dirPath)
+
+    return {
+      id: slug,
+      name: parsed.name,
+      description: parsed.description,
+      dir: dirPath,
+      skillFile: skillFile,
+      hasFrontmatter: parsed.hasFrontmatter
+    }
+  }
+
+  listDir(dirPath) {
+    if fs.exists(dirPath) != true {
+      return []
+    }
+    let info = fs.stat(dirPath)
+    if info.isDir != true {
+      return []
+    }
+
+    let skills = []
+    let entries = fs.readDir(dirPath)
+    for i, entry in entries {
+      if entry.isDir != true {
+        continue
+      }
+      let skill = this.buildSkill(entry.path)
+      if skill != null {
+        skills = skills.append(skill)
+      }
+    }
+    return skills
+  }
+
+  list(config) {
+    let items = []
+    let seen = []
+    let dirs = this.configuredDirs(config)
+    for i, dirPath in dirs {
+      let skills = this.listDir(dirPath)
+      for j, skill in skills {
+        if this.hasDir(seen, skill.skillFile) == true {
+          continue
+        }
+        seen = seen.append(skill.skillFile)
+        items = items.append(skill)
+      }
+    }
+    return items
+  }
+
+  findById(config, skillId) {
+    let items = this.list(config)
+    for i, skill in items {
+      if skill.id == skillId {
+        return skill
+      }
+      if skill.name == skillId {
+        return skill
+      }
+    }
+    return null
+  }
+
+  summary(config) {
+    let items = this.list(config)
+    if len(items) == 0 {
+      return "Available Skills:\n- none discovered"
+    }
+
+    let text = "Available Skills:\n"
+    for i, skill in items {
+      let label = skill.id
+      if typeOf(skill.name) == "string" && skill.name != "" {
+        label = label + " (" + skill.name + ")"
+      }
+      text = text + "- " + label
+      if typeOf(skill.description) == "string" && skill.description != "" {
+        text = text + ": " + skill.description
+      }
+      text = text + "\n"
+    }
+    return text
+  }
+}

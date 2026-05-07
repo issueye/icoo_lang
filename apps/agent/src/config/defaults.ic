@@ -3,7 +3,7 @@ import std.sys.os as os
 
 export class Defaults {
   defaultConfig() {
-    let stateDir = fs.join(os.cwd(), ".agent")
+    let stateDir = fs.join(os.cwd(), ".agents")
     return {
       workspace: os.cwd(),
       mode: "interactive",
@@ -18,7 +18,8 @@ export class Defaults {
       maxFiles: 24,
       maxTotalBytes: 32768,
       streamFinalAnswer: true,
-      agentName: "icoo_agent",
+      agentName: "icoo_agents",
+      skillsDir: null,
       sessionDir: fs.join(stateDir, "sessions"),
       logPath: fs.join(stateDir, "agent.log"),
       cliUnknownArgs: []

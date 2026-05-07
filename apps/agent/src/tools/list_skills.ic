@@ -1,0 +1,17 @@
+export class ListSkills {
+  init(skillCatalog) {
+    this.skillCatalog = skillCatalog
+  }
+
+  run(config, input) {
+    let items = this.skillCatalog.list(config)
+    return {
+      ok: true,
+      content: items,
+      meta: {
+        count: len(items),
+        configuredDirs: this.skillCatalog.configuredDirs(config)
+      }
+    }
+  }
+}

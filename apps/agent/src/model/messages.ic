@@ -1,4 +1,5 @@
 import std.data.json as json
+import std.core.object as object
 
 export class ModelMessages {
   init(toolRegistry) {
@@ -19,6 +20,10 @@ export class ModelMessages {
     text = text + "Workspace:\n" + context.workspace + "\n\n"
     if typeOf(context.cliUnknownArgs) == "array" && len(context.cliUnknownArgs) > 0 {
       text = text + "CLI Unknown Args:\n" + json.encode(context.cliUnknownArgs) + "\n\n"
+    }
+    let skillsSummary = object.get(context, "skillsSummary")
+    if typeOf(skillsSummary) == "string" && skillsSummary != "" {
+      text = text + skillsSummary + "\n\n"
     }
     text = text + "Context Summary:\n" + context.summaryJson + "\n"
     return text

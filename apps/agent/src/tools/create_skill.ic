@@ -1,0 +1,66 @@
+import std.io.fs as fs
+import std.sys.os as os
+import std.core.object as object
+
+export class CreateSkill {
+  init(skillCatalog) {
+    this.skillCatalog = skillCatalog
+  }
+
+  run(config, input) {
+    let skillId = object.get(input, "skill")
+    if this.skillCatalog.isValidSkillId(skillId) != true {
+      return {
+        ok: false,
+        error: "createSkill requires a safe skill id"
+      }
+    }
+
+    if this.skillCatalog.findById(config, skillId) != null {
+      return {
+        ok: false,
+        error: "skill already exists: " + skillId
+      }
+    }
+
+    let description = object.get(input, "description")
+    if typeOf(description) != "string" || description == "" {
+      return {
+        ok: false,
+        error: "createSkill requires non-empty description"
+      }
+    }
+
+    let baseDir = this.skillCatalog.primaryDir(config)
+    if typeOf(baseDir) != "string" || baseDir == "" {
+      return {
+        ok: false,
+        error: "no skill directory configured"
+      }
+    }
+
+    let skillDir = fs.join(baseDir, skillId)
+    let skillFile = fs.join(skillDir, "SKILL.md")
+    let content = object.get(input, "content")
+    if typeOf(content) != "string" || content == "" {
+      content = this.skillCatalog.buildSkillDocument(
+        skillId,
+        object.get(input, "name"),
+        description,
+        object.get(input, "body")
+      )
+    }
+
+    os.mkdirAll(skillDir)
+    fs.writeFile(skillFile, content)
+
+    return {
+      ok: true,
+      created: skillId,
+      meta: {
+        dir: skillDir,
+        skillFile: skillFile
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+import std.sys.os as os
+import std.core.object as object
+
+export class RemoveSkill {
+  init(skillCatalog) {
+    this.skillCatalog = skillCatalog
+  }
+
+  run(config, input) {
+    let skillId = object.get(input, "skill")
+    if typeOf(skillId) != "string" || skillId == "" {
+      return {
+        ok: false,
+        error: "removeSkill requires non-empty skill"
+      }
+    }
+
+    let skill = this.skillCatalog.findById(config, skillId)
+    if skill == null {
+      return {
+        ok: false,
+        error: "skill not found: " + skillId
+      }
+    }
+
+    os.removeAll(skill.dir)
+
+    return {
+      ok: true,
+      removed: skill.id,
+      meta: skill
+    }
+  }
+}

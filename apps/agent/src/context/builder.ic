@@ -4,9 +4,10 @@ import "@/src/context/budget.ic" as budget
 import "@/src/context/ignore.ic" as ignore
 
 export class ContextBuilder {
-  init(ignoreRule, contextBudget) {
+  init(ignoreRule, contextBudget, skillCatalog) {
     this.ignore = ignoreRule
     this.budget = contextBudget
+    this.skillCatalog = skillCatalog
   }
 
   isPreviewable(path) {
@@ -121,6 +122,7 @@ export class ContextBuilder {
         maxTotalBytes: state.budget.maxTotalBytes,
         maxDepth: state.budget.maxDepth
       },
+      skillsSummary: this.skillCatalog.summary(config),
       files: state.files,
       omitted: state.omitted
     }

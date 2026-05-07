@@ -1,0 +1,53 @@
+import std.io.fs as fs
+import std.core.object as object
+
+export class UpdateSkill {
+  init(skillCatalog) {
+    this.skillCatalog = skillCatalog
+  }
+
+  run(config, input) {
+    let skillId = object.get(input, "skill")
+    if typeOf(skillId) != "string" || skillId == "" {
+      return {
+        ok: false,
+        error: "updateSkill requires non-empty skill"
+      }
+    }
+
+    let skill = this.skillCatalog.findById(config, skillId)
+    if skill == null {
+      return {
+        ok: false,
+        error: "skill not found: " + skillId
+      }
+    }
+
+    let content = object.get(input, "content")
+    if typeOf(content) != "string" || content == "" {
+      let existing = fs.readFile(skill.skillFile)
+      let parsed = this.skillCatalog.parseFrontmatter(existing)
+      let name = object.get(input, "name", skill.id)
+      let description = object.get(input, "description", parsed.description)
+      let body = object.get(input, "body")
+      if typeOf(body) != "string" || body == "" {
+        body = this.skillCatalog.extractBody(existing)
+      }
+      if typeOf(description) != "string" || description == "" {
+        return {
+          ok: false,
+          error: "updateSkill requires description when the existing skill has none"
+        }
+      }
+      content = this.skillCatalog.buildSkillDocument(skill.id, name, description, body)
+    }
+
+    fs.writeFile(skill.skillFile, content)
+
+    return {
+      ok: true,
+      updated: skill.id,
+      meta: skill
+    }
+  }
+}

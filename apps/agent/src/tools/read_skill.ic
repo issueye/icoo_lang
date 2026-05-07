@@ -1,0 +1,32 @@
+import std.io.fs as fs
+import std.core.object as object
+
+export class ReadSkill {
+  init(skillCatalog) {
+    this.skillCatalog = skillCatalog
+  }
+
+  run(config, input) {
+    let skillId = object.get(input, "skill")
+    if typeOf(skillId) != "string" || skillId == "" {
+      return {
+        ok: false,
+        error: "readSkill requires non-empty skill"
+      }
+    }
+
+    let skill = this.skillCatalog.findById(config, skillId)
+    if skill == null {
+      return {
+        ok: false,
+        error: "skill not found: " + skillId
+      }
+    }
+
+    return {
+      ok: true,
+      content: fs.readFile(skill.skillFile),
+      meta: skill
+    }
+  }
+}

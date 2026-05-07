@@ -127,7 +127,7 @@ export class ModelClient {
         "- This fallback does not yet perform model-grade reasoning.\n" +
         "- Tool-calling requires a remote OpenAI-compatible model endpoint.\n\n" +
         "Next Steps\n" +
-        "- Configure `ICOO_AGENT_API_KEY` to enable remote model calls.\n" +
+        "- Configure `ICOO_AGENTS_API_KEY` to enable remote model calls.\n" +
         "- Keep extending tool coverage and session persistence on top of the current runtime loop.\n\n" +
         "Context Summary\n" +
         context.summaryJson,

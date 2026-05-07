@@ -9,8 +9,8 @@ max_turns = 12
 max_files = 24
 max_total_bytes = 32768
 stream_final_answer = true
-agent_name = "icoo_agent"
+agent_name = "icoo_agents"
 
 # Project-local runtime state defaults.
-session_dir = "./.agent/sessions"
-log_path = "./.agent/agent.log"
+session_dir = "./.agents/sessions"
+log_path = "./.agents/agent.log"

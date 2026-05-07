@@ -5,18 +5,29 @@ import "@/src/tools/list_dir.ic" as listDir
 import "@/src/tools/search_text.ic" as searchText
 import "@/src/tools/web_fetch.ic" as webFetch
 import "@/src/tools/web_search.ic" as webSearch
+import "@/src/tools/list_skills.ic" as listSkills
+import "@/src/tools/read_skill.ic" as readSkill
+import "@/src/tools/remove_skill.ic" as removeSkill
+import "@/src/tools/create_skill.ic" as createSkill
+import "@/src/tools/update_skill.ic" as updateSkill
 
 export class ToolRegistry {
-  init(toolPath, ignore, webCommon) {
+  init(toolPath, ignore, webCommon, skillCatalog) {
     this.toolPath = toolPath
     this.ignore = ignore
     this.webCommon = webCommon
+    this.skillCatalog = skillCatalog
     this.execCommand = execCommand.ExecCommand(this.toolPath)
     this.readFile = readFile.ReadFile(this.toolPath)
     this.listDir = listDir.ListDir(this.toolPath)
     this.searchText = searchText.SearchText(this.toolPath, this.ignore)
     this.webFetch = webFetch.WebFetch(this.webCommon)
     this.webSearch = webSearch.WebSearch(this.webCommon)
+    this.listSkills = listSkills.ListSkills(this.skillCatalog)
+    this.readSkill = readSkill.ReadSkill(this.skillCatalog)
+    this.removeSkill = removeSkill.RemoveSkill(this.skillCatalog)
+    this.createSkill = createSkill.CreateSkill(this.skillCatalog)
+    this.updateSkill = updateSkill.UpdateSkill(this.skillCatalog)
   }
 
   build() {
@@ -144,6 +155,107 @@ export class ToolRegistry {
           required: ["query"]
         },
         handler: this.webSearch.run
+      },
+      listSkills: {
+        name: "listSkills",
+        description: "List discovered agent skills from configured skill directories.",
+        parameters: {
+          type: "object",
+          properties: {}
+        },
+        handler: this.listSkills.run
+      },
+      readSkill: {
+        name: "readSkill",
+        description: "Read a discovered skill SKILL.md file by skill id or name.",
+        parameters: {
+          type: "object",
+          properties: {
+            skill: {
+              type: "string",
+              description: "Skill folder name or frontmatter name."
+            }
+          },
+          required: ["skill"]
+        },
+        handler: this.readSkill.run
+      },
+      removeSkill: {
+        name: "removeSkill",
+        description: "Remove a discovered skill by deleting its skill directory.",
+        parameters: {
+          type: "object",
+          properties: {
+            skill: {
+              type: "string",
+              description: "Skill folder name or frontmatter name."
+            }
+          },
+          required: ["skill"]
+        },
+        handler: this.removeSkill.run
+      },
+      createSkill: {
+        name: "createSkill",
+        description: "Create a new skill directory with a SKILL.md file in the primary skill directory.",
+        parameters: {
+          type: "object",
+          properties: {
+            skill: {
+              type: "string",
+              description: "Skill folder id to create."
+            },
+            name: {
+              type: "string",
+              description: "Optional frontmatter skill name."
+            },
+            description: {
+              type: "string",
+              description: "Frontmatter description."
+            },
+            body: {
+              type: "string",
+              description: "Optional markdown body to place after frontmatter."
+            },
+            content: {
+              type: "string",
+              description: "Optional full SKILL.md content. When provided, it overrides name/description/body assembly."
+            }
+          },
+          required: ["skill", "description"]
+        },
+        handler: this.createSkill.run
+      },
+      updateSkill: {
+        name: "updateSkill",
+        description: "Update an existing discovered skill by overwriting or rebuilding its SKILL.md file.",
+        parameters: {
+          type: "object",
+          properties: {
+            skill: {
+              type: "string",
+              description: "Skill folder id or frontmatter name."
+            },
+            name: {
+              type: "string",
+              description: "Optional replacement frontmatter skill name."
+            },
+            description: {
+              type: "string",
+              description: "Optional replacement frontmatter description."
+            },
+            body: {
+              type: "string",
+              description: "Optional replacement markdown body."
+            },
+            content: {
+              type: "string",
+              description: "Optional full SKILL.md content. When provided, it overrides name/description/body assembly."
+            }
+          },
+          required: ["skill"]
+        },
+        handler: this.updateSkill.run
       }
     }
   }
@@ -155,7 +267,7 @@ export class ToolRegistry {
 
   definitions() {
     let tools = this.build()
-    let names = ["readFile", "listDir", "searchText", "execCommand", "webFetch", "webSearch"]
+    let names = ["readFile", "listDir", "searchText", "execCommand", "webFetch", "webSearch", "listSkills", "readSkill", "removeSkill", "createSkill", "updateSkill"]
     let definitions = []
     for i, name in names {
       let tool = object.get(tools, name)

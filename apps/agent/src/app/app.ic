@@ -11,6 +11,7 @@ import "@/src/model/client.ic" as modelClient
 import "@/src/model/messages.ic" as modelMessages
 import "@/src/model/parser.ic" as modelParser
 import "@/src/runtime/runtime.ic" as runtime
+import "@/src/skills/catalog.ic" as skills
 import "@/src/session/schema.ic" as schema
 import "@/src/session/store.ic" as sessionStore
 import "@/src/tools/executor.ic" as toolExecutor
@@ -34,7 +35,13 @@ export class App {
     this.toolPath = toolPath.ToolPath()
     this.ignore = ignore.Ignore()
     this.webCommon = webCommon.WebCommon()
-    this.toolRegistry = registry.ToolRegistry(this.toolPath, this.ignore, this.webCommon)
+    this.skillCatalog = skills.SkillCatalog()
+    this.toolRegistry = registry.ToolRegistry(
+      this.toolPath,
+      this.ignore,
+      this.webCommon,
+      this.skillCatalog
+    )
     this.toolExecutor = toolExecutor.ToolExecutor(this.toolRegistry)
 
     this.modelMessages = modelMessages.ModelMessages(this.toolRegistry)
@@ -42,7 +49,7 @@ export class App {
     this.modelClient = modelClient.ModelClient(this.modelMessages, this.modelParser)
 
     this.budget = budget.Budget()
-    this.contextBuilder = contextBuilder.ContextBuilder(this.ignore, this.budget)
+    this.contextBuilder = contextBuilder.ContextBuilder(this.ignore, this.budget, this.skillCatalog)
     this.sessionSchema = schema.Schema()
     this.sessionStore = sessionStore.SessionStore(this.sessionSchema)
     this.runtime = runtime.Runtime(

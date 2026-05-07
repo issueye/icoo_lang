@@ -78,6 +78,10 @@ export class ArgsConfig {
       description: "Approval mode"
     })
     app.flagString({
+      name: "skills-dir",
+      description: "Skill directory to discover SKILL.md folders from"
+    })
+    app.flagString({
       name: "session-dir",
       description: "Directory for session files"
     })
@@ -155,6 +159,7 @@ export class ArgsConfig {
     config = this.applyIfString(config, flags.session, "sessionId")
     config = this.applyIfString(config, flags.resume, "resumeSession")
     config = this.applyIfString(config, flags.approval, "approval")
+    config = this.applyIfString(config, flags["skills-dir"], "skillsDir")
     config = this.applyIfString(config, flags["session-dir"], "sessionDir")
     config = this.applyIfString(config, flags["log-path"], "logPath")
     config = this.applyIfInt(config, flags["max-turns"], "maxTurns")

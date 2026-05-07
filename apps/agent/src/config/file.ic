@@ -81,6 +81,11 @@ export class ConfigFile {
     config = this.applyString(config, object.get(loaded, "approval"), "approval")
     config = this.applyString(
       config,
+      this.resolvePathValue(configDir, object.get(loaded, "skills_dir")),
+      "skillsDir"
+    )
+    config = this.applyString(
+      config,
       this.resolvePathValue(configDir, object.get(loaded, "session_dir")),
       "sessionDir"
     )
