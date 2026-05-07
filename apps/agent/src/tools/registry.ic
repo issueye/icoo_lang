@@ -1,0 +1,32 @@
+import "@/src/tools/read_file.ic" as readFile
+import "@/src/tools/list_dir.ic" as listDir
+import "@/src/tools/search_text.ic" as searchText
+
+const registryApi = fn() {
+  fn build() {
+    // 第一版 registry 先保持静态，后续再引入能力开关和风险级别。
+    return {
+      readFile: {
+        name: "readFile",
+        description: "Read a file from the local workspace.",
+        handler: readFile.run
+      },
+      listDir: {
+        name: "listDir",
+        description: "List entries under a directory.",
+        handler: listDir.run
+      },
+      searchText: {
+        name: "searchText",
+        description: "Search text under a path.",
+        handler: searchText.run
+      }
+    }
+  }
+
+  return {
+    build: build
+  }
+}()
+
+export const build = registryApi.build

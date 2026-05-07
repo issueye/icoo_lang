@@ -4,9 +4,66 @@ import "@/src/context/budget.ic" as budget
 import "@/src/context/ignore.ic" as ignore
 
 const builderApi = fn() {
+  fn isPreviewable(path) {
+    return (
+      str.hasSuffix(path, ".ic") ||
+      str.hasSuffix(path, ".md") ||
+      str.hasSuffix(path, ".txt") ||
+      str.hasSuffix(path, ".json") ||
+      str.hasSuffix(path, ".toml") ||
+      str.hasSuffix(path, ".yaml") ||
+      str.hasSuffix(path, ".yml") ||
+      str.hasSuffix(path, ".go") ||
+      str.hasSuffix(path, ".js") ||
+      str.hasSuffix(path, ".ts")
+    )
+  }
+
+  fn fileItem(path, size, included, preview, omittedReason) {
+    return {
+      path: path,
+      size: size,
+      kind: "file",
+      included: included,
+      preview: preview,
+      omittedReason: omittedReason
+    }
+  }
+
+  fn pushOmitted(state, path, reason) {
+    state.omittedCount = state.omittedCount + 1
+    state.omitted = state.omitted.append({
+      path: path,
+      reason: reason
+    })
+  }
+
+  fn summarizeFile(path, info, state) {
+    if state.fileCount >= state.budget.maxFiles {
+      return
+    }
+
+    state.fileCount = state.fileCount + 1
+
+    if state.totalBytes + info.size > state.budget.maxTotalBytes {
+      pushOmitted(state, path, "budget exceeded")
+      state.files = state.files.append(fileItem(path, info.size, false, null, "budget exceeded"))
+      return
+    }
+
+    let preview = null
+    if isPreviewable(path) == true {
+      // 先直接读全文；后续如果大文件预览仍有成本问题，再补专门的截断读能力。
+      preview = fs.readFile(path)
+    }
+
+    state.totalBytes = state.totalBytes + info.size
+    state.files = state.files.append(fileItem(path, info.size, true, preview, null))
+  }
+
   fn scan(path, depth, state) {
     if depth > state.budget.maxDepth {
-      state.omittedCount = state.omittedCount + 1
+      pushOmitted(state, path, "max depth reached")
       return
     }
     if state.fileCount >= state.budget.maxFiles {
@@ -15,23 +72,7 @@ const builderApi = fn() {
 
     let info = fs.stat(path)
     if info.isFile {
-      if state.fileCount < state.budget.maxFiles {
-        state.fileCount = state.fileCount + 1
-        if state.totalBytes + info.size <= state.budget.maxTotalBytes {
-          state.totalBytes = state.totalBytes + info.size
-          state.files = state.files.append({
-            path: path,
-            size: info.size,
-            kind: "file"
-          })
-        } else {
-          state.omittedCount = state.omittedCount + 1
-          state.omitted = state.omitted.append({
-            path: path,
-            reason: "budget exceeded"
-          })
-        }
-      }
+      summarizeFile(path, info, state)
       return
     }
 
@@ -41,11 +82,7 @@ const builderApi = fn() {
         break
       }
       if ignore.shouldIgnoreName(entry.name) == true {
-        state.omittedCount = state.omittedCount + 1
-        state.omitted = state.omitted.append({
-          path: entry.path,
-          reason: "ignored by name"
-        })
+        pushOmitted(state, entry.path, "ignored by name")
         continue
       }
 
@@ -54,27 +91,12 @@ const builderApi = fn() {
         continue
       }
 
-      let fileInfo = fs.stat(entry.path)
-      state.fileCount = state.fileCount + 1
-      if state.totalBytes + fileInfo.size <= state.budget.maxTotalBytes {
-        state.totalBytes = state.totalBytes + fileInfo.size
-        state.files = state.files.append({
-          path: entry.path,
-          size: fileInfo.size,
-          kind: "file"
-        })
-      } else {
-        state.omittedCount = state.omittedCount + 1
-        state.omitted = state.omitted.append({
-          path: entry.path,
-          reason: "budget exceeded"
-        })
-      }
+      summarizeFile(entry.path, fs.stat(entry.path), state)
     }
   }
 
   fn build(config) {
-    // 现在数组原生方法已具备 append/concat，可恢复结构化列表输出。
+    // 第一版优先保证结构清晰：summary + files + omitted，便于后续直接喂给 model 层。
     let state = {
       budget: budget.create(config),
       fileCount: 0,

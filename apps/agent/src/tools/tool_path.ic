@@ -1,0 +1,21 @@
+import std.io.fs as fs
+import std.core.string as str
+
+const toolPathApi = fn() {
+  fn resolve(config, path) {
+    if path == null || path == "" {
+      return path
+    }
+    if str.hasPrefix(path, "@/") {
+      let suffix = str.replace(path, "@/", "", 1)
+      return fs.join(config.workspace, suffix)
+    }
+    return path
+  }
+
+  return {
+    resolve: resolve
+  }
+}()
+
+export const resolve = toolPathApi.resolve

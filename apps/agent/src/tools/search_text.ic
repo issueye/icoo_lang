@@ -1,0 +1,88 @@
+import std.io.fs as fs
+import std.core.object as object
+import std.core.string as str
+import "@/src/context/ignore.ic" as ignore
+import "@/src/tools/tool_path.ic" as toolPath
+
+const searchTextApi = fn() {
+  fn isSearchable(path) {
+    return (
+      str.hasSuffix(path, ".ic") ||
+      str.hasSuffix(path, ".md") ||
+      str.hasSuffix(path, ".txt") ||
+      str.hasSuffix(path, ".json") ||
+      str.hasSuffix(path, ".toml") ||
+      str.hasSuffix(path, ".yaml") ||
+      str.hasSuffix(path, ".yml") ||
+      str.hasSuffix(path, ".go") ||
+      str.hasSuffix(path, ".js") ||
+      str.hasSuffix(path, ".ts")
+    )
+  }
+
+  fn scan(path, needle, matches) {
+    let info = fs.stat(path)
+    if info.isFile {
+      if isSearchable(path) != true {
+        return matches
+      }
+      let text = fs.readFile(path)
+      if str.contains(text, needle) == true {
+        return matches.append({
+          path: path
+        })
+      }
+      return matches
+    }
+
+    let entries = fs.readDir(path)
+    for i, entry in entries {
+      if ignore.shouldIgnoreName(entry.name) == true {
+        continue
+      }
+      matches = scan(entry.path, needle, matches)
+    }
+    return matches
+  }
+
+  fn run(config, input) {
+    let path = object.get(input, "path")
+    let query = object.get(input, "query")
+    if path == null || path == "" {
+      return {
+        ok: false,
+        error: "searchText requires non-empty path"
+      }
+    }
+    if query == null || query == "" {
+      return {
+        ok: false,
+        error: "searchText requires non-empty query"
+      }
+    }
+    path = toolPath.resolve(config, path)
+    if fs.exists(path) != true {
+      return {
+        ok: false,
+        error: "search root not found: " + path
+      }
+    }
+
+    let matches = scan(path, query, [])
+    return {
+      ok: true,
+      content: matches,
+      meta: {
+        path: path,
+        query: query,
+        count: len(matches)
+      }
+    }
+  }
+
+  return {
+    run: run
+  }
+}()
+
+export const run = searchTextApi.run

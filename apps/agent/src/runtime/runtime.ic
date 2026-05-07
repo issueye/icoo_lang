@@ -1,14 +1,39 @@
 import std.io.console as io
 import std.data.json as json
 import "@/src/context/builder.ic" as contextBuilder
+import "@/src/model/client.ic" as modelClient
 import "@/src/session/store.ic" as sessionStore
+import "@/src/tools/executor.ic" as toolExecutor
 
 const runtimeApi = fn() {
+  fn printListPreview(label, items, limit) {
+    if typeOf(items) != "array" || len(items) == 0 {
+      io.println(label + ":", "[]")
+      return
+    }
+
+    let preview = items.take(limit)
+    io.println(label + ":", json.encode(preview))
+  }
+
   fn start(config) {
     // 运行时第一步先拿到 session，这样后续 context/tool/model 都能共享统一状态。
     let opened = sessionStore.open(config)
     let session = opened.session
     let context = contextBuilder.build(config)
+    let modelContext = {
+      workspace: context.workspace,
+      summaryJson: json.encode(context.summary),
+      files: context.files,
+      omitted: context.omitted
+    }
+    let modelResult = modelClient.request(config, modelContext)
+    let readToolResult = toolExecutor.run(config, "readFile", {
+      path: "@/app.ic"
+    })
+    let listToolResult = toolExecutor.run(config, "listDir", {
+      path: config.workspace
+    })
 
     // 这里先只做启动面板输出，后续再接 session/context/tool/runtime 主流程。
     io.println("== icoo agent ==")
@@ -26,13 +51,33 @@ const runtimeApi = fn() {
     io.println("max files:", config.maxFiles)
     io.println("max total bytes:", config.maxTotalBytes)
     io.println("context summary:", json.encode(context.summary))
+    printListPreview("context files", context.files, 3)
+    printListPreview("context omitted", context.omitted, 3)
+    io.println("tool readFile ok:", readToolResult.ok)
+    if readToolResult.ok == true {
+      io.println("tool readFile meta:", json.encode(readToolResult.meta))
+    } else {
+      io.println("tool readFile error:", readToolResult.error)
+    }
+    io.println("tool listDir ok:", listToolResult.ok)
+    if listToolResult.ok == true {
+      io.println("tool listDir meta:", json.encode(listToolResult.meta))
+      printListPreview("tool listDir content", listToolResult.content, 3)
+    } else {
+      io.println("tool listDir error:", listToolResult.error)
+    }
+    io.println("")
+    io.println("model mode:", modelResult.mode)
+    io.println("model output:")
+    io.println(modelResult.text)
 
     return {
       ok: true,
       config: config,
       session: session,
       sessionPath: opened.path,
-      context: context
+      context: context,
+      model: modelResult
     }
   }
 

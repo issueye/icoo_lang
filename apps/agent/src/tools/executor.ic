@@ -1,0 +1,24 @@
+import std.core.object as object
+import "@/src/tools/registry.ic" as registry
+
+const executorApi = fn() {
+  fn run(config, name, input) {
+    let tools = registry.build()
+    let tool = object.get(tools, name)
+    if tool == null {
+      return {
+        ok: false,
+        error: "unknown tool: " + name
+      }
+    }
+
+    let handler = object.get(tool, "handler")
+    return handler(config, input)
+  }
+
+  return {
+    run: run
+  }
+}()
+
+export const run = executorApi.run

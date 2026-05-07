@@ -1,0 +1,66 @@
+import std.net.http.client as http
+import std.core.object as object
+import std.data.json as json
+import "@/src/model/messages.ic" as messages
+import "@/src/model/parser.ic" as parser
+
+const clientApi = fn() {
+  fn localFallback(config, context) {
+    return {
+      mode: "local",
+      text:
+        "Summary\n" +
+        "- Remote model is disabled because no API key is configured.\n" +
+        "- Workspace context was collected successfully.\n\n" +
+        "Risks\n" +
+        "- This fallback does not yet perform model-grade reasoning.\n" +
+        "- Context ranking is still shallow in the current build.\n\n" +
+        "Next Steps\n" +
+        "- Configure `ICOO_AGENT_API_KEY` to enable remote model calls.\n" +
+        "- Add tool execution and turn persistence on top of the current session/context layers.\n\n" +
+        "Context Summary\n" +
+        context.summaryJson
+    }
+  }
+
+  fn request(config, context) {
+    if config.apiKey == null || config.apiKey == "" {
+      return localFallback(config, context)
+    }
+
+    let builtMessages = messages.build(config, context)
+    let response = http.requestJSON({
+      url: config.baseUrl + "/chat/completions",
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + config.apiKey
+      },
+      json: {
+        model: config.model,
+        temperature: 0.2,
+        messages: builtMessages
+      }
+    })
+
+    let parsed = parser.parseResponse(response.json)
+    if parsed.ok == true {
+      return {
+        mode: "remote",
+        text: parsed.text,
+        raw: response.json
+      }
+    }
+
+    return {
+      mode: "remote",
+      text: json.encode(response.json),
+      raw: response.json
+    }
+  }
+
+  return {
+    request: request
+  }
+}()
+
+export const request = clientApi.request

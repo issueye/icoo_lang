@@ -1,0 +1,45 @@
+import std.io.fs as fs
+import std.core.object as object
+import "@/src/tools/tool_path.ic" as toolPath
+
+const listDirApi = fn() {
+  fn run(config, input) {
+    let path = object.get(input, "path")
+    if path == null || path == "" {
+      return {
+        ok: false,
+        error: "listDir requires non-empty path"
+      }
+    }
+    path = toolPath.resolve(config, path)
+    if fs.exists(path) != true {
+      return {
+        ok: false,
+        error: "directory not found: " + path
+      }
+    }
+
+    let entries = fs.readDir(path).map(fn(entry) {
+      return {
+        name: entry.name,
+        path: entry.path,
+        isDir: entry.isDir
+      }
+    })
+
+    return {
+      ok: true,
+      content: entries,
+      meta: {
+        path: path,
+        count: len(entries)
+      }
+    }
+  }
+
+  return {
+    run: run
+  }
+}()
+
+export const run = listDirApi.run

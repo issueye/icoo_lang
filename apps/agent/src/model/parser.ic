@@ -1,0 +1,37 @@
+import std.core.object as object
+
+const parserApi = fn() {
+  fn parseResponse(payload) {
+    let choices = object.get(payload, "choices")
+    if typeOf(choices) == "array" && len(choices) > 0 {
+      let first = choices[0]
+      let message = object.get(first, "message")
+      let content = object.get(message, "content")
+      if typeOf(content) == "string" {
+        return {
+          ok: true,
+          text: content
+        }
+      }
+    }
+
+    let outputText = object.get(payload, "output_text")
+    if typeOf(outputText) == "string" {
+      return {
+        ok: true,
+        text: outputText
+      }
+    }
+
+    return {
+      ok: false,
+      text: null
+    }
+  }
+
+  return {
+    parseResponse: parseResponse
+  }
+}()
+
+export const parseResponse = parserApi.parseResponse

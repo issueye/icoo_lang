@@ -1,0 +1,37 @@
+const messagesApi = fn() {
+  fn systemPrompt() {
+    return "You are an Icoo agent. Be concise, repository-aware, and action-oriented."
+  }
+
+  fn userPrompt(config, context) {
+    let text = ""
+    if config.task != null && config.task != "" {
+      text = text + "Task:\n" + config.task + "\n\n"
+    } else {
+      text = text + "Task:\nSummarize the repository state and suggest the next concrete engineering step.\n\n"
+    }
+    text = text + "Workspace:\n" + context.workspace + "\n\n"
+    text = text + "Context Summary:\n" + context.summaryJson + "\n"
+    return text
+  }
+
+  fn build(config, context) {
+    // 第一版先只发 system + user 两条消息，历史消息后续接 session/turn 层。
+    return [
+      {
+        role: "system",
+        content: systemPrompt()
+      },
+      {
+        role: "user",
+        content: userPrompt(config, context)
+      }
+    ]
+  }
+
+  return {
+    build: build
+  }
+}()
+
+export const build = messagesApi.build
