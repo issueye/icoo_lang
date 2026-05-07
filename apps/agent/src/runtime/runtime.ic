@@ -1,4 +1,6 @@
 import std.io.console as io
+import std.data.json as json
+import "@/src/context/builder.ic" as contextBuilder
 import "@/src/session/store.ic" as sessionStore
 
 const runtimeApi = fn() {
@@ -6,6 +8,7 @@ const runtimeApi = fn() {
     // 运行时第一步先拿到 session，这样后续 context/tool/model 都能共享统一状态。
     let opened = sessionStore.open(config)
     let session = opened.session
+    let context = contextBuilder.build(config)
 
     // 这里先只做启动面板输出，后续再接 session/context/tool/runtime 主流程。
     io.println("== icoo agent ==")
@@ -22,12 +25,14 @@ const runtimeApi = fn() {
     io.println("max turns:", config.maxTurns)
     io.println("max files:", config.maxFiles)
     io.println("max total bytes:", config.maxTotalBytes)
+    io.println("context summary:", json.encode(context.summary))
 
     return {
       ok: true,
       config: config,
       session: session,
-      sessionPath: opened.path
+      sessionPath: opened.path,
+      context: context
     }
   }
 

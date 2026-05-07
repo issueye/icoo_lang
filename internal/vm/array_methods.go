@@ -197,9 +197,182 @@ func arrayMethod(array *runtime.ArrayValue, name string) (*runtime.NativeFunctio
 				return runtime.IntValue{Value: -1}, nil
 			},
 		}, true
+	case "append":
+		return &runtime.NativeFunction{
+			Name:  "array.append",
+			Arity: 1,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				result := make([]runtime.Value, 0, len(array.Elements)+1)
+				result = append(result, array.Elements...)
+				result = append(result, args[0])
+				return &runtime.ArrayValue{Elements: result}, nil
+			},
+		}, true
+	case "concat":
+		return &runtime.NativeFunction{
+			Name:  "array.concat",
+			Arity: 1,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				other, ok := args[0].(*runtime.ArrayValue)
+				if !ok {
+					return nil, runtimeError("array.concat expects array argument")
+				}
+				result := make([]runtime.Value, 0, len(array.Elements)+len(other.Elements))
+				result = append(result, array.Elements...)
+				result = append(result, other.Elements...)
+				return &runtime.ArrayValue{Elements: result}, nil
+			},
+		}, true
+	case "prepend":
+		return &runtime.NativeFunction{
+			Name:  "array.prepend",
+			Arity: 1,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				result := make([]runtime.Value, 0, len(array.Elements)+1)
+				result = append(result, args[0])
+				result = append(result, array.Elements...)
+				return &runtime.ArrayValue{Elements: result}, nil
+			},
+		}, true
+	case "slice":
+		return &runtime.NativeFunction{
+			Name:  "array.slice",
+			Arity: -1,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				if len(args) > 2 {
+					return nil, runtimeError("array.slice expects 0, 1, or 2 arguments, got %d", len(args))
+				}
+
+				length := len(array.Elements)
+				start := 0
+				end := length
+
+				if len(args) >= 1 {
+					value, ok := args[0].(runtime.IntValue)
+					if !ok {
+						return nil, runtimeError("array.slice start must be int")
+					}
+					start = normalizeSliceIndex(int(value.Value), length)
+				}
+				if len(args) == 2 {
+					value, ok := args[1].(runtime.IntValue)
+					if !ok {
+						return nil, runtimeError("array.slice end must be int")
+					}
+					end = normalizeSliceIndex(int(value.Value), length)
+				}
+
+				if start > end {
+					start = end
+				}
+
+				result := make([]runtime.Value, 0, end-start)
+				result = append(result, array.Elements[start:end]...)
+				return &runtime.ArrayValue{Elements: result}, nil
+			},
+		}, true
+	case "flatMap":
+		return &runtime.NativeFunction{
+			Name:  "array.flatMap",
+			Arity: 1,
+			CtxFn: func(ctx *runtime.NativeContext, args []runtime.Value) (runtime.Value, error) {
+				callback := args[0]
+				length := len(array.Elements)
+				result := make([]runtime.Value, 0, length)
+				for i := 0; i < length; i++ {
+					mapped, err := callArrayCallback(ctx, callback, array.Elements[i], i, array)
+					if err != nil {
+						return nil, err
+					}
+					if nested, ok := mapped.(*runtime.ArrayValue); ok {
+						result = append(result, nested.Elements...)
+						continue
+					}
+					result = append(result, mapped)
+				}
+				return &runtime.ArrayValue{Elements: result}, nil
+			},
+		}, true
+	case "take":
+		return &runtime.NativeFunction{
+			Name:  "array.take",
+			Arity: 1,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				countValue, ok := args[0].(runtime.IntValue)
+				if !ok {
+					return nil, runtimeError("array.take count must be int")
+				}
+				length := len(array.Elements)
+				count := normalizeTakeDropCount(int(countValue.Value), length)
+				result := make([]runtime.Value, 0, count)
+				result = append(result, array.Elements[:count]...)
+				return &runtime.ArrayValue{Elements: result}, nil
+			},
+		}, true
+	case "drop":
+		return &runtime.NativeFunction{
+			Name:  "array.drop",
+			Arity: 1,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				countValue, ok := args[0].(runtime.IntValue)
+				if !ok {
+					return nil, runtimeError("array.drop count must be int")
+				}
+				length := len(array.Elements)
+				count := normalizeTakeDropCount(int(countValue.Value), length)
+				result := make([]runtime.Value, 0, length-count)
+				result = append(result, array.Elements[count:]...)
+				return &runtime.ArrayValue{Elements: result}, nil
+			},
+		}, true
+	case "first":
+		return &runtime.NativeFunction{
+			Name:  "array.first",
+			Arity: 0,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				if len(array.Elements) == 0 {
+					return runtime.NullValue{}, nil
+				}
+				return array.Elements[0], nil
+			},
+		}, true
+	case "last":
+		return &runtime.NativeFunction{
+			Name:  "array.last",
+			Arity: 0,
+			Fn: func(args []runtime.Value) (runtime.Value, error) {
+				if len(array.Elements) == 0 {
+					return runtime.NullValue{}, nil
+				}
+				return array.Elements[len(array.Elements)-1], nil
+			},
+		}, true
 	default:
 		return nil, false
 	}
+}
+
+func normalizeSliceIndex(index, length int) int {
+	if index < 0 {
+		index = length + index
+	}
+	if index < 0 {
+		return 0
+	}
+	if index > length {
+		return length
+	}
+	return index
+}
+
+func normalizeTakeDropCount(count, length int) int {
+	if count < 0 {
+		return 0
+	}
+	if count > length {
+		return length
+	}
+	return count
 }
 
 func callArrayCallback(ctx *runtime.NativeContext, callback, value runtime.Value, index int, array *runtime.ArrayValue) (runtime.Value, error) {

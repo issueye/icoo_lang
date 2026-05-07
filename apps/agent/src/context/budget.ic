@@ -1,0 +1,15 @@
+const budgetApi = fn() {
+  fn create(config) {
+    return {
+      maxFiles: config.maxFiles,
+      maxTotalBytes: config.maxTotalBytes,
+      maxDepth: 3
+    }
+  }
+
+  return {
+    create: create
+  }
+}()
+
+export const create = budgetApi.create

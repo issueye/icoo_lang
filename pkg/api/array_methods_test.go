@@ -122,6 +122,155 @@ if arr.indexOf(99) != -1 {
   panic("missing indexOf should return -1")
 }
 
+let appended = arr.append(5)
+if len(appended) != 5 || appended[4] != 5 {
+  panic("append should add one item to the end")
+}
+if len(arr) != 4 {
+  panic("append should not mutate original array")
+}
+
+let concatenated = arr.concat([5, 6])
+if len(concatenated) != 6 {
+  panic("concat should produce merged array")
+}
+if concatenated[4] != 5 || concatenated[5] != 6 {
+  panic("concat should preserve right-hand array order")
+}
+if len(arr) != 4 {
+  panic("concat should not mutate original array")
+}
+
+let concatError = false
+try {
+  arr.concat("bad")
+} catch err {
+  concatError = true
+}
+if !concatError {
+  panic("concat should reject non-array input")
+}
+
+let prepended = arr.prepend(0)
+if len(prepended) != 5 || prepended[0] != 0 || prepended[1] != 1 {
+  panic("prepend should add one item to the front")
+}
+if len(arr) != 4 {
+  panic("prepend should not mutate original array")
+}
+
+let slicedAll = arr.slice()
+if len(slicedAll) != 4 || slicedAll[0] != 1 || slicedAll[3] != 4 {
+  panic("slice without args should copy whole array")
+}
+
+let slicedTail = arr.slice(1)
+if len(slicedTail) != 3 || slicedTail[0] != 2 || slicedTail[2] != 4 {
+  panic("slice(start) should return tail")
+}
+
+let slicedRange = arr.slice(1, 3)
+if len(slicedRange) != 2 || slicedRange[0] != 2 || slicedRange[1] != 3 {
+  panic("slice(start, end) should return half-open range")
+}
+
+let slicedNegative = arr.slice(-2)
+if len(slicedNegative) != 2 || slicedNegative[0] != 3 || slicedNegative[1] != 4 {
+  panic("slice should support negative start index")
+}
+
+let slicedClamped = arr.slice(-99, 99)
+if len(slicedClamped) != 4 {
+  panic("slice should clamp indexes into array bounds")
+}
+
+let sliceError = false
+try {
+  arr.slice("bad")
+} catch err {
+  sliceError = true
+}
+if !sliceError {
+  panic("slice should reject non-int start")
+}
+
+let flatMapped = arr.flatMap(fn(value) {
+  return [value, value * 10]
+})
+if len(flatMapped) != 8 || flatMapped[0] != 1 || flatMapped[1] != 10 || flatMapped[6] != 4 || flatMapped[7] != 40 {
+  panic("flatMap should flatten one array level")
+}
+
+let flatMappedScalars = arr.flatMap(fn(value) {
+  return value * 2
+})
+if len(flatMappedScalars) != 4 || flatMappedScalars[0] != 2 || flatMappedScalars[3] != 8 {
+  panic("flatMap should keep scalar callback results")
+}
+
+let taken = arr.take(2)
+if len(taken) != 2 || taken[0] != 1 || taken[1] != 2 {
+  panic("take should keep first n items")
+}
+
+let takeClamped = arr.take(99)
+if len(takeClamped) != 4 {
+  panic("take should clamp count to array length")
+}
+
+let takeNegative = arr.take(-5)
+if len(takeNegative) != 0 {
+  panic("take should clamp negative count to zero")
+}
+
+let takeError = false
+try {
+  arr.take("bad")
+} catch err {
+  takeError = true
+}
+if !takeError {
+  panic("take should reject non-int count")
+}
+
+let dropped = arr.drop(2)
+if len(dropped) != 2 || dropped[0] != 3 || dropped[1] != 4 {
+  panic("drop should skip first n items")
+}
+
+let dropClamped = arr.drop(99)
+if len(dropClamped) != 0 {
+  panic("drop should clamp count to array length")
+}
+
+let dropNegative = arr.drop(-5)
+if len(dropNegative) != 4 {
+  panic("drop should clamp negative count to zero")
+}
+
+let dropError = false
+try {
+  arr.drop("bad")
+} catch err {
+  dropError = true
+}
+if !dropError {
+  panic("drop should reject non-int count")
+}
+
+if arr.first() != 1 {
+  panic("first should return first item")
+}
+if arr.last() != 4 {
+  panic("last should return last item")
+}
+if [].first() != null {
+  panic("first on empty array should return null")
+}
+if [].last() != null {
+  panic("last on empty array should return null")
+}
+
 let caughtReduceError = false
 try {
   [].reduce(fn(acc, value) {

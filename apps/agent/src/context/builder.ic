@@ -1,0 +1,109 @@
+import std.io.fs as fs
+import std.core.string as str
+import "@/src/context/budget.ic" as budget
+import "@/src/context/ignore.ic" as ignore
+
+const builderApi = fn() {
+  fn scan(path, depth, state) {
+    if depth > state.budget.maxDepth {
+      state.omittedCount = state.omittedCount + 1
+      return
+    }
+    if state.fileCount >= state.budget.maxFiles {
+      return
+    }
+
+    let info = fs.stat(path)
+    if info.isFile {
+      if state.fileCount < state.budget.maxFiles {
+        state.fileCount = state.fileCount + 1
+        if state.totalBytes + info.size <= state.budget.maxTotalBytes {
+          state.totalBytes = state.totalBytes + info.size
+          state.files = state.files.append({
+            path: path,
+            size: info.size,
+            kind: "file"
+          })
+        } else {
+          state.omittedCount = state.omittedCount + 1
+          state.omitted = state.omitted.append({
+            path: path,
+            reason: "budget exceeded"
+          })
+        }
+      }
+      return
+    }
+
+    let entries = fs.readDir(path)
+    for i, entry in entries {
+      if state.fileCount >= state.budget.maxFiles {
+        break
+      }
+      if ignore.shouldIgnoreName(entry.name) == true {
+        state.omittedCount = state.omittedCount + 1
+        state.omitted = state.omitted.append({
+          path: entry.path,
+          reason: "ignored by name"
+        })
+        continue
+      }
+
+      if entry.isDir {
+        scan(entry.path, depth + 1, state)
+        continue
+      }
+
+      let fileInfo = fs.stat(entry.path)
+      state.fileCount = state.fileCount + 1
+      if state.totalBytes + fileInfo.size <= state.budget.maxTotalBytes {
+        state.totalBytes = state.totalBytes + fileInfo.size
+        state.files = state.files.append({
+          path: entry.path,
+          size: fileInfo.size,
+          kind: "file"
+        })
+      } else {
+        state.omittedCount = state.omittedCount + 1
+        state.omitted = state.omitted.append({
+          path: entry.path,
+          reason: "budget exceeded"
+        })
+      }
+    }
+  }
+
+  fn build(config) {
+    // 现在数组原生方法已具备 append/concat，可恢复结构化列表输出。
+    let state = {
+      budget: budget.create(config),
+      fileCount: 0,
+      totalBytes: 0,
+      omittedCount: 0,
+      files: [],
+      omitted: []
+    }
+
+    scan(config.workspace, 0, state)
+
+    return {
+      workspace: config.workspace,
+      summary: {
+        fileCount: state.fileCount,
+        totalBytes: state.totalBytes,
+        omittedCount: state.omittedCount,
+        maxFiles: state.budget.maxFiles,
+        maxTotalBytes: state.budget.maxTotalBytes,
+        maxDepth: state.budget.maxDepth
+      },
+      files: state.files,
+      omitted: state.omitted
+    }
+  }
+
+  return {
+    build: build
+  }
+}()
+
+export const build = builderApi.build

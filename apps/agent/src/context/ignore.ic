@@ -1,0 +1,19 @@
+import std.core.string as str
+
+const ignoreApi = fn() {
+  fn shouldIgnoreName(name) {
+    if name == ".git" || name == "node_modules" || name == "dist" || name == "build" {
+      return true
+    }
+    if str.hasPrefix(name, ".") {
+      return true
+    }
+    return false
+  }
+
+  return {
+    shouldIgnoreName: shouldIgnoreName
+  }
+}()
+
+export const shouldIgnoreName = ignoreApi.shouldIgnoreName
