@@ -66,6 +66,7 @@ var moduleLoaders = map[string]func() *runtime.Module{
 	"std.sys.os":   stdsystem.LoadStdSysOSModule,
 	"std.sys.host": stdsystem.LoadStdSysHostModule,
 	"std.sys.exec": stdsystem.LoadStdSysExecModule,
+	"std.sys.cli":  stdsystem.LoadStdSysCLIModule,
 }
 
 // LoadModule 根据模块路径加载标准库模块

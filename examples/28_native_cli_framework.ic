@@ -1,0 +1,48 @@
+import std.io.console as io
+import std.sys.cli as cli
+
+let app = cli.create({
+  name: "demo",
+  description: "Minimal native CLI framework example"
+})
+
+app.flagBool({
+  name: "verbose",
+  short: "v",
+  description: "Enable verbose output"
+})
+app.flagString({
+  name: "name",
+  short: "n",
+  description: "Name to greet",
+  default: "world"
+})
+
+let greet = app.command({
+  name: "greet",
+  description: "Print greeting"
+})
+
+greet.flagInt({
+  name: "count",
+  short: "c",
+  description: "Repeat count",
+  default: 1
+})
+
+greet.action(fn(ctx) {
+  let count = ctx.flags.count
+  let i = 0
+  while i < count {
+    io.println("hello", ctx.flags.name)
+    i = i + 1
+  }
+  if ctx.flags.verbose {
+    io.println("args:", ctx.args)
+  }
+})
+
+let result = app.run()
+if result.help == true {
+  io.println(result.helpText)
+}

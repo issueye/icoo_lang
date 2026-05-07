@@ -203,15 +203,16 @@ func (r *Runtime) runModuleSource(path, src string) (runtime.Value, error) {
 }
 
 func (r *Runtime) applyScriptArgs() func() {
-	if r.scriptArgs == nil {
-		return func() {}
-	}
 	original := append([]string(nil), os.Args...)
 	execName := ""
 	if len(original) > 0 {
 		execName = original[0]
 	}
-	os.Args = append([]string{execName}, r.scriptArgs...)
+	scriptArgs := r.scriptArgs
+	if scriptArgs == nil {
+		scriptArgs = []string{}
+	}
+	os.Args = append([]string{execName}, scriptArgs...)
 	return func() {
 		os.Args = original
 	}
