@@ -29,4 +29,6 @@ class Defaults {
 
 let defaultsApi = Defaults()
 
-export const defaultConfig = defaultsApi.defaultConfig
+const defaultConfig = defaultsApi.defaultConfig
+
+export { defaultConfig }

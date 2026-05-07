@@ -127,4 +127,6 @@ class ContextBuilder {
 
 let builderApi = ContextBuilder()
 
-export const build = builderApi.build
+const build = builderApi.build
+
+export { build }

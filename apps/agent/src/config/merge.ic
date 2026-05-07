@@ -30,4 +30,6 @@ class MergeConfig {
 
 let mergeApi = MergeConfig()
 
-export const loadConfig = mergeApi.loadConfig
+const loadConfig = mergeApi.loadConfig
+
+export { loadConfig }

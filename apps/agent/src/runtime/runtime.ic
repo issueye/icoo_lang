@@ -180,4 +180,6 @@ class Runtime {
 
 let runtimeApi = Runtime()
 
-export const start = runtimeApi.start
+const start = runtimeApi.start
+
+export { start }

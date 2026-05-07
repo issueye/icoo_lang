@@ -193,5 +193,7 @@ class ModelParser {
 
 let parserApi = ModelParser()
 
-export const parseResponse = parserApi.parseResponse
-export const parseStreamEvent = parserApi.parseStreamEvent
+const parseResponse = parserApi.parseResponse
+const parseStreamEvent = parserApi.parseStreamEvent
+
+export { parseResponse, parseStreamEvent }

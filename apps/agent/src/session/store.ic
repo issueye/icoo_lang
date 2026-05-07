@@ -199,14 +199,16 @@ class SessionStore {
 
 let storeApi = SessionStore()
 
-export const sessionPath = storeApi.sessionPath
-export const save = storeApi.save
-export const load = storeApi.load
-export const open = storeApi.open
-export const appendTurn = storeApi.appendTurn
-export const appendUserMessage = storeApi.appendUserMessage
-export const appendRequestSnapshot = storeApi.appendRequestSnapshot
-export const appendAssistantMessage = storeApi.appendAssistantMessage
-export const appendToolMessage = storeApi.appendToolMessage
-export const markCompleted = storeApi.markCompleted
-export const buildMessages = storeApi.buildMessages
+const sessionPath = storeApi.sessionPath
+const save = storeApi.save
+const load = storeApi.load
+const open = storeApi.open
+const appendTurn = storeApi.appendTurn
+const appendUserMessage = storeApi.appendUserMessage
+const appendRequestSnapshot = storeApi.appendRequestSnapshot
+const appendAssistantMessage = storeApi.appendAssistantMessage
+const appendToolMessage = storeApi.appendToolMessage
+const markCompleted = storeApi.markCompleted
+const buildMessages = storeApi.buildMessages
+
+export { sessionPath, save, load, open, appendTurn, appendUserMessage, appendRequestSnapshot, appendAssistantMessage, appendToolMessage, markCompleted, buildMessages }

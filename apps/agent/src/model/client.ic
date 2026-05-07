@@ -219,5 +219,10 @@ class ModelClient {
 
 let clientApi = ModelClient()
 
-export const request = clientApi.request
-export const requestWithMessages = clientApi.requestWithMessages
+// const request = clientApi.request
+// const requestWithMessages = clientApi.requestWithMessages
+
+export {
+  request: clientApi.request, 
+  requestWithMessages: clientApi.requestWithMessages,
+}
