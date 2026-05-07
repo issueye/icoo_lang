@@ -18,4 +18,6 @@ const toolPathApi = fn() {
   }
 }()
 
-export const resolve = toolPathApi.resolve
+export {
+  resolve: toolPathApi.resolve,
+}

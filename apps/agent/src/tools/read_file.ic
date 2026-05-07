@@ -33,4 +33,6 @@ const readFileApi = fn() {
   }
 }()
 
-export const run = readFileApi.run
+export {
+  run: readFileApi.run,
+}

@@ -85,4 +85,6 @@ const searchTextApi = fn() {
   }
 }()
 
-export const run = searchTextApi.run
+export {
+  run: searchTextApi.run,
+}

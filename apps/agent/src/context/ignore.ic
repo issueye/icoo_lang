@@ -16,4 +16,6 @@ const ignoreApi = fn() {
   }
 }()
 
-export const shouldIgnoreName = ignoreApi.shouldIgnoreName
+export {
+  shouldIgnoreName: ignoreApi.shouldIgnoreName,
+}

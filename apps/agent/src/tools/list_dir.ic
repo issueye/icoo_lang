@@ -42,4 +42,6 @@ const listDirApi = fn() {
   }
 }()
 
-export const run = listDirApi.run
+export {
+  run: listDirApi.run,
+}

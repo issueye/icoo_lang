@@ -105,12 +105,14 @@ const schemaApi = fn() {
   }
 }()
 
-export const sessionSchemaVersion = schemaApi.sessionSchemaVersion
-export const normalizeSessionId = schemaApi.normalizeSessionId
-export const newSession = schemaApi.newSession
-export const newTurn = schemaApi.newTurn
-export const userMessage = schemaApi.userMessage
-export const requestSnapshot = schemaApi.requestSnapshot
-export const assistantMessage = schemaApi.assistantMessage
-export const toolMessage = schemaApi.toolMessage
-export const runSummary = schemaApi.runSummary
+export {
+  sessionSchemaVersion: schemaApi.sessionSchemaVersion,
+  normalizeSessionId: schemaApi.normalizeSessionId,
+  newSession: schemaApi.newSession,
+  newTurn: schemaApi.newTurn,
+  userMessage: schemaApi.userMessage,
+  requestSnapshot: schemaApi.requestSnapshot,
+  assistantMessage: schemaApi.assistantMessage,
+  toolMessage: schemaApi.toolMessage,
+  runSummary: schemaApi.runSummary,
+}
