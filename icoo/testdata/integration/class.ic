@@ -1,6 +1,9 @@
 // ---- Basic class ----
 
 class Person {
+  name = ""
+  age = 0
+
   init(name, age) {
     this.name = name
     this.age = age
@@ -91,6 +94,41 @@ if e.getValue() != 42 {
   panic("no init: getValue failed")
 }
 println("class without init: ok")
+
+// ---- Default field declarations ----
+
+class DefaultsBox {
+  title = "draft"
+  items = []
+  meta = {
+    count: 0
+  }
+
+  add(item) {
+    this.items = this.items.append(item)
+    this.meta.count = this.meta.count + 1
+  }
+}
+
+let boxA = DefaultsBox()
+let boxB = DefaultsBox()
+boxA.add("first")
+if boxA.title != "draft" {
+  panic("defaults: title failed")
+}
+if len(boxA.items) != 1 {
+  panic("defaults: boxA items failed")
+}
+if len(boxB.items) != 0 {
+  panic("defaults: boxB items isolation failed")
+}
+if boxA.meta.count != 1 {
+  panic("defaults: boxA meta failed")
+}
+if boxB.meta.count != 0 {
+  panic("defaults: boxB meta isolation failed")
+}
+println("default field declarations: ok")
 
 // ---- Class with channel (go) ----
 

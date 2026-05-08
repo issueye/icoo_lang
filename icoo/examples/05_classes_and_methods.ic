@@ -1,9 +1,11 @@
 import std.io.console as io
 
 class Counter {
+  name = "counter"
+  value = 0
+
   init(name) {
     this.name = name
-    this.value = 0
   }
 
   inc() {

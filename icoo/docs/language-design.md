@@ -123,6 +123,75 @@ Icoo 是一门用 Golang 实现的编译型脚本语言，目标是结合�?
 - 模块缓存
 - 项目根别名导入（通过 `project.toml` �?`root_alias` 配置�?
 
+### 包系统
+
+已实现：
+
+- `.icpkg` 可复用包格式
+- 本地文件包导入：`import "./libs/demo.icpkg" as demo`
+- 命名包导入：`import "pkg:acme/demo" as demo`
+- `pkg.toml` 包元数据
+- `icoo init-pkg`
+- `icoo init-subpkg`
+- `icoo package`
+- 包可同时配置运行入口和导出入口
+
+命名包导入会按如下顺序解析：
+
+- `<projectRoot>/.icoo/packages/<name>.icpkg`
+- `<projectRoot>/packages/<name>.icpkg`
+
+例如：
+
+```icoo
+import "pkg:issueye/agent/pkg/config" as agentConfig
+```
+
+会查找：
+
+```text
+.icoo/packages/issueye/agent/pkg/config.icpkg
+```
+
+包目录通常包含：
+
+```text
+demo/
+  pkg.toml
+  lib.ic
+  build.ps1
+  src/
+    main.ic
+```
+
+其中：
+
+- `entry`
+  决定包作为应用运行时从哪里启动
+- `export`
+  决定包作为依赖导入时暴露哪个模块
+
+推荐把两者分开配置：
+
+- 应用入口用 `src/main.ic`
+- 导出入口用 `lib.ic` 或稳定聚合模块
+
+`pkg.toml` 示例：
+
+```toml
+[package]
+name = "acme/demo"
+version = "0.1.0"
+entry = "src/main.ic"
+entry_function = "main"
+export = "lib.ic"
+root_alias = "@"
+```
+
+更完整的工作流说明见：
+
+- `docs/package-reuse.md`
+
 ### 错误与异�?
 
 已实现：
@@ -171,6 +240,7 @@ fn loadPort(text) {
 - `class`
 - `this`
 - `init(...)`
+- 类内实例默认字段：`name = expr`
 - 实例方法
 - 单继承：`class Dog <- Animal`
 - `super.init(...)`
@@ -199,6 +269,8 @@ fn loadPort(text) {
 
 ```icoo
 class Animal {
+  name = ""
+
   init(name) {
     this.name = name
   }
@@ -209,6 +281,8 @@ class Animal {
 }
 
 class Dog <- Animal {
+  breed = "mixed"
+
   init(name, breed) {
     super.init(name)
     this.breed = breed
@@ -216,6 +290,32 @@ class Dog <- Animal {
 
   speak() {
     return super.speak() + " and barks"
+  }
+}
+```
+
+类字段声明规则：
+
+- 类体内可直接声明实例默认字段，例如 `count = 0`
+- 字段声明不写 `let` / `const`
+- 字段默认值会在 `init(...)` 执行前注入新实例
+- `init(...)` 内可以继续覆盖这些字段
+- 对象、数组等默认值按实例隔离，不会被多个实例共享
+
+例如：
+
+```icoo
+class Counter {
+  name = "counter"
+  count = 0
+
+  init(name) {
+    this.name = name
+  }
+
+  next() {
+    this.count = this.count + 1
+    return this.count
   }
 }
 ```
@@ -301,9 +401,12 @@ select {
 - `icoo`
 - `icoo repl`
 - `icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]`
+- `icoo init-pkg [dir] [--name value] [--version value]`
+- `icoo init-subpkg <dir> --parent value`
 - `icoo check <file|dir>`
 - `icoo run <file|dir>`
 - `icoo bundle <file|dir> [output]`
+- `icoo package <file|dir> [output]`
 - `icoo build <file|dir> [output] [--metadata file]`
 - `icoo extract <bundle|executable> [output]`
 - `icoo inspect <bundle|executable>`
@@ -421,7 +524,9 @@ TypeDecl        = "type" Identifier "=" TypeExpr ;
 InterfaceDecl   = "interface" Identifier "{" { InterfaceMethod } "}" ;
 InterfaceMethod = Identifier "(" [ ParamTypeList ] ")" [ ReturnType ] ;
 
-ClassDecl       = "class" Identifier [ "<" Expression ] "{" { ClassMethod } "}" ;
+ClassDecl       = "class" Identifier [ "<" Expression ] "{" { ClassMember } "}" ;
+ClassMember     = ClassField | ClassMethod ;
+ClassField      = Identifier "=" Expression ;
 ClassMethod     = { Decorator } Identifier "(" [ ParamList ] ")" Block ;
 
 DecoratedDecl   = Decorator { Decorator } ( FnDecl | ClassDecl ) ;

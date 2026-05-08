@@ -58,6 +58,7 @@ Icoo 当前已经实现：
 - 后缀 try 表达式 `expr?`
 - `type` / `interface`
 - `class` / `this` / `super`
+- 类内默认字段声明：`name = expr`
 - 函数、类、方法装饰器
 - `chan` / `go` / `select`
 - 文件模块与标准库模块导入
@@ -68,13 +69,14 @@ Icoo 当前已经实现：
 
 1. 变量声明优先用 `let` 或 `const`，不要生成 `var`
 2. 类方法定义不写 `fn`
-3. 继承写法是 `class Dog <- Animal`，不是 `extends`，也不是旧写法 `<`
-4. `for-in` 可用于 `array / string / object / module / iterator`
-5. 需要错误传播时，优先使用 `expr?` 或 `try/catch/finally`
-6. 需要并发通道时，优先生成 `chan()` 与对象方法 `send/recv/...`
-7. 不要直接生成编译器内部 builtin，例如 `__select`、`__buildClass`
-8. 不要假设存在内置 AI / Agent 标准库
-9. 需要 Agent 时，优先生成独立 app / CLI 工程，而不是往 `std.*` 中虚构模块
+3. 类默认字段可直接写成 `name = expr`，不要写成 `let name = ...`
+4. 继承写法是 `class Dog <- Animal`，不是 `extends`，也不是旧写法 `<`
+5. `for-in` 可用于 `array / string / object / module / iterator`
+6. 需要错误传播时，优先使用 `expr?` 或 `try/catch/finally`
+7. 需要并发通道时，优先生成 `chan()` 与对象方法 `send/recv/...`
+8. 不要直接生成编译器内部 builtin，例如 `__select`、`__buildClass`
+9. 不要假设存在内置 AI / Agent 标准库
+10. 需要 Agent 时，优先生成独立 app / CLI 工程，而不是往 `std.*` 中虚构模块
 
 ---
 
@@ -301,6 +303,8 @@ let ok = satisfies(service, Greeter)
 
 ```icoo
 class Animal {
+  name = ""
+
   init(name) {
     this.name = name
   }
@@ -311,6 +315,8 @@ class Animal {
 }
 
 class Dog <- Animal {
+  breed = "mixed"
+
   init(name, breed) {
     super.init(name)
     this.breed = breed
@@ -326,8 +332,11 @@ class Dog <- Animal {
 
 - 方法定义不写 `fn`
 - 构造入口通常是 `init(...)`
+- 默认实例字段可直接写在类体中，例如 `count = 0`
+- 默认字段会在 `init(...)` 前注入实例
 - 通过 `this.xxx` 访问实例字段
 - 通过 `super.xxx(...)` 调父类实现
+- 对象、数组等默认值按实例隔离，不会被多个实例共享
 
 ### 2.11 装饰器
 

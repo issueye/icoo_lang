@@ -1,5 +1,5 @@
 import std.io.console as io
-import "pkg:issueye/agent/pkg/config" as agentConfig
+import "pkg:issueye/agent/pkg/config" as config
 import "@/src/context/budget.ic" as budget
 import "@/src/context/builder.ic" as contextBuilder
 import "@/src/context/ignore.ic" as ignore
@@ -12,12 +12,41 @@ import "@/src/skills/catalog.ic" as skills
 import "pkg:issueye/agent/pkg/tools" as agentTools
 
 export class App {
+  // 命令行参数配置
+  argsConfig = null
+  // 默认配置
+  defaultsConfig = null
+  // 环境变量配置
+  envConfig = null
+  // 配置文件
+  configFile = null
+  // 合并后的配置
+  mergeConfig = null
+  // 工具路径
+  toolPath = null
+  // 忽略文件
+  ignore = null
+  // 网络工具
+  webCommon = null
+  // 技能目录
+  skillCatalog = null
+  // 工具注册器
+  toolRegistry = null
+  // 工具执行器
+  toolExecutor = null
+  // 模型消息处理模块
+  modelMessages = null
+  // 会话存储模块
+  sessionStore = null
+  // 运行时模块
+  runtime = null
+
   init() {
-    this.argsConfig = agentConfig.ArgsConfig()
-    this.defaultsConfig = agentConfig.Defaults()
-    this.envConfig = agentConfig.EnvConfig()
-    this.configFile = agentConfig.ConfigFile()
-    this.mergeConfig = agentConfig.MergeConfig(
+    this.argsConfig = config.ArgsConfig()
+    this.defaultsConfig = config.Defaults()
+    this.envConfig = config.EnvConfig()
+    this.configFile = config.ConfigFile()
+    this.mergeConfig = config.MergeConfig(
       this.defaultsConfig,
       this.argsConfig,
       this.envConfig,

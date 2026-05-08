@@ -14,7 +14,7 @@ go run ./cmd/icoo run examples/01_data_types.ic
 2. `02_functions_and_closures.ic` - 函数、匿名函数、闭包
 3. `03_control_flow.ic` - `if`、三元表达式、`for`、`break`、`continue`、逻辑运算
 4. `04_collections_and_iteration.ic` - 数组、对象、字符串、迭代器
-5. `05_classes_and_methods.ic` - 类、`this`、实例方法、状态
+5. `05_classes_and_methods.ic` - 类、默认字段声明、`this`、实例方法、状态
 6. `06_errors_and_try.ic` - `throw`、`try/catch/finally`、`error()`、后缀 `?`
 7. `07_types_and_interfaces.ic` - 类型别名、接口、`satisfies`
 8. `08_modules_and_formats.ic` - 本地模块、JSON/YAML/TOML/XML 编解码
