@@ -223,3 +223,28 @@ main()
 		t.Fatalf("expected merge config to ignore env and args, got: %v", err)
 	}
 }
+
+func TestAgentAppResolveCliLaunchAllowsOnlyTUI(t *testing.T) {
+	rt := NewRuntime()
+	agentRoot := resolveAgentRoot(t)
+	rt.SetProjectRoot(agentRoot, "@")
+	rt.SetScriptArgs([]string{"--tui"})
+
+	source := `
+import "@/src/app/app.ic" as appModule
+
+fn main() {
+  let app = appModule.App()
+  let launch = app.resolveCliLaunch()
+  if launch.tui != true {
+    panic("expected --tui to be allowed")
+  }
+}
+
+main()
+`
+
+	if _, err := rt.RunSource(source); err != nil {
+		t.Fatalf("expected --tui to be allowed, got: %v", err)
+	}
+}

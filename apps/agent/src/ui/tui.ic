@@ -1,0 +1,645 @@
+import std.core.object as object
+import std.core.string as str
+import std.data.json as json
+import std.io.fs as fs
+import std.ui.tui as tui
+
+export class AgentTUI {
+  init(config, runtimeApp) {
+    this.baseConfig = config
+    this.runtime = runtimeApp
+  }
+
+  initialTask() {
+    if this.baseConfig.task != null && this.baseConfig.task != "" {
+      return this.baseConfig.task
+    }
+    return ""
+  }
+
+  sessionFilePath(entry) {
+    return fs.join(this.baseConfig.sessionDir, entry.name)
+  }
+
+  sessionTitle(session) {
+    if session == null {
+      return "Untitled"
+    }
+    if session.sessionId != null && session.sessionId != "" {
+      return session.sessionId
+    }
+    return "Untitled"
+  }
+
+  buildTurnLine(turn) {
+    if turn.kind == "user_message" {
+      return "You\n" + turn.payload.content
+    }
+    if turn.kind == "assistant_message" {
+      let content = turn.payload.content
+      if content == null || content == "" {
+        content = "(no text)"
+      }
+      return "Agent\n" + content
+    }
+    if turn.kind == "tool_message" {
+      let state = "ok"
+      if turn.payload.ok != true {
+        state = "error"
+      }
+      return "Tool · " + turn.payload.name + " · " + state
+    }
+    return null
+  }
+
+  buildConversation(session) {
+    if session == null || typeOf(session.turns) != "array" || len(session.turns) == 0 {
+      return "No conversation yet."
+    }
+
+    let parts = []
+    for i, turn in session.turns {
+      let line = this.buildTurnLine(turn)
+      if line != null {
+        parts = parts.append(line)
+      }
+    }
+    if len(parts) == 0 {
+      return "No conversation yet."
+    }
+    return str.join(parts, "\n\n")
+  }
+
+  turnCount(session) {
+    if session != null && session.budgets != null && session.budgets.turnCount != null {
+      return session.budgets.turnCount
+    }
+    if session != null && typeOf(session.turns) == "array" {
+      return len(session.turns)
+    }
+    return 0
+  }
+
+  toolCallCount(session) {
+    if session != null && session.budgets != null && session.budgets.toolCallCount != null {
+      return session.budgets.toolCallCount
+    }
+    return 0
+  }
+
+  sessionUpdatedAt(session) {
+    if session != null && session.updatedAt != null {
+      return session.updatedAt
+    }
+    return 0
+  }
+
+  firstLine(text) {
+    if text == null || text == "" {
+      return ""
+    }
+    let lines = str.lines(text)
+    if len(lines) == 0 {
+      return ""
+    }
+    return str.trimSpace(lines[0])
+  }
+
+  sessionPreview(session) {
+    if session == null || typeOf(session.turns) != "array" || len(session.turns) == 0 {
+      return "No messages yet"
+    }
+
+    let index = len(session.turns) - 1
+    while index >= 0 {
+      let turn = session.turns[index]
+      index = index - 1
+      if turn.kind == "assistant_message" {
+        let content = this.firstLine(turn.payload.content)
+        if content != "" {
+          return "Agent: " + content
+        }
+      }
+      if turn.kind == "user_message" {
+        let content = this.firstLine(turn.payload.content)
+        if content != "" {
+          return "You: " + content
+        }
+      }
+      if turn.kind == "tool_message" {
+        return "Tool: " + turn.payload.name
+      }
+    }
+
+    return "No messages yet"
+  }
+
+  sortSessionsByRecent(sessions) {
+    let sorted = []
+    for i, item in sessions {
+      let inserted = false
+      let itemUpdatedAt = this.sessionUpdatedAt(item.session)
+      let next = []
+      for j, existing in sorted {
+        if inserted != true && itemUpdatedAt > this.sessionUpdatedAt(existing.session) {
+          next = next.append(item)
+          inserted = true
+        }
+        next = next.append(existing)
+      }
+      if inserted != true {
+        next = next.append(item)
+      }
+      sorted = next
+    }
+    return sorted
+  }
+
+  summarizeSession(session, path) {
+    let title = this.sessionTitle(session)
+    let subtitle = "idle"
+    if session.status != null && session.status != "" {
+      subtitle = session.status
+    }
+    let toolCalls = this.toolCallCount(session)
+    let turns = this.turnCount(session)
+    return {
+      id: title,
+      title: title,
+      subtitle: subtitle + " · " + this.toText(turns) + " turns · " + this.toText(toolCalls) + " tools",
+      preview: this.sessionPreview(session),
+      updatedAt: this.sessionUpdatedAt(session),
+      path: path,
+      session: session,
+      conversation: this.buildConversation(session)
+    }
+  }
+
+  loadSessions() {
+    if fs.exists(this.baseConfig.sessionDir) != true {
+      return []
+    }
+
+    let entries = fs.readDir(this.baseConfig.sessionDir)
+    let sessions = []
+    let index = len(entries) - 1
+    while index >= 0 {
+      let entry = entries[index]
+      index = index - 1
+      if entry.isDir == true || str.hasSuffix(entry.name, ".json") != true {
+        continue
+      }
+      let path = this.sessionFilePath(entry)
+      let loaded = json.fromFile(path)
+      if loaded == null || typeOf(loaded) != "object" {
+        continue
+      }
+      sessions = sessions.append(this.summarizeSession(loaded, path))
+    }
+    return this.sortSessionsByRecent(sessions)
+  }
+
+  sessionListFromSessions(sessions, selected) {
+    let items = []
+    for i, sessionItem in sessions {
+      items = items.append(sessionItem.title + "\n" + sessionItem.preview + "\n" + sessionItem.subtitle)
+    }
+    return tui.listState({
+      items: items,
+      selected: selected
+    })
+  }
+
+  selectedSession(sessions, sessionList) {
+    if typeOf(sessions) != "array" || len(sessions) == 0 {
+      return null
+    }
+    let index = sessionList.selected
+    if index < 0 || index >= len(sessions) {
+      return sessions[0]
+    }
+    return sessions[index]
+  }
+
+  sidebarStatus(model) {
+    let text = "Sessions " + this.toText(len(model.sessions))
+    if model.focus == "sessions" {
+      text = text + " · focus"
+    }
+    return text
+  }
+
+  inputStatus(model) {
+    if model.running == true {
+      return "Running..."
+    }
+    if model.focus == "input" {
+      return "Enter send · Shift+Enter newline"
+    }
+    return "Tab input · Up/Down sessions"
+  }
+
+  toText(value) {
+    let kind = typeOf(value)
+    if kind == "string" {
+      return value
+    }
+    if kind == "null" {
+      return ""
+    }
+    return json.encode(value)
+  }
+
+  conversationViewport(content) {
+    return tui.viewportState({
+      content: content,
+      height: 20,
+      offset: 999999
+    })
+  }
+
+  buildSummaryRows(result) {
+    return [
+      ["workspace", result.config.workspace],
+      ["model", result.config.model],
+      ["mode", result.model.mode],
+      ["turns", this.toText(result.turnsUsed)],
+      ["tools", this.toText(len(result.toolRuns))],
+      ["stop", result.stopReason]
+    ]
+  }
+
+  buildToolRows(toolRuns) {
+    if typeOf(toolRuns) != "array" || len(toolRuns) == 0 {
+      return [
+        ["-", "No tool calls", "idle"]
+      ]
+    }
+
+    let rows = []
+    for i, run in toolRuns {
+      let state = "ok"
+      if run.ok != true {
+        state = "error"
+      }
+      rows = rows.append([
+        run.name,
+        run.toolCallId,
+        state
+      ])
+    }
+    return rows
+  }
+
+  buildDetailsContent(result) {
+    let lines = []
+    lines = lines.append("workspace: " + result.config.workspace)
+    lines = lines.append("model: " + result.config.model)
+    lines = lines.append("mode: " + result.model.mode)
+    lines = lines.append("turns: " + this.toText(result.turnsUsed))
+    lines = lines.append("tools: " + this.toText(len(result.toolRuns)))
+    lines = lines.append("stop: " + result.stopReason)
+    lines = lines.append("")
+    lines = lines.append("context")
+    lines = lines.append(json.encode(result.context.summary))
+    return str.join(lines, "\n")
+  }
+
+  sidebarFooter(model) {
+    if model.focus == "sessions" {
+      return "Tab chat\nUp/Down select\nCtrl+C quit"
+    }
+    return "Tab sessions\nEnter send\nShift+Enter newline"
+  }
+
+  runTask(taskText) {
+    let nextTask = str.trimSpace(taskText)
+    if nextTask == "" {
+      nextTask = this.initialTask()
+    }
+
+    let config = object.merge(this.baseConfig, {
+      mode: "tui",
+      task: nextTask,
+      streamFinalAnswer: false
+    })
+    let result = this.runtime.execute(config)
+    let sessions = this.loadSessions()
+    let selected = 0
+    let idx = 0
+    while idx < len(sessions) {
+      if sessions[idx].id == result.session.sessionId {
+        selected = idx
+        break
+      }
+      idx = idx + 1
+    }
+
+    return {
+      kind: "run_complete",
+      task: nextTask,
+      result: result,
+      sessions: sessions,
+      selected: selected,
+      conversation: this.buildConversation(result.session),
+      summaryRows: this.buildSummaryRows(result),
+      toolRows: this.buildToolRows(result.toolRuns),
+      details: this.buildDetailsContent(result)
+    }
+  }
+
+  initialModel() {
+    let sessions = this.loadSessions()
+    let selected = 0
+    let selectedSession = null
+    if len(sessions) > 0 {
+      selectedSession = sessions[0]
+    }
+
+    return {
+      focus: "input",
+      running: false,
+      statusTone: "info",
+      statusText: "Ready",
+      sessions: sessions,
+      sessionList: this.sessionListFromSessions(sessions, selected),
+      currentConversation: selectedSession == null ? "No conversation yet." : selectedSession.conversation,
+      conversationView: this.conversationViewport(
+        selectedSession == null ? "No conversation yet." : selectedSession.conversation
+      ),
+      detailsView: tui.viewportState({
+        content: selectedSession == null ? "No session selected." : "session: " + selectedSession.title + "\nstatus: " + selectedSession.subtitle,
+        height: 8
+      }),
+      prompt: tui.inputState({
+        value: this.initialTask(),
+        placeholder: "Message agent...",
+        focused: true,
+        multiLine: true
+      }),
+      progressValue: 0,
+      progressTotal: 4,
+      summaryTable: tui.tableState({
+        columns: ["Key", "Value"],
+        rows: [
+          ["workspace", this.baseConfig.workspace],
+          ["model", this.baseConfig.model]
+        ],
+        height: 6,
+        selected: 0
+      }),
+      toolTable: tui.tableState({
+        columns: ["Tool", "Call", "State"],
+        rows: [
+          ["-", "No tool calls yet", "idle"]
+        ],
+        height: 6,
+        selected: 0
+      })
+    }
+  }
+
+  syncSessionSelection(model) {
+    let selected = this.selectedSession(model.sessions, model.sessionList)
+    if selected == null {
+      model.currentConversation = "No conversation yet."
+      model.conversationView = this.conversationViewport("No conversation yet.")
+      model.detailsView = tui.viewportState({
+        content: "No session selected.",
+        height: 8
+      })
+      return model
+    }
+
+    model.currentConversation = selected.conversation
+    model.conversationView = this.conversationViewport(selected.conversation)
+    model.detailsView = tui.viewportState({
+      content: "session: " + selected.title + "\nstatus: " + selected.subtitle,
+      height: 8
+    })
+    return model
+  }
+
+  app() {
+    let current = this
+    return tui.app({
+      altScreen: true,
+      init: fn() {
+        return current.initialModel()
+      },
+      update: fn(model, msg) {
+        if msg.kind == "key" && msg.key == "ctrl+c" {
+          return {
+            model: model,
+            quit: true
+          }
+        }
+
+        if msg.kind == "key" && msg.key == "tab" {
+          if model.focus == "input" {
+            model.focus = "sessions"
+            model.prompt.focused = false
+          } else {
+            model.focus = "input"
+            model.prompt.focused = true
+          }
+          return {
+            model: model
+          }
+        }
+
+        model.summaryTable = tui.tableUpdate(model.summaryTable, msg)
+        model.toolTable = tui.tableUpdate(model.toolTable, msg)
+        model.conversationView = tui.viewportUpdate(model.conversationView, msg)
+        model.detailsView = tui.viewportUpdate(model.detailsView, msg)
+
+        if model.focus == "sessions" {
+          model.sessionList = tui.listUpdate(model.sessionList, msg)
+          model = current.syncSessionSelection(model)
+          return {
+            model: model
+          }
+        }
+
+        if model.running != true {
+          model.prompt.focused = true
+          model.prompt = tui.inputUpdate(model.prompt, msg)
+        }
+
+        if model.running != true && model.prompt.submitted == true {
+          let taskText = model.prompt.value
+          model.running = true
+          model.statusTone = "warning"
+          model.statusText = "Running"
+          model.progressValue = 2
+          model.prompt = tui.inputState({
+            value: taskText,
+            placeholder: "Message agent...",
+            focused: true,
+            multiLine: true
+          })
+          model.currentConversation = model.currentConversation + "\n\nYou\n" + taskText
+          model.conversationView = current.conversationViewport(model.currentConversation)
+          return {
+            model: model,
+            command: tui.task(fn() {
+              return current.runTask(taskText)
+            })
+          }
+        }
+
+        if msg.kind == "run_complete" {
+          model.running = false
+          model.statusTone = "success"
+          model.statusText = "Completed"
+          model.progressValue = 4
+          model.sessions = msg.sessions
+          model.sessionList = current.sessionListFromSessions(msg.sessions, msg.selected)
+          model.currentConversation = msg.conversation
+          model.conversationView = current.conversationViewport(msg.conversation)
+          model.summaryTable = tui.tableState({
+            columns: ["Key", "Value"],
+            rows: msg.summaryRows,
+            height: 6,
+            selected: 0
+          })
+          model.toolTable = tui.tableState({
+            columns: ["Tool", "Call", "State"],
+            rows: msg.toolRows,
+            height: 6,
+            selected: 0
+          })
+          model.detailsView = tui.viewportState({
+            content: msg.details,
+            height: 8
+          })
+          model.prompt = tui.inputState({
+            value: "",
+            placeholder: "Message agent...",
+            focused: true,
+            multiLine: true
+          })
+          return {
+            model: model,
+            command: tui.tick(80, {
+              kind: "ready_state"
+            })
+          }
+        }
+
+        if msg.kind == "task_error" {
+          model.running = false
+          model.statusTone = "error"
+          model.statusText = "Task failed"
+          model.progressValue = 4
+          model.currentConversation = model.currentConversation + "\n\nSystem\n" + msg.error
+          model.conversationView = current.conversationViewport(model.currentConversation)
+        }
+
+        if msg.kind == "ready_state" && model.running != true {
+          model.statusTone = "info"
+          model.statusText = "Ready"
+          model.progressValue = 1
+        }
+
+        return {
+          model: model
+        }
+      },
+      view: fn(model) {
+        return tui.hstack({
+          gap: 1,
+          children: [
+                tui.box({
+                  title: current.sidebarStatus(model),
+                  border: "rounded",
+                  padding: [0, 1],
+                  width: 28,
+                  child: tui.vstack({
+                    gap: 1,
+                    children: [
+                      tui.list({
+                        state: model.sessionList
+                      }),
+                      tui.status({
+                        text: current.sidebarFooter(model),
+                        tone: model.focus == "sessions" ? "info" : "warning"
+                      })
+                    ]
+                  })
+                }),
+            tui.vstack({
+              gap: 1,
+              children: [
+                tui.status({
+                  text: model.statusText,
+                  tone: model.statusTone
+                }),
+                tui.box({
+                  title: "Conversation",
+                  border: "rounded",
+                  padding: [0, 1],
+                  width: 90,
+                  child: tui.viewport({
+                    state: model.conversationView
+                  })
+                }),
+                tui.box({
+                  title: "Message",
+                  border: "rounded",
+                  padding: [0, 1],
+                  width: 90,
+                  child: tui.input({
+                    state: model.prompt
+                  })
+                }),
+                tui.progress({
+                  label: current.inputStatus(model),
+                  value: model.progressValue,
+                  total: model.progressTotal,
+                  width: 36
+                }),
+                tui.hstack({
+                  gap: 1,
+                  children: [
+                    tui.box({
+                      title: "Summary",
+                      border: "rounded",
+                      padding: [0, 1],
+                      width: 44,
+                      child: tui.table({
+                        state: model.summaryTable
+                      })
+                    }),
+                    tui.box({
+                      title: "Tool Calls",
+                      border: "rounded",
+                      padding: [0, 1],
+                      width: 45,
+                      child: tui.table({
+                        state: model.toolTable
+                      })
+                    })
+                  ]
+                }),
+                tui.box({
+                  title: "Details",
+                  border: "rounded",
+                  padding: [0, 1],
+                  width: 90,
+                  child: tui.viewport({
+                    state: model.detailsView
+                  })
+                })
+              ]
+            })
+          ]
+        })
+      }
+    })
+  }
+
+  start() {
+    return tui.run(this.app())
+  }
+}

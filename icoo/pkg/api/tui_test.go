@@ -32,8 +32,22 @@ fn main() {
     tui.inputState({
       value: "hi",
       cursor: 2,
-      focused: true
+      focused: true,
+      multiLine: true
     }),
+    {
+      kind: "key",
+      key: "shift+enter",
+      text: ""
+    }
+  )
+
+  if prompt.value != "hi\n" {
+    panic("expected inputUpdate to insert newline on shift+enter")
+  }
+
+  prompt = tui.inputUpdate(
+    prompt,
     {
       kind: "key",
       key: "!",
@@ -41,8 +55,8 @@ fn main() {
     }
   )
 
-  if prompt.value != "hi!" {
-    panic("expected inputUpdate to append text")
+  if prompt.value != "hi\n!" {
+    panic("expected inputUpdate to append text after newline")
   }
 
   let viewport = tui.viewportUpdate(
@@ -142,8 +156,8 @@ fn main() {
   if str.indexOf(rendered, "Prompt") < 0 {
     panic("expected rendered output to contain Prompt")
   }
-  if str.indexOf(rendered, "hi!") < 0 {
-    panic("expected rendered output to contain hi!")
+  if str.indexOf(rendered, "hi") < 0 || str.indexOf(rendered, "!") < 0 {
+    panic("expected rendered output to contain multiline prompt text")
   }
   if str.indexOf(rendered, "Logs") < 0 {
     panic("expected rendered output to contain Logs")

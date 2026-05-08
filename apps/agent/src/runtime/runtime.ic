@@ -123,7 +123,7 @@ export class Runtime {
     }
   }
 
-  start(config) {
+  execute(config) {
     let opened = this.sessionStore.open(config)
     let session = opened.session
     let context = this.ctxBuilder.build(config)
@@ -141,38 +141,12 @@ export class Runtime {
       mode: modelLoop.final.mode
     })
 
-    io.println("== " + config.agentName + " ==")
-    io.println("workspace:", config.workspace)
-    io.println("mode:", config.mode)
-    io.println("model:", config.model)
-    io.println("approval:", config.approval)
-    io.println("session id:", session.sessionId)
-    io.println("resume:", config.resumeSession)
-    io.println("session dir:", config.sessionDir)
-    io.println("session path:", opened.path)
-    io.println("session resumed:", opened.resumed)
-    io.println("log path:", config.logPath)
-    io.println("max turns:", config.maxTurns)
-    io.println("max files:", config.maxFiles)
-    io.println("max total bytes:", config.maxTotalBytes)
-    io.println("context summary:", json.encode(context.summary))
-    io.println("")
-    io.println("model mode:", modelLoop.final.mode)
-    io.println("turns used:", modelLoop.turnsUsed)
-    io.println("stop reason:", modelLoop.stopReason)
-    io.println("tool calls:", len(modelLoop.toolRuns))
-    io.println("session stored turns:", len(session.turns))
-    if len(modelLoop.toolRuns) > 0 {
-      this.printListPreview("tool run preview", modelLoop.toolRuns, 2)
-    }
-    io.println("model output:")
-    io.println(modelLoop.final.text)
-
     return {
       ok: true,
       config: config,
       session: session,
       sessionPath: opened.path,
+      resumed: opened.resumed,
       context: context,
       model: modelLoop.final,
       toolRuns: modelLoop.toolRuns,
@@ -181,5 +155,38 @@ export class Runtime {
       turnsUsed: modelLoop.turnsUsed,
       stopReason: modelLoop.stopReason
     }
+  }
+
+  start(config) {
+    let result = this.execute(config)
+
+    io.println("== " + config.agentName + " ==")
+    io.println("workspace:", config.workspace)
+    io.println("mode:", config.mode)
+    io.println("model:", config.model)
+    io.println("approval:", config.approval)
+    io.println("session id:", result.session.sessionId)
+    io.println("resume:", config.resumeSession)
+    io.println("session dir:", config.sessionDir)
+    io.println("session path:", result.sessionPath)
+    io.println("session resumed:", result.resumed)
+    io.println("log path:", config.logPath)
+    io.println("max turns:", config.maxTurns)
+    io.println("max files:", config.maxFiles)
+    io.println("max total bytes:", config.maxTotalBytes)
+    io.println("context summary:", json.encode(result.context.summary))
+    io.println("")
+    io.println("model mode:", result.model.mode)
+    io.println("turns used:", result.turnsUsed)
+    io.println("stop reason:", result.stopReason)
+    io.println("tool calls:", len(result.toolRuns))
+    io.println("session stored turns:", len(result.session.turns))
+    if len(result.toolRuns) > 0 {
+      this.printListPreview("tool run preview", result.toolRuns, 2)
+    }
+    io.println("model output:")
+    io.println(result.model.text)
+
+    return result
   }
 }

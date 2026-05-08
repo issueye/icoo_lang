@@ -250,6 +250,7 @@ func tuiInputState(args []langruntime.Value) (langruntime.Value, error) {
 	fields["cursor"] = langruntime.IntValue{Value: int64(clampCursor(cursor, value))}
 	fields["placeholder"] = langruntime.StringValue{Value: stringField(options, "placeholder", "")}
 	fields["focused"] = langruntime.BoolValue{Value: boolField(options, "focused", true)}
+	fields["multiLine"] = langruntime.BoolValue{Value: boolField(options, "multiLine", false)}
 	fields["submitted"] = langruntime.BoolValue{Value: false}
 	fields["type"] = langruntime.StringValue{Value: "input_state"}
 	return &langruntime.ObjectValue{Fields: fields}, nil
@@ -269,6 +270,7 @@ func tuiInputUpdate(args []langruntime.Value) (langruntime.Value, error) {
 	value := stringField(state, "value", "")
 	cursor := clampCursor(intField(state, "cursor", len([]rune(value))), value)
 	focused := boolField(state, "focused", true)
+	multiLine := boolField(state, "multiLine", false)
 	submitted := false
 
 	if focused && stringField(msg, "kind", "") == "key" {
@@ -289,8 +291,18 @@ func tuiInputUpdate(args []langruntime.Value) (langruntime.Value, error) {
 			value, cursor = deleteAtCursor(value, cursor)
 		case "ctrl+u":
 			value, cursor = "", 0
+		case "shift+enter":
+			if multiLine == true {
+				value, cursor = insertAtCursor(value, cursor, "\n")
+			} else {
+				submitted = true
+			}
 		case "enter":
-			submitted = true
+			if multiLine == true {
+				submitted = true
+			} else {
+				submitted = true
+			}
 		default:
 			if text != "" {
 				value, cursor = insertAtCursor(value, cursor, text)
@@ -712,6 +724,7 @@ func renderInputNode(node *langruntime.ObjectValue, tick int) (string, error) {
 	placeholder := stringField(state, "placeholder", stringField(node, "placeholder", ""))
 	cursor := clampCursor(intField(state, "cursor", len([]rune(value))), value)
 	focused := boolField(state, "focused", boolField(node, "focused", true))
+	multiLine := boolField(state, "multiLine", boolField(node, "multiLine", false))
 	cursorToken := stringField(node, "cursor", "│")
 	inputStyle := styleFromNode(node)
 	placeholderStyle, hasPlaceholderStyle := styleFromFieldMaybe(node, "placeholderStyle")
@@ -724,6 +737,9 @@ func renderInputNode(node *langruntime.ObjectValue, tick int) (string, error) {
 		display = placeholderStyle.Render(placeholder)
 	} else if focused {
 		display = withCursor(value, cursor, cursorToken)
+	}
+	if multiLine == true && display == "" {
+		display = placeholderStyle.Render(placeholder)
 	}
 	return inputStyle.Render(display), nil
 }
