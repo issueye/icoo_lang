@@ -20,6 +20,8 @@ import (
 type Runtime struct {
 	vm               *vm.VM
 	modules          map[string]*runtime.Module
+	packageModules   map[string]*runtime.Module
+	bundledPackages  map[string]*BundleArchive
 	bundledSources   map[string]string
 	projectRoot      string
 	projectRootAlias string
@@ -29,9 +31,11 @@ type Runtime struct {
 func NewRuntime() *Runtime {
 	machine := vm.New()
 	rt := &Runtime{
-		vm:             machine,
-		modules:        make(map[string]*runtime.Module),
-		bundledSources: make(map[string]string),
+		vm:              machine,
+		modules:         make(map[string]*runtime.Module),
+		packageModules:  make(map[string]*runtime.Module),
+		bundledPackages: make(map[string]*BundleArchive),
+		bundledSources:  make(map[string]string),
 	}
 	machine.SetModuleLoader(rt.loadModule)
 	stdlib.RegisterBuiltins(machine)
@@ -226,6 +230,12 @@ func (r *Runtime) loadModule(importerPath, spec string) (*runtime.Module, error)
 		return mod, nil
 	}
 
+	if packagePath, ok, err := r.resolvePackageImportPath(importerPath, spec); err != nil {
+		return nil, err
+	} else if ok {
+		return r.loadPackageModule(packagePath)
+	}
+
 	resolved, err := r.resolveModulePath(importerPath, spec)
 	if err != nil {
 		return nil, err
@@ -285,6 +295,28 @@ func (r *Runtime) loadModule(importerPath, spec string) (*runtime.Module, error)
 	return module, nil
 }
 
+func (r *Runtime) loadPackageModule(path string) (*runtime.Module, error) {
+	archivePath := filepath.Clean(path)
+	if mod, ok := r.packageModules[archivePath]; ok {
+		return mod, nil
+	}
+
+	archive, ok := r.bundledPackages[archivePath]
+	if !ok {
+		var err error
+		archive, err = LoadBundleFile(archivePath)
+		if err != nil {
+			return nil, err
+		}
+	}
+	mod, err := r.LoadPackageArchive(archivePath, archive)
+	if err != nil {
+		return nil, err
+	}
+	r.packageModules[archivePath] = mod
+	return mod, nil
+}
+
 func (r *Runtime) resolveModulePath(importerPath, spec string) (string, error) {
 	if spec == "" {
 		return "", fmt.Errorf("empty module path")
@@ -329,4 +361,62 @@ func resolvePathWithinRoot(root, rel, original string) (string, error) {
 		return "", fmt.Errorf("project root import must stay within project root: %s", original)
 	}
 	return absPath, nil
+}
+
+func (r *Runtime) resolvePackageImportPath(importerPath, spec string) (string, bool, error) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return "", false, nil
+	}
+	if strings.HasPrefix(spec, "pkg:") {
+		path, err := r.resolveNamedPackagePath(spec)
+		if err != nil {
+			return "", false, err
+		}
+		return path, true, nil
+	}
+	if !strings.EqualFold(filepath.Ext(spec), ".icpkg") {
+		return "", false, nil
+	}
+	if filepath.IsAbs(spec) {
+		return filepath.Clean(spec), true, nil
+	}
+	baseDir := "."
+	if importerPath != "" {
+		baseDir = filepath.Dir(importerPath)
+	}
+	path, err := filepath.Abs(filepath.Join(baseDir, spec))
+	return path, true, err
+}
+
+func (r *Runtime) resolveNamedPackagePath(spec string) (string, error) {
+	if r.projectRoot == "" {
+		return "", fmt.Errorf("named package import requires a project root: %s", spec)
+	}
+
+	name := strings.TrimPrefix(spec, "pkg:")
+	name = strings.TrimSpace(strings.TrimPrefix(name, "//"))
+	name = strings.Trim(name, "/")
+	if name == "" {
+		return "", fmt.Errorf("named package import requires a package name: %s", spec)
+	}
+	if strings.Contains(name, "..") || strings.Contains(name, "\\") {
+		return "", fmt.Errorf("invalid package import: %s", spec)
+	}
+
+	candidates := []string{
+		filepath.Join(r.projectRoot, ".icoo", "packages", filepath.FromSlash(name)+".icpkg"),
+		filepath.Join(r.projectRoot, "packages", filepath.FromSlash(name)+".icpkg"),
+	}
+	for _, candidate := range candidates {
+		if _, ok := r.bundledPackages[filepath.Clean(candidate)]; ok {
+			return candidate, nil
+		}
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		} else if err != nil && !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat package: %w", err)
+		}
+	}
+	return "", fmt.Errorf("package not found: %s", spec)
 }

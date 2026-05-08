@@ -51,6 +51,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+	case "package":
+		if err := runPackage(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	case "check":
 		if err := runCheck(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -114,6 +119,7 @@ func printUsage() {
 	fmt.Println("  icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]")
 	fmt.Println("                                                         initialize project")
 	fmt.Println("  icoo bundle <file|dir> [output]                        bundle source into one .icb file")
+	fmt.Println("  icoo package <file|dir> [output] [--export path]       package source into one reusable .icpkg file")
 	fmt.Println("  icoo build <file|dir> [output] [--metadata file]       build a standalone executable with embedded bundle")
 	fmt.Println("  icoo extract <bundle|executable> [output]              extract embedded bundle to an .icb file")
 	fmt.Println("  icoo inspect <bundle|executable>                       inspect bundled modules and entry metadata")

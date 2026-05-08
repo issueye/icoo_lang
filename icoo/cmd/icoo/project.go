@@ -186,7 +186,7 @@ func parseInitArgs(args []string) (initOptions, error) {
 }
 
 func runCheckPath(path string) error {
-	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
+	if isArchivePath(path) {
 		rt := api.NewRuntime()
 		defer func() {
 			_ = rt.Close()
@@ -225,7 +225,7 @@ func runCheckPath(path string) error {
 }
 
 func runProjectPath(path string, scriptArgs []string) error {
-	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
+	if isArchivePath(path) {
 		rt := api.NewRuntime()
 		defer func() {
 			_ = rt.Close()

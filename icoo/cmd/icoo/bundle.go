@@ -14,14 +14,17 @@ import (
 	"icoo_lang/pkg/api"
 )
 
-const bundleFileExt = ".icb"
-
 func runBundle(args []string) error {
 	if len(args) < 1 || len(args) > 2 {
 		return fmt.Errorf("usage: icoo bundle <file|dir> [output]")
 	}
 
-	archive, outputPath, err := buildBundleArchive(args[0], optionalArg(args, 1))
+	archive, outputPath, err := buildArchive(buildArchiveOptions{
+		Target:     args[0],
+		Output:     optionalArg(args, 1),
+		ArchiveExt: bundleFileExt,
+		Kind:       api.ArchiveKindApplication,
+	})
 	if err != nil {
 		return err
 	}
@@ -45,13 +48,23 @@ func optionalArg(args []string, index int) string {
 	return ""
 }
 
-func buildBundleArchive(target string, output string) (*api.BundleArchive, string, error) {
-	resolved, err := resolveRunTarget(target)
+type buildArchiveOptions struct {
+	Target         string
+	Output         string
+	ArchiveExt     string
+	Kind           string
+	PackageName    string
+	PackageVersion string
+	ExportPath     string
+}
+
+func buildArchive(opts buildArchiveOptions) (*api.BundleArchive, string, error) {
+	resolved, err := resolveRunTarget(opts.Target)
 	if err != nil {
 		return nil, "", err
 	}
 
-	graph, err := collectBundleSources(resolved)
+	graph, err := collectBundleSources(resolved, opts.ExportPath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -87,17 +100,38 @@ func buildBundleArchive(target string, output string) (*api.BundleArchive, strin
 		}
 		modules[relPath] = graph.Sources[absPath]
 	}
-
-	archive := &api.BundleArchive{
-		Version:       api.BundleVersion,
-		Entry:         entryRel,
-		EntryFunction: resolved.EntryFunction,
-		ProjectRoot:   projectRootRel,
-		RootAlias:     resolved.RootAlias,
-		Modules:       modules,
+	packages := make(map[string]*api.BundleArchive, len(graph.Packages))
+	for absPath, packageArchive := range graph.Packages {
+		relPath, err := relBundlePath(baseRoot, absPath)
+		if err != nil {
+			return nil, "", err
+		}
+		packages[relPath] = packageArchive
 	}
 
-	outputPath, err := resolveBundleOutput(target, output)
+	exportRel := ""
+	if graph.ExportPath != "" {
+		exportRel, err = relBundlePath(baseRoot, graph.ExportPath)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	archive := &api.BundleArchive{
+		Version:        api.BundleVersion,
+		Kind:           opts.Kind,
+		Entry:          entryRel,
+		EntryFunction:  resolved.EntryFunction,
+		ProjectRoot:    projectRootRel,
+		RootAlias:      resolved.RootAlias,
+		PackageName:    opts.PackageName,
+		PackageVersion: opts.PackageVersion,
+		Export:         exportRel,
+		Modules:        modules,
+		Packages:       packages,
+	}
+
+	outputPath, err := resolveArchiveOutput(opts.Target, opts.Output, opts.ArchiveExt)
 	if err != nil {
 		return nil, "", err
 	}
@@ -105,13 +139,17 @@ func buildBundleArchive(target string, output string) (*api.BundleArchive, strin
 }
 
 type bundleGraph struct {
-	Paths   []string
-	Sources map[string]string
+	Paths      []string
+	Sources    map[string]string
+	Packages   map[string]*api.BundleArchive
+	ExportPath string
 }
 
-func collectBundleSources(resolved resolvedProject) (*bundleGraph, error) {
+func collectBundleSources(resolved resolvedProject, exportPath string) (*bundleGraph, error) {
 	sources := make(map[string]string)
+	packages := make(map[string]*api.BundleArchive)
 	visiting := make(map[string]bool)
+	var err error
 
 	var visit func(path string) error
 	visit = func(path string) error {
@@ -140,6 +178,16 @@ func collectBundleSources(resolved resolvedProject) (*bundleGraph, error) {
 			if isStdImport(spec) {
 				continue
 			}
+			if packagePath, ok, err := resolveArchivePackageImport(path, spec, resolved.Root); err != nil {
+				return err
+			} else if ok {
+				archive, err := api.LoadBundleFile(packagePath)
+				if err != nil {
+					return err
+				}
+				packages[filepath.Clean(packagePath)] = archive
+				continue
+			}
 			resolvedPath, err := resolveBundleImport(path, spec, resolved.Root, resolved.RootAlias)
 			if err != nil {
 				return err
@@ -155,12 +203,32 @@ func collectBundleSources(resolved resolvedProject) (*bundleGraph, error) {
 		return nil, err
 	}
 
+	exportAbsPath := ""
+	if strings.TrimSpace(exportPath) != "" {
+		exportAbsPath, err = resolveArchiveExportPath(resolved, exportPath)
+		if err != nil {
+			return nil, err
+		}
+		if err := visit(exportAbsPath); err != nil {
+			return nil, err
+		}
+	}
+
+	if exportAbsPath == "" {
+		exportAbsPath = resolved.EntryPath
+	}
+
 	paths := make([]string, 0, len(sources))
 	for path := range sources {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
-	return &bundleGraph{Paths: paths, Sources: sources}, nil
+	return &bundleGraph{
+		Paths:      paths,
+		Sources:    sources,
+		Packages:   packages,
+		ExportPath: filepath.Clean(exportAbsPath),
+	}, nil
 }
 
 func parseImportSpecs(src string) ([]string, error) {
@@ -210,6 +278,45 @@ func resolveBundleImport(importerPath string, spec string, projectRoot string, r
 
 	baseDir := filepath.Dir(importerPath)
 	return filepath.Abs(filepath.Join(baseDir, spec))
+}
+
+func resolveArchivePackageImport(importerPath string, spec string, projectRoot string) (string, bool, error) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return "", false, nil
+	}
+	if strings.HasPrefix(spec, "pkg:") {
+		if projectRoot == "" {
+			return "", false, fmt.Errorf("named package import requires a project root: %s", spec)
+		}
+		name := strings.TrimPrefix(spec, "pkg:")
+		name = strings.TrimSpace(strings.TrimPrefix(name, "//"))
+		name = strings.Trim(name, "/")
+		if name == "" || strings.Contains(name, "..") || strings.Contains(name, "\\") {
+			return "", false, fmt.Errorf("invalid package import: %s", spec)
+		}
+		candidates := []string{
+			filepath.Join(projectRoot, ".icoo", "packages", filepath.FromSlash(name)+packageFileExt),
+			filepath.Join(projectRoot, "packages", filepath.FromSlash(name)+packageFileExt),
+		}
+		for _, candidate := range candidates {
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate, true, nil
+			} else if err != nil && !os.IsNotExist(err) {
+				return "", false, fmt.Errorf("stat package: %w", err)
+			}
+		}
+		return "", false, fmt.Errorf("package not found: %s", spec)
+	}
+	if !strings.EqualFold(filepath.Ext(spec), packageFileExt) {
+		return "", false, nil
+	}
+	if filepath.IsAbs(spec) {
+		return filepath.Clean(spec), true, nil
+	}
+	baseDir := filepath.Dir(importerPath)
+	path, err := filepath.Abs(filepath.Join(baseDir, spec))
+	return path, true, err
 }
 
 func relBundlePath(root string, path string) (string, error) {
@@ -268,7 +375,22 @@ func equalPathSegment(left string, right string) bool {
 	return strings.EqualFold(left, right)
 }
 
-func resolveBundleOutput(target string, output string) (string, error) {
+func resolveArchiveExportPath(resolved resolvedProject, exportPath string) (string, error) {
+	exportPath = strings.TrimSpace(exportPath)
+	if exportPath == "" {
+		return "", nil
+	}
+	if filepath.IsAbs(exportPath) {
+		return filepath.Abs(exportPath)
+	}
+	if resolved.Root != "" {
+		return resolveProjectEntryPath(resolved.Root, filepath.ToSlash(exportPath))
+	}
+	baseDir := filepath.Dir(resolved.EntryPath)
+	return filepath.Abs(filepath.Join(baseDir, exportPath))
+}
+
+func resolveArchiveOutput(target string, output string, ext string) (string, error) {
 	if strings.TrimSpace(output) != "" {
 		return filepath.Abs(output)
 	}
@@ -282,7 +404,7 @@ func resolveBundleOutput(target string, output string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("resolve bundle target: %w", err)
 		}
-		return filepath.Join(filepath.Dir(absTarget), filepath.Base(absTarget)+bundleFileExt), nil
+		return filepath.Join(filepath.Dir(absTarget), filepath.Base(absTarget)+ext), nil
 	}
 
 	absTarget, err := filepath.Abs(target)
@@ -290,5 +412,5 @@ func resolveBundleOutput(target string, output string) (string, error) {
 		return "", fmt.Errorf("resolve bundle target: %w", err)
 	}
 	base := strings.TrimSuffix(absTarget, filepath.Ext(absTarget))
-	return base + bundleFileExt, nil
+	return base + ext, nil
 }

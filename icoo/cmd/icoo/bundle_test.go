@@ -162,8 +162,8 @@ func TestPrintArchiveSummary(t *testing.T) {
 		RootAlias:     "app",
 		ProjectRoot:   "src",
 		Modules: map[string]string{
-			"src/main.ic":      "fn main() {}\n",
-			"src/lib/util.ic":  "export fn value() { return 1 }\n",
+			"src/main.ic":     "fn main() {}\n",
+			"src/lib/util.ic": "export fn value() { return 1 }\n",
 		},
 	}
 
@@ -369,6 +369,157 @@ func TestApplyWindowsBuildMetadataWritesVersionInfo(t *testing.T) {
 	}
 	if table[version.ProductVersion] != "1.2.3" {
 		t.Fatalf("expected product version %q, got %q", "1.2.3", table[version.ProductVersion])
+	}
+}
+
+func TestRunPackageImportsFromRelativePackageFileAndBundle(t *testing.T) {
+	root := t.TempDir()
+	libDir := filepath.Join(root, "lib")
+	appDir := filepath.Join(root, "app")
+	libSourcePath := filepath.Join(libDir, "greeter.ic")
+	packagePath := filepath.Join(root, "dist", "greeter.icpkg")
+	appSourcePath := filepath.Join(appDir, "main.ic")
+	bundlePath := filepath.Join(root, "dist", "app.icb")
+
+	if err := os.MkdirAll(filepath.Dir(libSourcePath), 0o755); err != nil {
+		t.Fatalf("mkdir lib dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(appSourcePath), 0o755); err != nil {
+		t.Fatalf("mkdir app dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(packagePath), 0o755); err != nil {
+		t.Fatalf("mkdir dist dir: %v", err)
+	}
+	if err := os.WriteFile(libSourcePath, []byte("export fn message() {\n  return \"hello package\"\n}\n"), 0o644); err != nil {
+		t.Fatalf("write lib source: %v", err)
+	}
+	if err := runPackage([]string{libSourcePath, packagePath, "--name", "acme/greeter", "--version", "1.0.0"}); err != nil {
+		t.Fatalf("package lib: %v", err)
+	}
+
+	appSource := strings.Join([]string{
+		"import \"../dist/greeter.icpkg\" as greeter",
+		"",
+		"if greeter.message() != \"hello package\" {",
+		"  panic(\"unexpected package message\")",
+		"}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(appSourcePath, []byte(appSource), 0o644); err != nil {
+		t.Fatalf("write app source: %v", err)
+	}
+
+	if err := runProjectPath(appSourcePath, nil); err != nil {
+		t.Fatalf("run source app with relative package: %v", err)
+	}
+	if err := runBundle([]string{appSourcePath, bundlePath}); err != nil {
+		t.Fatalf("bundle app with package dependency: %v", err)
+	}
+
+	rt := api.NewRuntime()
+	defer func() {
+		_ = rt.Close()
+	}()
+	if _, err := rt.RunBundleFile(bundlePath); err != nil {
+		t.Fatalf("run bundled app with packaged dependency: %v", err)
+	}
+}
+
+func TestRunPackageSupportsNamedPackageImports(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "demo")
+	libSourcePath := filepath.Join(root, "pkgsrc", "math.ic")
+	packagePath := filepath.Join(root, ".icoo", "packages", "acme", "math.icpkg")
+	entryPath := filepath.Join(root, "src", "main.ic")
+	bundlePath := filepath.Join(root, "demo.icb")
+
+	if err := runInit([]string{root, "--root-alias", "app"}); err != nil {
+		t.Fatalf("init project: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(libSourcePath), 0o755); err != nil {
+		t.Fatalf("mkdir pkgsrc dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(packagePath), 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	if err := os.WriteFile(libSourcePath, []byte("export fn answer() {\n  return 42\n}\n"), 0o644); err != nil {
+		t.Fatalf("write package source: %v", err)
+	}
+	if err := runPackage([]string{libSourcePath, packagePath, "--name", "acme/math"}); err != nil {
+		t.Fatalf("package named dependency: %v", err)
+	}
+
+	entrySource := strings.Join([]string{
+		"import \"pkg:acme/math\" as math",
+		"",
+		"fn main() {",
+		"  if math.answer() != 42 {",
+		"    panic(\"unexpected answer\")",
+		"  }",
+		"}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(entryPath, []byte(entrySource), 0o644); err != nil {
+		t.Fatalf("write project entry: %v", err)
+	}
+
+	if err := runProjectPath(root, nil); err != nil {
+		t.Fatalf("run project with named package import: %v", err)
+	}
+	if err := runBundle([]string{root, bundlePath}); err != nil {
+		t.Fatalf("bundle project with named package import: %v", err)
+	}
+
+	rt := api.NewRuntime()
+	defer func() {
+		_ = rt.Close()
+	}()
+	if _, err := rt.RunBundleFile(bundlePath); err != nil {
+		t.Fatalf("run bundled project with named package import: %v", err)
+	}
+}
+
+func TestRunPackageDirectorySupportsRunAndImport(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "pkgapp")
+	libPath := filepath.Join(root, "src", "lib", "message.ic")
+	packagePath := filepath.Join(t.TempDir(), "pkgapp.icpkg")
+
+	if err := runInit([]string{root, "--root-alias", "app"}); err != nil {
+		t.Fatalf("init package project: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(libPath), 0o755); err != nil {
+		t.Fatalf("mkdir lib dir: %v", err)
+	}
+	if err := os.WriteFile(libPath, []byte("export fn text() {\n  return \"hi\"\n}\n"), 0o644); err != nil {
+		t.Fatalf("write export module: %v", err)
+	}
+	entrySource := strings.Join([]string{
+		"import \"app/src/lib/message.ic\" as message",
+		"",
+		"fn main() {",
+		"  if message.text() != \"hi\" {",
+		"    panic(\"unexpected package export\")",
+		"  }",
+		"}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(root, "src", "main.ic"), []byte(entrySource), 0o644); err != nil {
+		t.Fatalf("write entry source: %v", err)
+	}
+
+	if err := runPackage([]string{root, packagePath, "--name", "acme/pkgapp", "--version", "2.0.0", "--export", "src/lib/message.ic"}); err != nil {
+		t.Fatalf("package directory app: %v", err)
+	}
+
+	if err := runProjectPath(packagePath, nil); err != nil {
+		t.Fatalf("run package archive: %v", err)
+	}
+
+	archive, err := api.LoadBundleFile(packagePath)
+	if err != nil {
+		t.Fatalf("load packaged archive: %v", err)
+	}
+	if archive.Export != "src/lib/message.ic" || archive.PackageName != "acme/pkgapp" || archive.PackageVersion != "2.0.0" {
+		t.Fatalf("unexpected package metadata: %+v", archive)
 	}
 }
 

@@ -24,12 +24,16 @@ func runInspect(args []string) error {
 }
 
 func loadArchiveForInspect(path string) (*api.BundleArchive, string, error) {
-	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
+	if isArchivePath(path) {
 		archive, err := api.LoadBundleFile(path)
 		if err != nil {
 			return nil, "", err
 		}
-		return archive, "bundle", nil
+		kind := "bundle"
+		if strings.EqualFold(filepath.Ext(path), packageFileExt) {
+			kind = "package"
+		}
+		return archive, kind, nil
 	}
 
 	data, err := readEmbeddedBundle(path)
@@ -55,9 +59,19 @@ func printArchiveSummary(path string, kind string, archive *api.BundleArchive) {
 
 	fmt.Printf("type: %s\n", kind)
 	fmt.Printf("path: %s\n", path)
+	fmt.Printf("archive_kind: %s\n", archive.Kind)
 	fmt.Printf("entry: %s\n", archive.Entry)
+	if archive.Export != "" {
+		fmt.Printf("export: %s\n", archive.Export)
+	}
 	if archive.EntryFunction != "" {
 		fmt.Printf("entry_function: %s\n", archive.EntryFunction)
+	}
+	if archive.PackageName != "" {
+		fmt.Printf("package_name: %s\n", archive.PackageName)
+	}
+	if archive.PackageVersion != "" {
+		fmt.Printf("package_version: %s\n", archive.PackageVersion)
 	}
 	if archive.RootAlias != "" {
 		fmt.Printf("root_alias: %s\n", archive.RootAlias)

@@ -30,7 +30,7 @@ func runExtract(args []string) error {
 }
 
 func loadBundleDataForExtract(path string) ([]byte, error) {
-	if strings.EqualFold(filepath.Ext(path), bundleFileExt) {
+	if isArchivePath(path) {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("read bundle: %w", err)
@@ -63,9 +63,9 @@ func resolveExtractOutput(target string, output string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve extract target: %w", err)
 	}
-	if strings.EqualFold(filepath.Ext(absTarget), bundleFileExt) {
+	if isArchivePath(absTarget) {
 		base := strings.TrimSuffix(absTarget, filepath.Ext(absTarget))
-		return base + ".extracted" + bundleFileExt, nil
+		return base + ".extracted" + filepath.Ext(absTarget), nil
 	}
 	base := strings.TrimSuffix(absTarget, filepath.Ext(absTarget))
 	return base + bundleFileExt, nil

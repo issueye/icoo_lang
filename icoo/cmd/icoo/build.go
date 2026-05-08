@@ -55,7 +55,11 @@ func runBuild(args []string) error {
 		return err
 	}
 
-	archive, _, err := buildBundleArchive(opts.Target, "")
+	archive, _, err := buildArchive(buildArchiveOptions{
+		Target:     opts.Target,
+		ArchiveExt: bundleFileExt,
+		Kind:       api.ArchiveKindApplication,
+	})
 	if err != nil {
 		return err
 	}
