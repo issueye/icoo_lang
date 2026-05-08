@@ -2,6 +2,17 @@ import std.io.console as io
 import std.data.json as json
 
 export class Runtime {
+  // 上下文构建器
+  ctxBuilder = null
+  // 模型客户端
+  modelClient = null
+  // 模型消息处理模块
+  modelMessages = null
+  // 会话存储模块
+  sessionStore = null
+  // 工具执行器
+  toolExecutor = null
+
   init(contextBuilder, modelClient, modelMessages, sessionStore, toolExecutor) {
     this.ctxBuilder = contextBuilder
     this.modelClient = modelClient
