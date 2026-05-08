@@ -1,0 +1,48 @@
+import std.core.object as object
+import "@/src/tools/list_skills.ic" as listSkills
+import "@/src/tools/read_skill.ic" as readSkill
+import "@/src/tools/remove_skill.ic" as removeSkill
+import "@/src/tools/create_skill.ic" as createSkill
+import "@/src/tools/update_skill.ic" as updateSkill
+
+export class SkillTool {
+  init(skillCatalog) {
+    this.skillCatalog = skillCatalog
+    this.listSkills = listSkills.ListSkills(this.skillCatalog)
+    this.readSkill = readSkill.ReadSkill(this.skillCatalog)
+    this.removeSkill = removeSkill.RemoveSkill(this.skillCatalog)
+    this.createSkill = createSkill.CreateSkill(this.skillCatalog)
+    this.updateSkill = updateSkill.UpdateSkill(this.skillCatalog)
+  }
+
+  run(config, input) {
+    let action = object.get(input, "action")
+    if typeOf(action) != "string" || action == "" {
+      return {
+        ok: false,
+        error: "skill tool requires non-empty action"
+      }
+    }
+
+    if action == "list" {
+      return this.listSkills.run(config, input)
+    }
+    if action == "read" {
+      return this.readSkill.run(config, input)
+    }
+    if action == "create" {
+      return this.createSkill.run(config, input)
+    }
+    if action == "update" {
+      return this.updateSkill.run(config, input)
+    }
+    if action == "remove" {
+      return this.removeSkill.run(config, input)
+    }
+
+    return {
+      ok: false,
+      error: "unsupported skill action: " + action
+    }
+  }
+}
