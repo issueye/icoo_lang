@@ -26,10 +26,21 @@ agent_name = "icoo_agents"
 
 server_host = "127.0.0.1"
 server_port = 8080
+server_read_timeout_ms = 0
+server_read_header_timeout_ms = 0
+server_write_timeout_ms = 0
+server_idle_timeout_ms = 0
 
 session_dir = "./runtime/.agents/sessions"
 log_path = "./runtime/.agents/agent.log"
 ```
+
+超时字段会透传给 `std.web.express.listen(...)`：
+
+- `server_read_timeout_ms`
+- `server_read_header_timeout_ms`
+- `server_write_timeout_ms`
+- `server_idle_timeout_ms`
 
 启动：
 

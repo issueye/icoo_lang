@@ -33,6 +33,10 @@ stream_final_answer = false
 agent_name = "icoo_agent"
 server_host = "0.0.0.0"
 server_port = 9090
+server_read_timeout_ms = 1000
+server_read_header_timeout_ms = 2000
+server_write_timeout_ms = 3000
+server_idle_timeout_ms = 4000
 session_dir = ".agent/sessions"
 log_path = ".agent/agent.log"
 `
@@ -71,6 +75,18 @@ fn main() {
   }
   if cfg.serverPort != 9090 {
     panic("expected config.toml server_port")
+  }
+  if cfg.serverReadTimeoutMs != 1000 {
+    panic("expected config.toml server_read_timeout_ms")
+  }
+  if cfg.serverReadHeaderTimeoutMs != 2000 {
+    panic("expected config.toml server_read_header_timeout_ms")
+  }
+  if cfg.serverWriteTimeoutMs != 3000 {
+    panic("expected config.toml server_write_timeout_ms")
+  }
+  if cfg.serverIdleTimeoutMs != 4000 {
+    panic("expected config.toml server_idle_timeout_ms")
   }
   if cfg.sessionDir != "` + filepath.Join(workspace, ".agent", "sessions") + `" {
     panic("expected config.toml session_dir")

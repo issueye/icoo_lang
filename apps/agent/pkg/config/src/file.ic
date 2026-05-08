@@ -97,6 +97,10 @@ export class ConfigFile {
     config = this.applyString(config, object.get(loaded, "approval"), "approval")
     config = this.applyString(config, object.get(loaded, "server_host"), "serverHost")
     config = this.applyInt(config, object.get(loaded, "server_port"), "serverPort")
+    config = this.applyInt(config, object.get(loaded, "server_read_timeout_ms"), "serverReadTimeoutMs")
+    config = this.applyInt(config, object.get(loaded, "server_read_header_timeout_ms"), "serverReadHeaderTimeoutMs")
+    config = this.applyInt(config, object.get(loaded, "server_write_timeout_ms"), "serverWriteTimeoutMs")
+    config = this.applyInt(config, object.get(loaded, "server_idle_timeout_ms"), "serverIdleTimeoutMs")
     config = this.applyString(
       config,
       this.resolvePathValue(configDir, object.get(loaded, "skills_dir")),

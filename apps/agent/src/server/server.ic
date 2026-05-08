@@ -147,7 +147,11 @@ export class Server {
   start() {
     let server = this.app().listen({
       host: this.baseConfig.serverHost,
-      port: this.baseConfig.serverPort
+      port: this.baseConfig.serverPort,
+      readTimeoutMs: this.baseConfig.serverReadTimeoutMs,
+      readHeaderTimeoutMs: this.baseConfig.serverReadHeaderTimeoutMs,
+      writeTimeoutMs: this.baseConfig.serverWriteTimeoutMs,
+      idleTimeoutMs: this.baseConfig.serverIdleTimeoutMs
     })
 
     io.println("== " + this.baseConfig.agentName + " server ==")

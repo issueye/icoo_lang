@@ -15,7 +15,13 @@ app.get("/json", fn(req) {
   })
 })
 
-let server = app.listen(0)
+let server = app.listen({
+  port: 0,
+  readTimeoutMs: 5000,
+  readHeaderTimeoutMs: 2000,
+  writeTimeoutMs: 5000,
+  idleTimeoutMs: 30000
+})
 let textResp = client.get(server.url + "/hello?name=icoo")
 let jsonResp = client.getJSON(server.url + "/json")
 server.close()

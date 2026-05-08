@@ -52,6 +52,14 @@ type serverBinding struct {
 	server *http.Server
 }
 
+type listenOptions struct {
+	addr                string
+	readTimeout         time.Duration
+	readHeaderTimeout   time.Duration
+	writeTimeout        time.Duration
+	idleTimeout         time.Duration
+}
+
 type responseBinding struct {
 	writer      http.ResponseWriter
 	flusher     http.Flusher
@@ -134,20 +142,26 @@ func (app *appBinding) addRoute(name, method string, args []runtime.Value) (runt
 }
 
 func (app *appBinding) listen(ctx *runtime.NativeContext, args []runtime.Value) (runtime.Value, error) {
-	addr, err := parseListenAddr(args[0])
+	options, err := parseListenOptions(args[0])
 	if err != nil {
 		return nil, err
 	}
 
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", options.addr)
 	if err != nil {
 		return nil, err
 	}
 
 	binding := &serverBinding{}
-	binding.server = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.serveHTTP(ctx, w, r)
-	})}
+	binding.server = &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			app.serveHTTP(ctx, w, r)
+		}),
+		ReadTimeout:       options.readTimeout,
+		ReadHeaderTimeout: options.readHeaderTimeout,
+		WriteTimeout:      options.writeTimeout,
+		IdleTimeout:       options.idleTimeout,
+	}
 
 	go func() {
 		_ = binding.server.Serve(listener)
@@ -650,6 +664,59 @@ func parseListenAddr(value runtime.Value) (string, error) {
 	default:
 		return "", fmt.Errorf("listen expects string, int, or options object")
 	}
+}
+
+func parseListenOptions(value runtime.Value) (*listenOptions, error) {
+	addr, err := parseListenAddr(value)
+	if err != nil {
+		return nil, err
+	}
+
+	options := &listenOptions{
+		addr: addr,
+	}
+	obj, ok := value.(*runtime.ObjectValue)
+	if !ok {
+		return options, nil
+	}
+
+	readTimeout, err := parseServerTimeoutOption("listen", obj, "readTimeoutMs")
+	if err != nil {
+		return nil, err
+	}
+	readHeaderTimeout, err := parseServerTimeoutOption("listen", obj, "readHeaderTimeoutMs")
+	if err != nil {
+		return nil, err
+	}
+	writeTimeout, err := parseServerTimeoutOption("listen", obj, "writeTimeoutMs")
+	if err != nil {
+		return nil, err
+	}
+	idleTimeout, err := parseServerTimeoutOption("listen", obj, "idleTimeoutMs")
+	if err != nil {
+		return nil, err
+	}
+
+	options.readTimeout = readTimeout
+	options.readHeaderTimeout = readHeaderTimeout
+	options.writeTimeout = writeTimeout
+	options.idleTimeout = idleTimeout
+	return options, nil
+}
+
+func parseServerTimeoutOption(name string, obj *runtime.ObjectValue, field string) (time.Duration, error) {
+	value, ok := obj.Fields[field]
+	if !ok {
+		return 0, nil
+	}
+	intValue, ok := value.(runtime.IntValue)
+	if !ok {
+		return 0, fmt.Errorf("%s %s must be int", name, field)
+	}
+	if intValue.Value < 0 {
+		return 0, fmt.Errorf("%s %s must be non-negative", name, field)
+	}
+	return time.Duration(intValue.Value) * time.Millisecond, nil
 }
 
 func httpRequestToRuntime(r *http.Request) (runtime.Value, error) {
