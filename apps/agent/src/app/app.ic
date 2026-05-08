@@ -8,7 +8,6 @@ import "@/src/model/parser.ic" as modelParser
 import "pkg:issueye/agent/pkg/session" as agentSession
 import "@/src/runtime/runtime.ic" as runtime
 import "@/src/skills/catalog.ic" as skills
-import "@/src/ui/tui.ic" as agentTui
 import "pkg:issueye/agent/pkg/tools" as agentTools
 
 export class App {
@@ -81,33 +80,16 @@ export class App {
   resolveCliLaunch() {
     let values = argv()
     if typeOf(values) != "array" || len(values) == 0 {
-      return {
-        tui: false
-      }
+      return null
     }
 
-    if len(values) == 1 && values[0] == "--tui" {
-      return {
-        tui: true
-      }
-    }
-
-    panic("Only --tui is supported; configure workspace, task, and model via config.toml")
-  }
-
-  startTUI(config) {
-    let tuiApp = agentTui.AgentTUI(config, this.runtime)
-    return tuiApp.start()
+    panic("CLI args are not supported; configure workspace, task, and model via config.toml")
   }
 
   start(overrides) {
-    let launch = this.resolveCliLaunch()
+    this.resolveCliLaunch()
     let loaded = this.loadConfig(overrides)
-    let cfg = loaded.config
-    if launch.tui == true || cfg.mode == "tui" {
-      return this.startTUI(cfg)
-    }
-    return this.runtime.start(cfg)
+    return this.runtime.start(loaded.config)
   }
 
   stop(runtimeApp) {

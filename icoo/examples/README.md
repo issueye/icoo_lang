@@ -39,8 +39,6 @@ go run ./cmd/icoo run examples/01_data_types.ic
 27. `27_db_open_driver.ic` - `std.db.open(...)` 的通用驱动入口
 28. `28_db_orm.ic` - `std.db.table(...)` 的轻量 ORM / 查询构造器
 29. `29_from_import.ic` - `from ... import ...` 选择性导入与别名导入
-30. `30_tui_framework.ic` - `std.ui.tui` 的声明式终端 UI 框架示例
-
 示例使用到的辅助模块位于 `examples/lib`。
 
 除了这些单文件示例，仓库里还有一个项目级服务样例：

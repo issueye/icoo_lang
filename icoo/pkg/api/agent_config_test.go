@@ -3,6 +3,7 @@ package api
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -224,7 +225,7 @@ main()
 	}
 }
 
-func TestAgentAppResolveCliLaunchAllowsOnlyTUI(t *testing.T) {
+func TestAgentAppResolveCliLaunchRejectsCliArgs(t *testing.T) {
 	rt := NewRuntime()
 	agentRoot := resolveAgentRoot(t)
 	rt.SetProjectRoot(agentRoot, "@")
@@ -235,16 +236,15 @@ import "@/src/app/app.ic" as appModule
 
 fn main() {
   let app = appModule.App()
-  let launch = app.resolveCliLaunch()
-  if launch.tui != true {
-    panic("expected --tui to be allowed")
-  }
+  app.resolveCliLaunch()
 }
 
 main()
 `
 
-	if _, err := rt.RunSource(source); err != nil {
-		t.Fatalf("expected --tui to be allowed, got: %v", err)
+	if _, err := rt.RunSource(source); err == nil {
+		t.Fatal("expected CLI args to be rejected")
+	} else if !strings.Contains(err.Error(), "CLI args are not supported") {
+		t.Fatalf("expected CLI args rejection, got: %v", err)
 	}
 }

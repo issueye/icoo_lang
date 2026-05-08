@@ -304,7 +304,7 @@ func TestRunAgentProjectRejectsCliArgs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected CLI args to be rejected")
 	}
-	if !strings.Contains(err.Error(), "Only --tui is supported") {
+	if !strings.Contains(err.Error(), "CLI args are not supported") {
 		t.Fatalf("expected explicit CLI args rejection, got: %v", err)
 	}
 }

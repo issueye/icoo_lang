@@ -9,7 +9,6 @@ import (
 	stdio "icoo_lang/internal/stdlib/io"
 	stdnet "icoo_lang/internal/stdlib/net"
 	stdsystem "icoo_lang/internal/stdlib/system"
-	stdui "icoo_lang/internal/stdlib/ui"
 	stdweb "icoo_lang/internal/stdlib/web"
 )
 
@@ -26,7 +25,6 @@ var moduleLoaders = map[string]func() *runtime.Module{
 	"std.io.console":  stdio.LoadStdIOConsoleModule,
 	"std.io.fs":       stdio.LoadStdIOFSModule,
 	"std.io.template": stdio.LoadStdIOTemplateModule,
-	"std.ui.tui":      stdui.LoadStdUITUIModule,
 
 	// std.time - 时间日期
 	"std.time.basic": stdcore.LoadStdTimeBasicModule,
