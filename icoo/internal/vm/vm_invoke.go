@@ -108,6 +108,10 @@ func cloneDetachedValue(value runtime.Value) runtime.Value {
 		}
 		return &runtime.ObjectValue{Fields: fields, Class: class}
 	case *runtime.ClassValue:
+		fields := make(map[string]runtime.Value, len(v.Fields))
+		for key, fieldValue := range v.Fields {
+			fields[key] = cloneDetachedValue(fieldValue)
+		}
 		methods := make(map[string]*runtime.MethodDef, len(v.Methods))
 		for key, method := range v.Methods {
 			if method == nil {
@@ -123,7 +127,7 @@ func cloneDetachedValue(value runtime.Value) runtime.Value {
 		if v.Init != nil {
 			init = cloneDetachedValue(v.Init).(*runtime.MethodDef)
 		}
-		return &runtime.ClassValue{Name: v.Name, Super: super, Init: init, Methods: methods}
+		return &runtime.ClassValue{Name: v.Name, Super: super, Init: init, Fields: fields, Methods: methods}
 	case *runtime.BoundMethod:
 		var receiver *runtime.ObjectValue
 		if v.Receiver != nil {

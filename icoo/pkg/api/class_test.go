@@ -102,6 +102,90 @@ if e.getValue() != 42 {
 	}
 }
 
+func TestClassDefaultFieldDeclaration(t *testing.T) {
+	src := `
+class Person {
+  name = ""
+  age = 18
+}
+
+let p = Person()
+if p.name != "" {
+  panic("expected default name")
+}
+if p.age != 18 {
+  panic("expected default age")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class default field declaration failed: %v", err)
+	}
+}
+
+func TestClassDefaultFieldCanBeOverriddenInInit(t *testing.T) {
+	src := `
+class Person {
+  name = "unknown"
+  age = 0
+
+  init(name) {
+    this.name = name
+    this.age = this.age + 20
+  }
+}
+
+let p = Person("Ada")
+if p.name != "Ada" {
+  panic("expected init override name")
+}
+if p.age != 20 {
+  panic("expected init to see default age")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class default field init override failed: %v", err)
+	}
+}
+
+func TestClassDefaultFieldUsesDistinctMutableInstances(t *testing.T) {
+	src := `
+class Box {
+  items = []
+  meta = {
+    count: 0
+  }
+
+  push(value) {
+    this.items = this.items.append(value)
+    this.meta.count = this.meta.count + 1
+  }
+}
+
+let a = Box()
+let b = Box()
+a.push(1)
+
+if len(a.items) != 1 {
+  panic("expected first instance item")
+}
+if len(b.items) != 0 {
+  panic("expected second instance isolated items")
+}
+if a.meta.count != 1 {
+  panic("expected first instance meta count")
+}
+if b.meta.count != 0 {
+  panic("expected second instance isolated meta count")
+}
+`
+	rt := NewRuntime()
+	if _, err := rt.RunSource(src); err != nil {
+		t.Fatalf("class mutable default field isolation failed: %v", err)
+	}
+}
+
 func TestClassMultipleInstances(t *testing.T) {
 	src := `
 class Point {

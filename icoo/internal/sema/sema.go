@@ -160,6 +160,17 @@ func (a *Analyzer) visitClassDecl(d *ast.ClassDecl) {
 	if d.Super != nil {
 		a.visitExpr(d.Super)
 	}
+	seenFields := map[string]struct{}{}
+	for _, field := range d.Fields {
+		if _, ok := seenFields[field.Name]; ok {
+			a.report(field.Span(), "duplicate class field: "+field.Name)
+			continue
+		}
+		seenFields[field.Name] = struct{}{}
+		if field.Value != nil {
+			a.visitExpr(field.Value)
+		}
+	}
 	hasInit := false
 	for _, method := range d.Methods {
 		for _, decorator := range method.Decorators {

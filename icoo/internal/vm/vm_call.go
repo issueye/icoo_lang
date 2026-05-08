@@ -120,6 +120,9 @@ func (vm *VM) callClass(class *runtime.ClassValue, argc int) error {
 		Fields: make(map[string]runtime.Value),
 		Class:  class,
 	}
+	for name, value := range class.Fields {
+		instance.Fields[name] = cloneDetachedValue(value)
+	}
 
 	initMethod, owner, ok := class.FindInitializer()
 	if !ok || initMethod == nil {

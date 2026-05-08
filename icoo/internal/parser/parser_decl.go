@@ -249,6 +249,7 @@ func (p *Parser) parseClassDecl() ast.Decl {
 		super = p.parseExpression(PrecLowest)
 	}
 	p.expect(token.LBrace, "expected '{' after class name")
+	fields := make([]ast.ClassField, 0, 2)
 	methods := make([]ast.ClassMethod, 0, 4)
 	for !p.check(token.RBrace) && !p.atEnd() {
 		var decorators []ast.Expr
@@ -259,6 +260,18 @@ func (p *Parser) parseClassDecl() ast.Decl {
 			methodStart = startTok.Span.Start
 		}
 		methodNameTok := p.expectIdentOrKeyword("method name")
+		if p.match(token.Assign) {
+			if len(decorators) > 0 {
+				p.errorAtCurrent("class fields do not support decorators")
+			}
+			value := p.parseExpression(PrecLowest)
+			fields = append(fields, ast.ClassField{
+				Name:  methodNameTok.Lexeme,
+				Value: value,
+				Span_: token.Span{Start: methodNameTok.Span.Start, End: value.Span().End},
+			})
+			continue
+		}
 		if !p.check(token.LParen) {
 			// Not actually a method declaration — the token consumed as "method
 			// name" is actually something else (e.g. the `fn` keyword inside a
@@ -287,6 +300,7 @@ func (p *Parser) parseClassDecl() ast.Decl {
 	return &ast.ClassDecl{
 		Name:    nameTok.Lexeme,
 		Super:   super,
+		Fields:  fields,
 		Methods: methods,
 		Span_:   token.Span{Start: startTok.Span.Start, End: endTok.Span.End},
 	}

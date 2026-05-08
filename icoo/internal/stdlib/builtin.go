@@ -22,7 +22,7 @@ func RegisterBuiltins(machine *vm.VM) {
 	machine.DefineBuiltin("__select", &runtime.NativeFunction{Name: "__select", Arity: 1, Fn: builtinSelect})
 	machine.DefineBuiltin("satisfies", &runtime.NativeFunction{Name: "satisfies", Arity: 2, Fn: builtinSatisfies})
 	machine.DefineBuiltin("_tryCheck", &runtime.NativeFunction{Name: "_tryCheck", Arity: 1, Fn: builtinTryCheck})
-	machine.DefineBuiltin("__buildClass", &runtime.NativeFunction{Name: "__buildClass", Arity: 4, Fn: builtinBuildClass})
+	machine.DefineBuiltin("__buildClass", &runtime.NativeFunction{Name: "__buildClass", Arity: 5, Fn: builtinBuildClass})
 	machine.DefineBuiltin("__methodDef", &runtime.NativeFunction{Name: "__methodDef", Arity: 4, Fn: builtinMethodDef})
 	machine.DefineBuiltin("__methodProxy", &runtime.NativeFunction{Name: "__methodProxy", Arity: 3, Fn: builtinMethodProxy})
 	machine.DefineBuiltin("__superGet", &runtime.NativeFunction{Name: "__superGet", Arity: 3, Fn: builtinSuperGet})
@@ -276,7 +276,16 @@ func builtinBuildClass(args []runtime.Value) (runtime.Value, error) {
 		return nil, fmt.Errorf("__buildClass: init must be method or null")
 	}
 
-	methodObj, ok := args[3].(*runtime.ObjectValue)
+	fieldObj, ok := args[3].(*runtime.ObjectValue)
+	if !ok {
+		return nil, fmt.Errorf("__buildClass: fields must be object")
+	}
+	fields := make(map[string]runtime.Value, len(fieldObj.Fields))
+	for name, value := range fieldObj.Fields {
+		fields[name] = value
+	}
+
+	methodObj, ok := args[4].(*runtime.ObjectValue)
 	if !ok {
 		return nil, fmt.Errorf("__buildClass: methods must be object")
 	}
@@ -293,6 +302,7 @@ func builtinBuildClass(args []runtime.Value) (runtime.Value, error) {
 		Name:    nameValue.Value,
 		Super:   super,
 		Init:    init,
+		Fields:  fields,
 		Methods: methods,
 	}, nil
 }

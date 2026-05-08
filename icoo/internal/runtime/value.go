@@ -140,6 +140,7 @@ type ClassValue struct {
 	Name    string
 	Super   *ClassValue
 	Init    *MethodDef
+	Fields  map[string]Value
 	Methods map[string]*MethodDef
 }
 

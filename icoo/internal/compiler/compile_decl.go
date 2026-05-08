@@ -349,6 +349,13 @@ func (c *Compiler) compileClassDecl(d *ast.ClassDecl) {
 		c.emitNull()
 	}
 
+	for _, field := range d.Fields {
+		c.emitConstant(runtime.StringValue{Value: field.Name})
+		c.compileExpr(field.Value)
+	}
+	c.emit(bytecode.OpObject)
+	c.emitShort(uint16(len(d.Fields)))
+
 	for _, method := range d.Methods {
 		if method.Name == "init" {
 			continue
@@ -360,7 +367,7 @@ func (c *Compiler) compileClassDecl(d *ast.ClassDecl) {
 	c.emitShort(uint16(len(d.Methods) - boolToInt(initMethod != nil)))
 
 	c.emit(bytecode.OpCall)
-	c.emitByte(4)
+	c.emitByte(5)
 
 	if c.current.scopeDepth > 0 {
 		c.addLocal(d.Name, true)

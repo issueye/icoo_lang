@@ -107,9 +107,20 @@ func (m ClassMethod) Span() token.Span {
 	return m.Span_
 }
 
+type ClassField struct {
+	Name  string
+	Value Expr
+	Span_ token.Span
+}
+
+func (f ClassField) Span() token.Span {
+	return f.Span_
+}
+
 type ClassDecl struct {
 	Name    string
 	Super   Expr
+	Fields  []ClassField
 	Methods []ClassMethod
 	Span_   token.Span
 }
