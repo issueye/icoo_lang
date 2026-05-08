@@ -1,49 +1,13 @@
 import std.io.fs as fs
-import std.sys.os as os
 import std.core.string as str
 
 export class SkillCatalog {
   primaryDir(config) {
-    let dirs = this.configuredDirs(config)
-    if len(dirs) == 0 {
-      return null
-    }
-    return dirs[0]
-  }
-
-  defaultDir(config) {
-    let agentHome = os.getEnv("ICOO_AGENTS_HOME")
-    if typeOf(agentHome) == "string" && agentHome != "" {
-      return fs.join(agentHome, "skills")
-    }
-
-    let userProfile = os.getEnv("USERPROFILE")
-    if typeOf(userProfile) == "string" && userProfile != "" {
-      return fs.join(fs.join(userProfile, ".agents"), "skills")
-    }
-
     return fs.join(fs.join(config.workspace, ".agents"), "skills")
   }
 
   configuredDirs(config) {
-    let dirs = []
-
-    let explicit = config.skillsDir
-    if typeOf(explicit) == "string" && explicit != "" {
-      dirs = dirs.append(explicit)
-    }
-
-    let workspaceDir = fs.join(fs.join(config.workspace, ".agents"), "skills")
-    if this.hasDir(dirs, workspaceDir) != true {
-      dirs = dirs.append(workspaceDir)
-    }
-
-    let defaultDir = this.defaultDir(config)
-    if this.hasDir(dirs, defaultDir) != true {
-      dirs = dirs.append(defaultDir)
-    }
-
-    return dirs
+    return [this.primaryDir(config)]
   }
 
   hasDir(dirs, path) {
