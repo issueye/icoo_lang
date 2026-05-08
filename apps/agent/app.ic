@@ -1,3 +1,0 @@
-import "@/src/main.ic" as main
-
-main.main()

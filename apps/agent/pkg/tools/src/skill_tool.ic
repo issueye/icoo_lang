@@ -1,9 +1,9 @@
 import std.core.object as object
-import "@/pkg/tools/list_skills.ic" as listSkills
-import "@/pkg/tools/read_skill.ic" as readSkill
-import "@/pkg/tools/remove_skill.ic" as removeSkill
-import "@/pkg/tools/create_skill.ic" as createSkill
-import "@/pkg/tools/update_skill.ic" as updateSkill
+import "./list_skills.ic" as listSkills
+import "./read_skill.ic" as readSkill
+import "./remove_skill.ic" as removeSkill
+import "./create_skill.ic" as createSkill
+import "./update_skill.ic" as updateSkill
 
 export class SkillTool {
   init(skillCatalog) {

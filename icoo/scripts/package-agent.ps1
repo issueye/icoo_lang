@@ -71,6 +71,7 @@ if (-not $packageDir -or $packageDir.Trim() -eq "") {
 }
 
 $configPackagePath = Join-Path $packageDir "agent\pkg\config.icpkg"
+$sessionPackagePath = Join-Path $packageDir "agent\pkg\session.icpkg"
 $toolsPackagePath = Join-Path $packageDir "agent\pkg\tools.icpkg"
 $agentPackagePath = Join-Path $packageDir "agent.icpkg"
 $smokePath = Join-Path $agentPath "smoke_package.ic"
@@ -78,16 +79,20 @@ $smokePath = Join-Path $agentPath "smoke_package.ic"
 Write-Host "==> Packaging reusable modules into $packageDir"
 Invoke-Icoo -CliPath $cliPath -Arguments @(
   "package",
-  (Join-Path $agentPath "pkg\config\package.ic"),
+  (Join-Path $agentPath "pkg\config"),
   $configPackagePath,
-  "--name", "issueye/agent/pkg/config",
   "--version", $PackageVersion
 )
 Invoke-Icoo -CliPath $cliPath -Arguments @(
   "package",
-  (Join-Path $agentPath "pkg\tools\package.ic"),
+  (Join-Path $agentPath "pkg\session"),
+  $sessionPackagePath,
+  "--version", $PackageVersion
+)
+Invoke-Icoo -CliPath $cliPath -Arguments @(
+  "package",
+  (Join-Path $agentPath "pkg\tools"),
   $toolsPackagePath,
-  "--name", "issueye/agent/pkg/tools",
   "--version", $PackageVersion
 )
 Invoke-Icoo -CliPath $cliPath -Arguments @(
@@ -118,7 +123,7 @@ if (-not $SkipVerify) {
 }
 
 Write-Host "==> Done"
-$outputs = @($cliPath, $configPackagePath, $toolsPackagePath, $agentPackagePath)
+$outputs = @($cliPath, $configPackagePath, $sessionPackagePath, $toolsPackagePath, $agentPackagePath)
 if (-not $SkipExecutable) {
   $outputs += (Resolve-RelativePath -Base $moduleRoot -Child $AgentOutput)
 }

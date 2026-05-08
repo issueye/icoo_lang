@@ -1,0 +1,7 @@
+[package]
+name = "issueye/agent/pkg/session"
+version = "0.1.0"
+entry = "src/main.ic"
+entry_function = "main"
+export = "lib.ic"
+root_alias = "@"

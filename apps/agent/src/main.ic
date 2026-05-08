@@ -1,27 +1,6 @@
 import "@/src/app/app.ic" as appModule
 
-const runtimeApi = fn() {
+fn main() {
   let app = appModule.App()
-
-  fn startImpl(overrides) {
-    return app.start(overrides)
-  }
-
-  fn stopImpl(runtimeApp) {
-    return app.stop(runtimeApp)
-  }
-
-  fn mainImpl() {
-    return app.main()
-  }
-
-  return {
-    start: startImpl,
-    stop: stopImpl,
-    main: mainImpl
-  }
-}()
-
-export const start = runtimeApi.start
-export const stop = runtimeApi.stop
-export const main = runtimeApi.main
+  app.main()
+}

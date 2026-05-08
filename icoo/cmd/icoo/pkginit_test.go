@@ -18,6 +18,7 @@ func TestRunInitPackageCreatesScaffold(t *testing.T) {
 
 	for _, path := range []string{
 		filepath.Join(root, packageConfigFileName),
+		filepath.Join(root, packageBuildScriptFileName),
 		filepath.Join(root, "lib.ic"),
 		filepath.Join(root, "src", "main.ic"),
 		filepath.Join(root, "examples"),
@@ -44,6 +45,14 @@ func TestRunInitPackageCreatesScaffold(t *testing.T) {
 	}
 	if !strings.Contains(string(libData), `import "@/src/main.ic" as mainModule`) {
 		t.Fatalf("expected lib.ic to import package entry, got:\n%s", string(libData))
+	}
+
+	buildData, err := os.ReadFile(filepath.Join(root, packageBuildScriptFileName))
+	if err != nil {
+		t.Fatalf("read build.ps1: %v", err)
+	}
+	if !strings.Contains(string(buildData), "package $packageRoot $Output") {
+		t.Fatalf("expected build.ps1 to package current module, got:\n%s", string(buildData))
 	}
 }
 

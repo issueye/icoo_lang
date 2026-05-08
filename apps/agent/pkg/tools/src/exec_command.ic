@@ -1,6 +1,6 @@
 import std.sys.exec as exec
 import std.core.object as object
-import "@/pkg/tools/tool_path.ic" as toolPath
+import "./tool_path.ic" as toolPath
 
 // 执行命令工具
 export class ExecCommand {

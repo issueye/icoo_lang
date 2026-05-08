@@ -1,16 +1,15 @@
 import std.io.console as io
-import "pkg:issueye/agent/pkg/config" as agentConfig
+import "@/pkg/config/lib.ic" as agentConfig
 import "@/src/context/budget.ic" as budget
 import "@/src/context/builder.ic" as contextBuilder
 import "@/src/context/ignore.ic" as ignore
 import "@/src/model/client.ic" as modelClient
 import "@/src/model/messages.ic" as modelMessages
 import "@/src/model/parser.ic" as modelParser
+import "@/pkg/session/lib.ic" as agentSession
 import "@/src/runtime/runtime.ic" as runtime
 import "@/src/skills/catalog.ic" as skills
-import "@/src/session/schema.ic" as schema
-import "@/src/session/store.ic" as sessionStore
-import "pkg:issueye/agent/pkg/tools" as agentTools
+import "@/pkg/tools/lib.ic" as agentTools
 
 export class App {
   init() {
@@ -43,8 +42,8 @@ export class App {
 
     this.budget = budget.Budget()
     this.contextBuilder = contextBuilder.ContextBuilder(this.ignore, this.budget, this.skillCatalog)
-    this.sessionSchema = schema.Schema()
-    this.sessionStore = sessionStore.SessionStore(this.sessionSchema)
+    this.sessionSchema = agentSession.Schema()
+    this.sessionStore = agentSession.SessionStore(this.sessionSchema)
     this.runtime = runtime.Runtime(
       this.contextBuilder,
       this.modelClient,

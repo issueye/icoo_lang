@@ -61,6 +61,13 @@ icoo init-pkg .\demo --name acme/demo
 icoo package .\demo .\dist\demo.icpkg --name acme/demo --version 1.0.0 --export src/lib/api.ic
 ```
 
+Create a nested project package such as `pkg/config`:
+
+```powershell
+icoo init-subpkg .\pkg\config --parent issueye/agent
+icoo package .\pkg\config .\dist\config.icpkg
+```
+
 The generated package scaffold includes:
 
 - `pkg.toml`

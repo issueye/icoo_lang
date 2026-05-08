@@ -16,6 +16,7 @@ const (
 	defaultPackageEntryFunction = "main"
 	defaultPackageExport        = "lib.ic"
 	packageConfigFileName       = "pkg.toml"
+	packageBuildScriptFileName  = "build.ps1"
 )
 
 type packageFile struct {
@@ -116,8 +117,95 @@ func runInitPackage(args []string) error {
 	if err := os.WriteFile(entryPath, []byte(entrySource), 0o644); err != nil {
 		return fmt.Errorf("write package entry file: %w", err)
 	}
+	if err := writeInitPackageBuildScript(root, opts); err != nil {
+		return err
+	}
 
 	return writeInitPackageExport(root, exportPath, opts)
+}
+
+func writeInitPackageBuildScript(root string, opts initPackageOptions) error {
+	outputBase := filepath.Base(root)
+	if outputBase == "." || outputBase == string(filepath.Separator) || outputBase == "" {
+		outputBase = "package"
+	}
+
+	script := strings.Join([]string{
+		"param(",
+		"  [string]$RepoRoot = \"\",",
+		"  [string]$CliPath = \"\",",
+		fmt.Sprintf("  [string]$Output = \"dist/%s.icpkg\"", outputBase),
+		")",
+		"",
+		"Set-StrictMode -Version Latest",
+		"$ErrorActionPreference = \"Stop\"",
+		"",
+		"$packageRoot = (Resolve-Path $PSScriptRoot).Path",
+		"",
+		"function Resolve-RepoRoot {",
+		"  param(",
+		"    [string]$InputRoot,",
+		"    [string]$StartPath",
+		"  )",
+		"",
+		"  if ($InputRoot -and $InputRoot.Trim() -ne \"\") {",
+		"    return (Resolve-Path $InputRoot).Path",
+		"  }",
+		"",
+		"  $current = (Resolve-Path $StartPath).Path",
+		"  while ($true) {",
+		"    if (Test-Path (Join-Path $current \"icoo\\go.mod\")) {",
+		"      return $current",
+		"    }",
+		"    $parent = Split-Path $current -Parent",
+		"    if (-not $parent -or $parent -eq $current) {",
+		"      break",
+		"    }",
+		"    $current = $parent",
+		"  }",
+		"  throw \"unable to locate repo root containing icoo\\go.mod\"",
+		"}",
+		"",
+		"$root = Resolve-RepoRoot -InputRoot $RepoRoot -StartPath $packageRoot",
+		"$moduleRoot = Join-Path $root \"icoo\"",
+		"",
+		"if (-not $CliPath -or $CliPath.Trim() -eq \"\") {",
+		"  $CliPath = Join-Path $moduleRoot \"dist\\icoo.exe\"",
+		"} elseif (-not [System.IO.Path]::IsPathRooted($CliPath)) {",
+		"  $CliPath = [System.IO.Path]::GetFullPath((Join-Path $root $CliPath))",
+		"}",
+		"",
+		"if (-not (Test-Path $CliPath)) {",
+		"  Push-Location $moduleRoot",
+		"  try {",
+		"    go build -o dist/icoo.exe ./cmd/icoo",
+		"  } finally {",
+		"    Pop-Location",
+		"  }",
+		"}",
+		"",
+		"if (-not [System.IO.Path]::IsPathRooted($Output)) {",
+		"  $Output = [System.IO.Path]::GetFullPath((Join-Path $packageRoot $Output))",
+		"}",
+		"$outputDir = Split-Path $Output -Parent",
+		"if ($outputDir) {",
+		"  New-Item -ItemType Directory -Force $outputDir | Out-Null",
+		"}",
+		"",
+		"& $CliPath package $packageRoot $Output",
+		"if ($LASTEXITCODE -ne 0) {",
+		"  throw \"package build failed\"",
+		"}",
+		"",
+		"Get-Item $Output | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize",
+		"",
+	}, "\n")
+
+	scriptPath := filepath.Join(root, packageBuildScriptFileName)
+	if err := os.WriteFile(scriptPath, []byte(script), 0o644); err != nil {
+		return fmt.Errorf("write package build script: %w", err)
+	}
+	return nil
 }
 
 func writeInitPackageExport(root string, exportPath string, opts initPackageOptions) error {
