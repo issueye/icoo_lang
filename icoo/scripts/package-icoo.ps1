@@ -17,11 +17,23 @@ function Resolve-RepoRoot {
   return (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 }
 
-$root = Resolve-RepoRoot -InputRoot $RepoRoot
-$moduleRoot = Join-Path $root "icoo"
-if (-not (Test-Path (Join-Path $moduleRoot "go.mod"))) {
-  throw "Go module root not found: $moduleRoot"
+function Resolve-ModuleRoot {
+  param([string]$Root)
+
+  if (Test-Path (Join-Path $Root "go.mod")) {
+    return $Root
+  }
+
+  $candidate = Join-Path $Root "icoo"
+  if (Test-Path (Join-Path $candidate "go.mod")) {
+    return $candidate
+  }
+
+  throw "Go module root not found from: $Root"
 }
+
+$root = Resolve-RepoRoot -InputRoot $RepoRoot
+$moduleRoot = Resolve-ModuleRoot -Root $root
 Set-Location $moduleRoot
 
 if ($RunTests) {

@@ -2,6 +2,9 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -65,6 +68,7 @@ type tuiProgram struct {
 	lastMessage *langruntime.ObjectValue
 	tickCount   int
 	viewCache   string
+	errorLog    string
 }
 
 type tuiTickMsg struct {
@@ -97,11 +101,13 @@ func tuiRun(ctx *langruntime.NativeContext, args []langruntime.Value) (langrunti
 	programModel := &tuiProgram{
 		ctx: ctx,
 		app: app,
+		errorLog: defaultTUIErrorLogPath(),
 	}
 
 	if initValue, ok := app.Fields["init"]; ok {
 		model, err := ctx.CallDetached(initValue, nil)
 		if err != nil {
+			logTUIError(programModel.errorLog, "init", err)
 			return nil, err
 		}
 		programModel.model = model
@@ -112,6 +118,7 @@ func tuiRun(ctx *langruntime.NativeContext, args []langruntime.Value) (langrunti
 	}
 
 	if err := programModel.refreshView(); err != nil {
+		logTUIError(programModel.errorLog, "initial_view", err)
 		return nil, err
 	}
 
@@ -126,6 +133,7 @@ func tuiRun(ctx *langruntime.NativeContext, args []langruntime.Value) (langrunti
 	program := tea.NewProgram(programModel, options...)
 	finalModel, err := program.Run()
 	if err != nil {
+		logTUIError(programModel.errorLog, "program_run", err)
 		return nil, err
 	}
 	finalProgram, ok := finalModel.(*tuiProgram)
@@ -473,6 +481,7 @@ func (p *tuiProgram) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		p.lastMessage = msgValue
 		resultCommands, err := p.callUpdate(msgValue)
 		if err != nil {
+			logTUIError(p.errorLog, "update", err)
 			p.viewCache = "TUI runtime error: " + err.Error()
 			p.quitting = true
 			return p, tea.Quit
@@ -499,6 +508,7 @@ func (p *tuiProgram) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return p, tea.Quit
 	}
 	if err := p.refreshView(); err != nil {
+		logTUIError(p.errorLog, "refresh_view", err)
 		p.viewCache = "TUI render error: " + err.Error()
 		p.quitting = true
 		return p, tea.Quit
@@ -594,6 +604,37 @@ func messageToRuntimeValue(message tea.Msg, tick int) *langruntime.ObjectValue {
 	default:
 		return nil
 	}
+}
+
+func defaultTUIErrorLogPath() string {
+	wd, err := os.Getwd()
+	if err != nil || wd == "" {
+		return "tui-error.log"
+	}
+	return filepath.Join(wd, "tui-error.log")
+}
+
+func logTUIError(path string, stage string, err error) {
+	if path == "" || err == nil {
+		return
+	}
+	record := fmt.Sprintf(
+		"[%s] stage=%s error=%v\n%s\n\n",
+		time.Now().Format(time.RFC3339),
+		stage,
+		err,
+		string(debug.Stack()),
+	)
+	dir := filepath.Dir(path)
+	if dir != "" && dir != "." {
+		_ = os.MkdirAll(dir, 0o755)
+	}
+	file, openErr := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if openErr != nil {
+		return
+	}
+	defer file.Close()
+	_, _ = file.WriteString(record)
 }
 
 func renderTUIView(value langruntime.Value, tick int) (string, error) {

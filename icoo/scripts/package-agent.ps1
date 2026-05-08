@@ -13,7 +13,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-function Resolve-RepoRoot {
+function Resolve-StartRoot {
   param([string]$InputRoot)
 
   if ($InputRoot -and $InputRoot.Trim() -ne "") {
@@ -23,11 +23,34 @@ function Resolve-RepoRoot {
   return (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 }
 
-$root = Resolve-RepoRoot -InputRoot $RepoRoot
-$moduleRoot = Join-Path $root "icoo"
-if (-not (Test-Path (Join-Path $moduleRoot "go.mod"))) {
-  throw "Go module root not found: $moduleRoot"
+function Resolve-ModuleRoot {
+  param([string]$Root)
+
+  if (Test-Path (Join-Path $Root "go.mod")) {
+    return $Root
+  }
+
+  $candidate = Join-Path $Root "icoo"
+  if (Test-Path (Join-Path $candidate "go.mod")) {
+    return $candidate
+  }
+
+  throw "Go module root not found from: $Root"
 }
+
+function Resolve-RepoRootFromModule {
+  param([string]$ModuleRoot)
+
+  $candidate = Split-Path $ModuleRoot -Parent
+  if (-not $candidate -or $candidate -eq "") {
+    return $ModuleRoot
+  }
+  return $candidate
+}
+
+$startRoot = Resolve-StartRoot -InputRoot $RepoRoot
+$moduleRoot = Resolve-ModuleRoot -Root $startRoot
+$root = Resolve-RepoRootFromModule -ModuleRoot $moduleRoot
 Set-Location $moduleRoot
 
 function Resolve-RelativePath {
