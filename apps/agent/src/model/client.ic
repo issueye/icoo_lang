@@ -11,11 +11,11 @@ export class ModelClient {
   }
 
   shouldStreamResponse(config, builtMessages) {
-    if config.responseStream == true {
+    if object.get(config, "responseStream") == true {
       return true
     }
 
-    if config.streamFinalAnswer != true {
+    if object.get(config, "streamFinalAnswer") != true {
       return false
     }
 

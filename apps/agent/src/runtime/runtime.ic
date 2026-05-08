@@ -51,8 +51,10 @@ export class Runtime {
   }
 
   runToolLoop(config, session, context) {
+    let systemPrompt = this.modelMessages.systemPrompt(context)
     let userPrompt = this.modelMessages.userPrompt(config, context)
     let builtContext = {
+      systemPrompt: systemPrompt,
       userPrompt: userPrompt
     }
     let messages = this.sessionStore.buildMessages(config, builtContext, session)
@@ -130,6 +132,7 @@ export class Runtime {
     let modelContext = {
       workspace: context.workspace,
       summaryJson: json.encode(context.summary),
+      skillsSummary: context.skillsSummary,
       files: context.files,
       omitted: context.omitted,
       cliUnknownArgs: config.cliUnknownArgs

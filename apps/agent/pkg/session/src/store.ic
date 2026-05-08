@@ -145,10 +145,18 @@ export class SessionStore {
   }
 
   buildMessages(config, context, session) {
+    let systemPrompt = "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
+    if context != null && typeOf(context) == "object" {
+      let nextSystemPrompt = object.get(context, "systemPrompt")
+      if typeOf(nextSystemPrompt) == "string" && nextSystemPrompt != "" {
+        systemPrompt = nextSystemPrompt
+      }
+    }
+
     let messages = [
       {
         role: "system",
-        content: "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
+        content: systemPrompt
       }
     ]
 

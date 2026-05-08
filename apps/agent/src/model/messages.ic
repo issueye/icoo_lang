@@ -6,8 +6,13 @@ export class ModelMessages {
     this.toolRegistry = toolRegistry
   }
 
-  systemPrompt() {
-    return "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
+  systemPrompt(context) {
+    let text = "You are an Icoo agent. Be concise, repository-aware, and action-oriented. Use tools when repository inspection is required before answering."
+    let skillsSummary = object.get(context, "skillsSummary")
+    if typeOf(skillsSummary) == "string" && skillsSummary != "" {
+      text = text + "\n\n" + skillsSummary
+    }
+    return text
   }
 
   userPrompt(config, context) {
@@ -21,10 +26,6 @@ export class ModelMessages {
     if typeOf(context.cliUnknownArgs) == "array" && len(context.cliUnknownArgs) > 0 {
       text = text + "CLI Unknown Args:\n" + json.encode(context.cliUnknownArgs) + "\n\n"
     }
-    let skillsSummary = object.get(context, "skillsSummary")
-    if typeOf(skillsSummary) == "string" && skillsSummary != "" {
-      text = text + skillsSummary + "\n\n"
-    }
     text = text + "Context Summary:\n" + context.summaryJson + "\n"
     return text
   }
@@ -33,7 +34,7 @@ export class ModelMessages {
     return [
       {
         role: "system",
-        content: this.systemPrompt()
+        content: this.systemPrompt(context)
       },
       {
         role: "user",

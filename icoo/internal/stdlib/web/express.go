@@ -184,7 +184,7 @@ func (app *appBinding) serveHTTP(ctx *runtime.NativeContext, w http.ResponseWrit
 		}
 		respValue, nextReqValue, err := callRouteHandler(ctx, route, reqValue, respBinding)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeHTTPError(respBinding, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if respBinding.handled {
@@ -195,12 +195,27 @@ func (app *appBinding) serveHTTP(ctx *runtime.NativeContext, w http.ResponseWrit
 			continue
 		}
 		if err := writeResponse(w, respValue, respBinding.statusCode); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeHTTPError(respBinding, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
 
+	if respBinding.wroteHeader {
+		return
+	}
 	http.NotFound(w, r)
+}
+
+func writeHTTPError(binding *responseBinding, message string, status int) {
+	if binding == nil || binding.writer == nil {
+		return
+	}
+	if binding.wroteHeader || binding.handled {
+		return
+	}
+	http.Error(binding.writer, message, status)
+	binding.wroteHeader = true
+	binding.handled = true
 }
 
 func (route routeBinding) matches(method, path string) bool {
