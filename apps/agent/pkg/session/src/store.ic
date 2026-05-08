@@ -1,3 +1,4 @@
+import std.core.object as object
 import std.data.json as json
 import std.io.fs as fs
 import std.sys.os as os
@@ -25,10 +26,10 @@ export class SessionStore {
 
     for i, turn in turns {
       let kind = turn.kind
-      if deprecated[kind] == true {
+      if object.get(deprecated, kind, false) == true {
         panic("deprecated session turn kind: " + kind + " in " + filePath)
       }
-      if allowed[kind] != true {
+      if object.get(allowed, kind, false) != true {
         panic("unknown session turn kind in " + filePath)
       }
     }

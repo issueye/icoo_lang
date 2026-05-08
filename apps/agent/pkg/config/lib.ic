@@ -1,9 +1,7 @@
 import "./src/main.ic" as mainModule
 
 export {
-  ArgsConfig: mainModule.ArgsConfig,
   Defaults: mainModule.Defaults,
-  EnvConfig: mainModule.EnvConfig,
   ConfigFile: mainModule.ConfigFile,
   MergeConfig: mainModule.MergeConfig
 }

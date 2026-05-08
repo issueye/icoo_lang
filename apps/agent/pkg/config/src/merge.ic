@@ -1,21 +1,14 @@
 import std.core.object as object
 
 export class MergeConfig {
-  init(defaultsConfig, argsConfig, envConfig, configFile) {
+  init(defaultsConfig, configFile) {
     this.defaults = defaultsConfig
-    this.argsConfig = argsConfig
-    this.envConfig = envConfig
     this.configFile = configFile
   }
 
   loadConfig(overrides) {
     let config = this.defaults.defaultConfig()
-    config = this.argsConfig.previewWorkspace(config)
     config = this.configFile.applyFile(config)
-    config = this.envConfig.applyEnv(config)
-
-    let argResult = this.argsConfig.applyArgs(config)
-    config = argResult.config
 
     if overrides != null {
       config = object.merge(config, overrides)
@@ -23,8 +16,8 @@ export class MergeConfig {
 
     return {
       config: config,
-      help: argResult.help,
-      helpText: argResult.helpText
+      help: false,
+      helpText: null
     }
   }
 }

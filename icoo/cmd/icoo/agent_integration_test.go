@@ -6,13 +6,38 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
+func writeAgentConfigToml(t *testing.T, dir string, body string) {
+	t.Helper()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write config.toml: %v", err)
+	}
+}
+
+func chdirForTest(t *testing.T, dir string) {
+	t.Helper()
+	previous, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir %s: %v", dir, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(previous); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+}
+
 func TestRunAgentProjectPersistsSessionWithToolTurns(t *testing.T) {
-	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "apps", "agent"))
+	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "..", "apps", "agent"))
 	if err != nil {
 		t.Fatalf("resolve agent root: %v", err)
 	}
@@ -85,22 +110,28 @@ func TestRunAgentProjectPersistsSessionWithToolTurns(t *testing.T) {
 	defer server.Close()
 
 	stateDir := t.TempDir()
+	chdirForTest(t, stateDir)
+	workspaceDir := filepath.Join(stateDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
 	sessionDir := filepath.Join(stateDir, "sessions")
 	sessionID := "s_cli_agent_test"
-	if err := runProjectPath(agentRoot, []string{
-		"--workspace", agentRoot,
-		"--session", sessionID,
-		"--session-dir", sessionDir,
-		"--log-path", filepath.Join(stateDir, "agent.log"),
-		"--base-url", server.URL,
-		"--api-key", "test-key",
-		"--model", "mock-model",
-		"--task", "List the root and summarize.",
-		"--max-turns", "3",
-		"--max-files", "4",
-		"--max-total-bytes", "2048",
-		"--stream-final-answer", "false",
-	}); err != nil {
+	writeAgentConfigToml(t, stateDir, fmt.Sprintf(`
+workspace = %q
+session = %q
+session_dir = %q
+log_path = %q
+base_url = %q
+api_key = "test-key"
+model = "mock-model"
+task = "List the root and summarize."
+max_turns = 3
+max_files = 4
+max_total_bytes = 2048
+stream_final_answer = false
+`, filepath.ToSlash(workspaceDir), sessionID, filepath.ToSlash(sessionDir), filepath.ToSlash(filepath.Join(stateDir, "agent.log")), server.URL))
+	if err := runProjectPath(agentRoot, nil); err != nil {
 		t.Fatalf("expected agent project run to succeed, got: %v", err)
 	}
 
@@ -151,7 +182,7 @@ func TestRunAgentProjectPersistsSessionWithToolTurns(t *testing.T) {
 }
 
 func TestRunAgentProjectStreamsFinalAnswerAfterTools(t *testing.T) {
-	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "apps", "agent"))
+	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "..", "apps", "agent"))
 	if err != nil {
 		t.Fatalf("resolve agent root: %v", err)
 	}
@@ -207,22 +238,28 @@ func TestRunAgentProjectStreamsFinalAnswerAfterTools(t *testing.T) {
 	defer server.Close()
 
 	stateDir := t.TempDir()
+	chdirForTest(t, stateDir)
+	workspaceDir := filepath.Join(stateDir, "workspace")
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
 	sessionDir := filepath.Join(stateDir, "sessions")
 	sessionID := "s_cli_agent_stream_test"
-	if err := runProjectPath(agentRoot, []string{
-		"--workspace", agentRoot,
-		"--session", sessionID,
-		"--session-dir", sessionDir,
-		"--log-path", filepath.Join(stateDir, "agent.log"),
-		"--base-url", server.URL,
-		"--api-key", "test-key",
-		"--model", "mock-model",
-		"--task", "List the root and summarize.",
-		"--max-turns", "3",
-		"--max-files", "4",
-		"--max-total-bytes", "2048",
-		"--stream-final-answer", "true",
-	}); err != nil {
+	writeAgentConfigToml(t, stateDir, fmt.Sprintf(`
+workspace = %q
+session = %q
+session_dir = %q
+log_path = %q
+base_url = %q
+api_key = "test-key"
+model = "mock-model"
+task = "List the root and summarize."
+max_turns = 3
+max_files = 4
+max_total_bytes = 2048
+stream_final_answer = true
+`, filepath.ToSlash(workspaceDir), sessionID, filepath.ToSlash(sessionDir), filepath.ToSlash(filepath.Join(stateDir, "agent.log")), server.URL))
+	if err := runProjectPath(agentRoot, nil); err != nil {
 		t.Fatalf("expected agent project run with streaming to succeed, got: %v", err)
 	}
 
@@ -254,6 +291,53 @@ func TestRunAgentProjectStreamsFinalAnswerAfterTools(t *testing.T) {
 	}
 	if !foundFinalText {
 		t.Fatal("expected streamed final answer to be persisted as complete assistant_message")
+	}
+}
+
+func TestRunAgentProjectRejectsCliArgs(t *testing.T) {
+	agentRoot, err := filepath.Abs(filepath.Join("..", "..", "..", "apps", "agent"))
+	if err != nil {
+		t.Fatalf("resolve agent root: %v", err)
+	}
+
+	err = runProjectPath(agentRoot, []string{"--workspace", "runtime", "--task", "今天成都的天气"})
+	if err == nil {
+		t.Fatal("expected CLI args to be rejected")
+	}
+	if !strings.Contains(err.Error(), "CLI args are not supported") {
+		t.Fatalf("expected explicit CLI args rejection, got: %v", err)
+	}
+}
+
+func TestAgentDistributableIncludesRuntimeConfigTemplate(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	projectRoot := filepath.Join(repoRoot, "apps", "agent")
+
+	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(projectRoot, "build.ps1"), "-RepoRoot", repoRoot, "-SkipVerify")
+	cmd.Dir = projectRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("build distributable failed: %v\n%s", err, string(output))
+	}
+
+	rootConfigPath := filepath.Join(projectRoot, "dist", "icoo-agent", "config.toml")
+	runtimeConfigPath := filepath.Join(projectRoot, "dist", "icoo-agent", "runtime", "config.toml")
+	if _, err := os.Stat(rootConfigPath); err != nil {
+		t.Fatalf("expected distributable root config.toml: %v", err)
+	}
+	if _, err := os.Stat(runtimeConfigPath); err != nil {
+		t.Fatalf("expected distributable runtime/config.toml: %v", err)
+	}
+
+	runtimeConfig, err := os.ReadFile(runtimeConfigPath)
+	if err != nil {
+		t.Fatalf("read distributable runtime config.toml: %v", err)
+	}
+	if !strings.Contains(string(runtimeConfig), `task = "今天成都的天气"`) {
+		t.Fatalf("expected runtime config template task, got: %s", string(runtimeConfig))
 	}
 }
 

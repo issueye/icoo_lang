@@ -4,6 +4,18 @@ import std.data.toml as toml
 import std.io.fs as fs
 
 export class ConfigFile {
+  configFileName() {
+    return "config.toml"
+  }
+
+  normalizeDirPath(path) {
+    let normalized = path
+    if str.hasSuffix(normalized, "/") || str.hasSuffix(normalized, "\\") {
+      normalized = fs.dir(normalized + "x")
+    }
+    return normalized
+  }
+
   applyString(config, value, key) {
     if typeOf(value) == "string" && value != "" {
       config[key] = value
@@ -31,11 +43,8 @@ export class ConfigFile {
       return null
     }
 
-    let normalized = workspace
-    if str.hasSuffix(normalized, "/") || str.hasSuffix(normalized, "\\") {
-      normalized = fs.dir(normalized + "x")
-    }
-    return fs.join(normalized, "config.toml")
+    let normalized = this.normalizeDirPath(workspace)
+    return fs.join(normalized, this.configFileName())
   }
 
   isAbsolutePath(path) {
@@ -58,9 +67,12 @@ export class ConfigFile {
     return fs.join(configDir, value)
   }
 
-  applyFile(config) {
-    let filePath = this.resolveConfigPath(config)
+  applyFilePath(config, filePath) {
     if filePath == null || fs.exists(filePath) != true {
+      return config
+    }
+    let info = fs.stat(filePath)
+    if info.isFile != true {
       return config
     }
     let configDir = fs.dir(filePath)
@@ -70,7 +82,11 @@ export class ConfigFile {
       return config
     }
 
-    config = this.applyString(config, object.get(loaded, "workspace"), "workspace")
+    config = this.applyString(
+      config,
+      this.resolvePathValue(configDir, object.get(loaded, "workspace")),
+      "workspace"
+    )
     config = this.applyString(config, object.get(loaded, "mode"), "mode")
     config = this.applyString(config, object.get(loaded, "model"), "model")
     config = this.applyString(config, object.get(loaded, "base_url"), "baseUrl")
@@ -102,12 +118,25 @@ export class ConfigFile {
 
     return config
   }
+
+  applyFile(config) {
+    let firstPath = this.resolveConfigPath(config)
+    config = this.applyFilePath(config, firstPath)
+
+    let secondPath = this.resolveConfigPath(config)
+    if secondPath != null && secondPath != firstPath {
+      config = this.applyFilePath(config, secondPath)
+    }
+
+    return config
+  }
 }
 
 let fileApi = ConfigFile()
 
 export {
   applyFile: fileApi.applyFile,
+  applyFilePath: fileApi.applyFilePath,
   resolveConfigPath: fileApi.resolveConfigPath,
   resolvePathValue: fileApi.resolvePathValue,
   ConfigFile: ConfigFile

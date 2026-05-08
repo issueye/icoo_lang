@@ -8,7 +8,7 @@ import (
 
 func setAgentProjectRoot(t *testing.T, rt *Runtime) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", "..", "apps", "agent"))
+	root, err := filepath.Abs(filepath.Join("..", "..", "..", "apps", "agent"))
 	if err != nil {
 		t.Fatalf("resolve agent project root: %v", err)
 	}
@@ -20,8 +20,8 @@ func TestAgentSessionBuildMessagesReplaysReasoningContent(t *testing.T) {
 	rt := NewRuntime()
 	setAgentProjectRoot(t, rt)
 
-	source := `
-import "@/src/session/store.ic" as store
+source := `
+import "@/pkg/session/lib.ic" as sessionPkg
 
 fn main() {
   let session = {
@@ -64,7 +64,7 @@ fn main() {
     ]
   }
 
-  let messages = store.buildMessages({}, {userPrompt: "fallback"}, session)
+  let messages = sessionPkg.SessionStore(sessionPkg.Schema()).buildMessages({}, {userPrompt: "fallback"}, session)
   if len(messages) != 4 {
     panic("unexpected message count")
   }
@@ -103,10 +103,10 @@ func TestAgentSessionLoadRejectsDeprecatedTurnKinds(t *testing.T) {
 	sessionDir := t.TempDir()
 	sessionPath := filepath.Join(sessionDir, "legacy.json")
 
-	source := `
+source := `
 import std.io.fs as fs
 import std.data.json as json
-import "@/src/session/store.ic" as store
+import "@/pkg/session/lib.ic" as sessionPkg
 
 fn main() {
   let filePath = "` + filepath.ToSlash(sessionPath) + `"
@@ -136,7 +136,7 @@ fn main() {
     approvals: []
   })
 
-  store.load({
+  sessionPkg.SessionStore(sessionPkg.Schema()).load({
     sessionDir: "` + filepath.ToSlash(sessionDir) + `"
   }, "legacy")
 }
@@ -151,5 +151,70 @@ main()
 	}
 	if !strings.Contains(err.Error(), "deprecated session turn kind: assistant_response") {
 		t.Fatalf("expected deprecated turn kind error, got: %v", err)
+	}
+}
+
+func TestAgentSessionLoadAcceptsCurrentTurnKinds(t *testing.T) {
+	rt := NewRuntime()
+	root := setAgentProjectRoot(t, rt)
+	sessionDir := t.TempDir()
+	sessionPath := filepath.Join(sessionDir, "current.json")
+
+source := `
+import std.data.json as json
+import "@/pkg/session/lib.ic" as sessionPkg
+
+fn main() {
+  let filePath = "` + filepath.ToSlash(sessionPath) + `"
+  json.saveToFile(filePath, {
+    sessionSchemaVersion: 2,
+    sessionId: "current",
+    workspace: "@/workspace",
+    mode: "interactive",
+    status: "completed",
+    createdAt: 0,
+    updatedAt: 0,
+    config: {},
+    turns: [
+      {
+        kind: "user_message",
+        payload: {
+          role: "user",
+          content: "hello"
+        }
+      },
+      {
+        kind: "assistant_message",
+        payload: {
+          content: "world",
+          reasoningContent: "",
+          toolCalls: [],
+          hasToolCalls: false
+        }
+      }
+    ],
+    events: [],
+    artifacts: [],
+    budgets: {
+      turnCount: 2,
+      toolCallCount: 0
+    },
+    approvals: []
+  })
+
+  let loaded = sessionPkg.SessionStore(sessionPkg.Schema()).load({
+    sessionDir: "` + filepath.ToSlash(sessionDir) + `"
+  }, "current")
+  if loaded == null {
+    panic("expected current session file to load")
+  }
+}
+
+main()
+`
+
+	rt.SetProjectRoot(root, "@")
+	if _, err := rt.RunSource(source); err != nil {
+		t.Fatalf("expected current session turn kinds to load, got: %v", err)
 	}
 }

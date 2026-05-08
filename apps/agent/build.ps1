@@ -46,6 +46,25 @@ function Resolve-RelativePath {
   return [System.IO.Path]::GetFullPath((Join-Path $Base $Child))
 }
 
+function Get-RelativePathCompat {
+  param(
+    [string]$Base,
+    [string]$Path
+  )
+
+  $resolvedBase = (Resolve-Path $Base).Path
+  $resolvedPath = [System.IO.Path]::GetFullPath($Path)
+
+  if ([type]::GetType("System.IO.Path") -and [System.IO.Path].GetMethod("GetRelativePath", [type[]]@([string], [string]))) {
+    return [System.IO.Path]::GetRelativePath($resolvedBase, $resolvedPath)
+  }
+
+  $baseUri = New-Object System.Uri(($resolvedBase.TrimEnd('\') + '\'))
+  $pathUri = New-Object System.Uri($resolvedPath)
+  $relative = $baseUri.MakeRelativeUri($pathUri).ToString()
+  return $relative.Replace('/', '\')
+}
+
 $root = Resolve-RepoRoot -InputRoot $RepoRoot -StartPath $projectRoot
 $moduleRoot = Join-Path $root "icoo"
 $packagerScript = Join-Path $moduleRoot "scripts\package-agent.ps1"
@@ -60,7 +79,7 @@ if (-not [System.IO.Path]::IsPathRooted($OutputDir)) {
 New-Item -ItemType Directory -Force $OutputDir | Out-Null
 
 $releaseExe = Join-Path $OutputDir $ExecutableName
-$moduleRelativeExe = [System.IO.Path]::GetRelativePath($moduleRoot, $releaseExe)
+$moduleRelativeExe = Get-RelativePathCompat -Base $moduleRoot -Path $releaseExe
 
 Write-Host "==> Building distributable agent into $OutputDir"
 
@@ -88,6 +107,13 @@ if (Test-Path $configSource) {
   Copy-Item -LiteralPath $configSource -Destination (Join-Path $OutputDir "config.toml") -Force
 }
 
+$runtimeConfigSource = Join-Path $projectRoot "runtime\\config.toml"
+$runtimeOutputDir = Join-Path $OutputDir "runtime"
+New-Item -ItemType Directory -Force $runtimeOutputDir | Out-Null
+if (Test-Path $runtimeConfigSource) {
+  Copy-Item -LiteralPath $runtimeConfigSource -Destination (Join-Path $runtimeOutputDir "config.toml") -Force
+}
+
 $manifest = @(
   "icoo-agent distributable",
   "build_date=$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))",
@@ -97,6 +123,6 @@ $manifest = @(
 ) -join [Environment]::NewLine
 Set-Content -LiteralPath (Join-Path $OutputDir "BUILD_INFO.txt") -Value $manifest -Encoding utf8
 
-Get-Item $releaseExe, (Join-Path $OutputDir "config.toml"), (Join-Path $OutputDir "BUILD_INFO.txt") -ErrorAction SilentlyContinue |
+Get-Item $releaseExe, (Join-Path $OutputDir "config.toml"), (Join-Path $runtimeOutputDir "config.toml"), (Join-Path $OutputDir "BUILD_INFO.txt") -ErrorAction SilentlyContinue |
   Select-Object FullName, Length, LastWriteTime |
   Format-Table -AutoSize

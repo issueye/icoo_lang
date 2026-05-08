@@ -248,8 +248,8 @@ import "pkg:issueye/agent/pkg/tools" as agentTools
 import "./src/main.ic" as mainModule
 
 export {
-  ArgsConfig: mainModule.ArgsConfig,
   Defaults: mainModule.Defaults,
+  ConfigFile: mainModule.ConfigFile,
   MergeConfig: mainModule.MergeConfig
 }
 ```

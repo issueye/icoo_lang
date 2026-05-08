@@ -51,6 +51,28 @@ function Invoke-Icoo {
   }
 }
 
+function New-AgentVerifyWorkspace {
+  param(
+    [string]$AgentWorkspace
+  )
+
+  $verifyRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("icoo-agent-verify-" + [System.Guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Path $verifyRoot -Force | Out-Null
+  $runtimeRoot = Join-Path $verifyRoot "runtime"
+  New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
+
+  $configToml = @"
+workspace = "./runtime"
+session_dir = ".agent/sessions"
+log_path = ".agent/agent.log"
+"@
+  Set-Content -Path (Join-Path $verifyRoot "config.toml") -Value $configToml -Encoding UTF8
+
+  Set-Content -Path (Join-Path $runtimeRoot "config.toml") -Value "# verify workspace`n" -Encoding UTF8
+
+  return $verifyRoot
+}
+
 if ($RunTests) {
   Write-Host "==> Running tests"
   go test ./...
@@ -110,15 +132,23 @@ if (-not $SkipExecutable) {
 }
 
 if (-not $SkipVerify) {
-  Write-Host "==> Verifying source project"
-  Invoke-Icoo -CliPath $cliPath -Arguments @("run", $agentPath, "--", "--help")
+  $verifyWorkspace = New-AgentVerifyWorkspace -AgentWorkspace $agentPath
+  try {
+    Push-Location $verifyWorkspace
 
-  Write-Host "==> Verifying packaged agent archive"
-  Invoke-Icoo -CliPath $cliPath -Arguments @("run", $agentPackagePath, "--", "--help")
+    Write-Host "==> Verifying source project"
+    Invoke-Icoo -CliPath $cliPath -Arguments @("run", $agentPath)
 
-  if (Test-Path $smokePath) {
-    Write-Host "==> Verifying pkg: import smoke test"
-    Invoke-Icoo -CliPath $cliPath -Arguments @("run", $smokePath, "--", "--help")
+    Write-Host "==> Verifying packaged agent archive"
+    Invoke-Icoo -CliPath $cliPath -Arguments @("run", $agentPackagePath)
+
+    if (Test-Path $smokePath) {
+      Write-Host "==> Verifying pkg: import smoke test"
+      Invoke-Icoo -CliPath $cliPath -Arguments @("run", $smokePath)
+    }
+  } finally {
+    Pop-Location
+    Remove-Item -LiteralPath $verifyWorkspace -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
 
