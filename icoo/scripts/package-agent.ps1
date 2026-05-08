@@ -101,7 +101,7 @@ Invoke-Icoo -CliPath $cliPath -Arguments @(
   $agentPackagePath,
   "--name", "issueye/agent",
   "--version", $PackageVersion,
-  "--export", "src/main.ic"
+  "--export", "src/app/app.ic"
 )
 
 if (-not $SkipExecutable) {

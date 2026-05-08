@@ -1,3 +1,15 @@
+import "./executor.ic" as executor
+import "./registry.ic" as registry
+import "./tool_path.ic" as toolPath
+import "./web_common.ic" as webCommon
+
+const ToolExecutor = executor.ToolExecutor
+const ToolRegistry = registry.ToolRegistry
+const ToolPath = toolPath.ToolPath
+const WebCommon = webCommon.WebCommon
+
+export { ToolExecutor, ToolRegistry, ToolPath, WebCommon }
+
 fn main() {
   return null
 }

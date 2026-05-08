@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -602,6 +603,74 @@ if score != 42 {
 	rt := NewRuntime()
 	if _, err := rt.RunFile(mainPath); err != nil {
 		t.Fatalf("expected module iteration run to succeed, got: %v", err)
+	}
+}
+
+func TestRuntimeRunBundleFile_NamedPackagesInSameDirectoryUseDistinctVirtualRoots(t *testing.T) {
+	dir := t.TempDir()
+	appPath := filepath.Join(dir, "app.icpkg")
+
+	makePackage := func(name, value string) *BundleArchive {
+		return &BundleArchive{
+			Version:       BundleVersion,
+			Kind:          ArchiveKindPackage,
+			Entry:         "src/main.ic",
+			EntryFunction: "main",
+			Export:        "src/main.ic",
+			PackageName:   name,
+			Modules: map[string]string{
+				"src/main.ic": `export const Name = "` + value + `"
+
+fn main() {
+  return null
+}
+`,
+			},
+		}
+	}
+
+	appArchive := &BundleArchive{
+		Version:       BundleVersion,
+		Kind:          ArchiveKindApplication,
+		Entry:         "src/main.ic",
+		EntryFunction: "main",
+		RootAlias:     "@",
+		Modules: map[string]string{
+			"src/main.ic": `import "pkg:issueye/pkg/one" as one
+import "pkg:issueye/pkg/two" as two
+
+fn main() {
+  if one.Name != "one" {
+    panic("unexpected first package export")
+  }
+  if two.Name != "two" {
+    panic("unexpected second package export")
+  }
+  return "ok"
+}
+`,
+		},
+		Packages: map[string]*BundleArchive{
+			".icoo/packages/issueye/pkg/one.icpkg": makePackage("issueye/pkg/one", "one"),
+			".icoo/packages/issueye/pkg/two.icpkg": makePackage("issueye/pkg/two", "two"),
+		},
+	}
+
+	data, err := json.Marshal(appArchive)
+	if err != nil {
+		t.Fatalf("marshal bundle: %v", err)
+	}
+	if err := os.WriteFile(appPath, data, 0o644); err != nil {
+		t.Fatalf("write bundle: %v", err)
+	}
+
+	rt := NewRuntime()
+	result, err := rt.RunBundleFile(appPath)
+	if err != nil {
+		t.Fatalf("expected sibling named packages to load independently, got: %v", err)
+	}
+	if result.String() != "ok" {
+		t.Fatalf("expected ok result, got: %#v", result)
 	}
 }
 

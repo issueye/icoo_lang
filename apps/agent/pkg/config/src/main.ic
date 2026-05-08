@@ -1,3 +1,17 @@
+import "./args.ic" as args
+import "./defaults.ic" as defaults
+import "./env.ic" as env
+import "./file.ic" as file
+import "./merge.ic" as merge
+
+const ArgsConfig = args.ArgsConfig
+const Defaults = defaults.Defaults
+const EnvConfig = env.EnvConfig
+const ConfigFile = file.ConfigFile
+const MergeConfig = merge.MergeConfig
+
+export { ArgsConfig, Defaults, EnvConfig, ConfigFile, MergeConfig }
+
 fn main() {
   return null
 }

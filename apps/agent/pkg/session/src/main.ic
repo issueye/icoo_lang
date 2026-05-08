@@ -1,3 +1,11 @@
+import "./schema.ic" as schema
+import "./store.ic" as store
+
+const Schema = schema.Schema
+const SessionStore = store.SessionStore
+
+export { Schema, SessionStore }
+
 fn main() {
   return null
 }

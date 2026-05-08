@@ -74,6 +74,16 @@ func LoadBundleFile(path string) (*BundleArchive, error) {
 	return LoadBundle(data)
 }
 
+func archiveVirtualBase(path string) string {
+	baseDir := filepath.Dir(path)
+	ext := filepath.Ext(path)
+	if strings.EqualFold(ext, ".icpkg") {
+		name := strings.TrimSuffix(filepath.Base(path), ext)
+		return filepath.Join(baseDir, "__bundle__", name)
+	}
+	return filepath.Join(baseDir, "__bundle__")
+}
+
 func (r *Runtime) SetBundledSources(sources map[string]string) {
 	r.bundledSources = make(map[string]string, len(sources))
 	for path, src := range sources {
@@ -122,7 +132,7 @@ func (r *Runtime) RunBundleArchive(path string, archive *BundleArchive) (runtime
 		return nil, fmt.Errorf("bundle entry is required to run archive: %s", path)
 	}
 
-	virtualBase := filepath.Join(filepath.Dir(path), "__bundle__")
+	virtualBase := archiveVirtualBase(path)
 	sources := make(map[string]string, len(archive.Modules))
 	for relPath, src := range archive.Modules {
 		absPath := filepath.Join(virtualBase, filepath.FromSlash(relPath))
@@ -170,7 +180,7 @@ func (r *Runtime) LoadPackageArchive(path string, archive *BundleArchive) (*runt
 		r.projectRootAlias = originalProjectRootAlias
 	}()
 
-	virtualBase := filepath.Join(filepath.Dir(path), "__bundle__")
+	virtualBase := archiveVirtualBase(path)
 	sources := make(map[string]string, len(archive.Modules))
 	for relPath, src := range archive.Modules {
 		absPath := filepath.Join(virtualBase, filepath.FromSlash(relPath))

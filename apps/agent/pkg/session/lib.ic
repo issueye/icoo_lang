@@ -1,7 +1,6 @@
-import "./src/schema.ic" as schema
-import "./src/store.ic" as store
+import "./src/main.ic" as mainModule
 
-const Schema = schema.Schema
-const SessionStore = store.SessionStore
-
-export { Schema, SessionStore }
+export {
+  Schema: mainModule.Schema,
+  SessionStore: mainModule.SessionStore
+}
