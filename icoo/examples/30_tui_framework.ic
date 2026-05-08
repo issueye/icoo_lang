@@ -1,0 +1,146 @@
+import std.ui.tui as tui
+
+fn main() {
+  let app = tui.app({
+    altScreen: true,
+    init: fn() {
+      return {
+        menu: tui.listState({
+          items: ["Chat", "Logs", "Settings"],
+          selected: 0
+        }),
+        table: tui.tableState({
+          columns: ["Agent", "State"],
+          rows: [
+            ["planner", "ready"],
+            ["builder", "running"],
+            ["reviewer", "idle"]
+          ],
+          selected: 1,
+          height: 3
+        }),
+        viewport: tui.viewportState({
+          content: "Recent events\n- Loaded workspace\n- Synced packages\n- Started local runtime\n- Waiting for input",
+          height: 4
+        }),
+        prompt: tui.inputState({
+          placeholder: "Type a message...",
+          focused: true
+        }),
+        progress: 2,
+        status: "Connected"
+      }
+    },
+    update: fn(model, msg) {
+      if msg.kind == "key" && msg.key == "ctrl+c" {
+        return {
+          model: model,
+          quit: true
+        }
+      }
+
+      model.menu = tui.listUpdate(model.menu, msg)
+      model.table = tui.tableUpdate(model.table, msg)
+      model.viewport = tui.viewportUpdate(model.viewport, msg)
+      model.prompt = tui.inputUpdate(model.prompt, msg)
+
+      if model.prompt.submitted == true {
+        model.status = "Submitted: " + model.prompt.value
+        model.progress = model.progress + 1
+        model.prompt = tui.inputState({
+          placeholder: "Type a message...",
+          focused: true
+        })
+        return {
+          model: model,
+          commands: [
+            tui.tick(200, {
+              kind: "refresh_status"
+            }),
+            tui.task(fn() {
+              return {
+                kind: "task_done",
+                text: "Background sync completed"
+              }
+            })
+          ]
+        }
+      }
+
+      if msg.kind == "refresh_status" {
+        model.status = "Status refreshed"
+      }
+      if msg.kind == "task_done" {
+        model.status = msg.text
+      }
+
+      return {
+        model: model
+      }
+    },
+    view: fn(model) {
+      return tui.hstack({
+        gap: 2,
+        children: [
+          tui.box({
+            title: "Navigation",
+            border: "rounded",
+            padding: [0, 1],
+            width: 24,
+            child: tui.list({
+              state: model.menu
+            })
+          }),
+          tui.vstack({
+            gap: 1,
+            children: [
+              tui.status({
+                text: model.status,
+                tone: "info"
+              }),
+              tui.box({
+                title: "Prompt",
+                border: "rounded",
+                padding: [0, 1],
+                width: 48,
+                child: tui.input({
+                  state: model.prompt
+                })
+              }),
+              tui.progress({
+                label: "Context sync",
+                value: model.progress,
+                total: 5,
+                width: 24
+              }),
+              tui.box({
+                title: "Agents",
+                border: "rounded",
+                padding: [0, 1],
+                child: tui.table({
+                  state: model.table
+                })
+              }),
+              tui.box({
+                title: "Activity",
+                border: "rounded",
+                padding: [0, 1],
+                child: tui.viewport({
+                  state: model.viewport
+                })
+              }),
+              tui.spinner({
+                text: "Press Ctrl+C to quit",
+                frame: "points"
+              })
+            ]
+          })
+        ]
+      })
+    }
+  })
+
+  tui.run(app)
+}
+
+main()
