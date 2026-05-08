@@ -22,6 +22,9 @@ func runPackage(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := loadPackageConfigInto(&opts); err != nil {
+		return err
+	}
 
 	archive, outputPath, err := buildArchive(buildArchiveOptions{
 		Target:         opts.Target,
@@ -39,6 +42,9 @@ func runPackage(args []string) error {
 	data, err := json.MarshalIndent(archive, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode package: %w", err)
+	}
+	if err := ensureParentDir(outputPath); err != nil {
+		return err
 	}
 	if err := os.WriteFile(outputPath, data, 0o644); err != nil {
 		return fmt.Errorf("write package: %w", err)
@@ -96,4 +102,31 @@ func parsePackageArgs(args []string) (packageOptions, error) {
 	opts.Version = strings.TrimSpace(opts.Version)
 	opts.ExportPath = strings.TrimSpace(opts.ExportPath)
 	return opts, nil
+}
+
+func loadPackageConfigInto(opts *packageOptions) error {
+	if opts == nil {
+		return nil
+	}
+	resolved, ok, err := tryLoadPackageTarget(opts.Target)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	manifest, err := loadPackageManifest(resolved.Root)
+	if err != nil {
+		return err
+	}
+	if opts.Name == "" {
+		opts.Name = strings.TrimSpace(manifest.Name)
+	}
+	if opts.Version == "" {
+		opts.Version = strings.TrimSpace(manifest.Version)
+	}
+	if opts.ExportPath == "" {
+		opts.ExportPath = strings.TrimSpace(manifest.Export)
+	}
+	return nil
 }

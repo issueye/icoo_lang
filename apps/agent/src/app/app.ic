@@ -1,9 +1,5 @@
 import std.io.console as io
-import "@/src/config/args.ic" as args
-import "@/src/config/defaults.ic" as defaults
-import "@/src/config/env.ic" as env
-import "@/src/config/file.ic" as file
-import "@/src/config/merge.ic" as config
+import "pkg:issueye/agent/pkg/config" as agentConfig
 import "@/src/context/budget.ic" as budget
 import "@/src/context/builder.ic" as contextBuilder
 import "@/src/context/ignore.ic" as ignore
@@ -14,35 +10,32 @@ import "@/src/runtime/runtime.ic" as runtime
 import "@/src/skills/catalog.ic" as skills
 import "@/src/session/schema.ic" as schema
 import "@/src/session/store.ic" as sessionStore
-import "@/src/tools/executor.ic" as toolExecutor
-import "@/src/tools/registry.ic" as registry
-import "@/src/tools/tool_path.ic" as toolPath
-import "@/src/tools/web_common.ic" as webCommon
+import "pkg:issueye/agent/pkg/tools" as agentTools
 
 export class App {
   init() {
-    this.argsConfig = args.ArgsConfig()
-    this.defaultsConfig = defaults.Defaults()
-    this.envConfig = env.EnvConfig()
-    this.configFile = file.ConfigFile()
-    this.mergeConfig = config.MergeConfig(
+    this.argsConfig = agentConfig.ArgsConfig()
+    this.defaultsConfig = agentConfig.Defaults()
+    this.envConfig = agentConfig.EnvConfig()
+    this.configFile = agentConfig.ConfigFile()
+    this.mergeConfig = agentConfig.MergeConfig(
       this.defaultsConfig,
       this.argsConfig,
       this.envConfig,
       this.configFile
     )
 
-    this.toolPath = toolPath.ToolPath()
+    this.toolPath = agentTools.ToolPath()
     this.ignore = ignore.Ignore()
-    this.webCommon = webCommon.WebCommon()
+    this.webCommon = agentTools.WebCommon()
     this.skillCatalog = skills.SkillCatalog()
-    this.toolRegistry = registry.ToolRegistry(
+    this.toolRegistry = agentTools.ToolRegistry(
       this.toolPath,
       this.ignore,
       this.webCommon,
       this.skillCatalog
     )
-    this.toolExecutor = toolExecutor.ToolExecutor(this.toolRegistry)
+    this.toolExecutor = agentTools.ToolExecutor(this.toolRegistry)
 
     this.modelMessages = modelMessages.ModelMessages(this.toolRegistry)
     this.modelParser = modelParser.ModelParser()

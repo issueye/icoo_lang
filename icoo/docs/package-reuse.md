@@ -57,8 +57,16 @@ For example, `pkg:acme/greeter` maps to:
 Create a reusable package:
 
 ```powershell
+icoo init-pkg .\demo --name acme/demo
 icoo package .\demo .\dist\demo.icpkg --name acme/demo --version 1.0.0 --export src/lib/api.ic
 ```
+
+The generated package scaffold includes:
+
+- `pkg.toml`
+- `lib.ic`
+- `src/main.ic`
+- `examples/`
 
 Create an application bundle:
 

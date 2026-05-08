@@ -401,6 +401,9 @@ func buildVersionInfo(opts buildOptions, outputPath string) (*version.Info, erro
 }
 
 func appendBundleToExecutable(stubPath string, outputPath string, bundleData []byte) error {
+	if err := ensureParentDir(outputPath); err != nil {
+		return err
+	}
 	in, err := os.Open(stubPath)
 	if err != nil {
 		return fmt.Errorf("open executable stub: %w", err)

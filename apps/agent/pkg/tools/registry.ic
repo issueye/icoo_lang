@@ -1,11 +1,11 @@
 import std.core.object as object
-import "@/src/tools/exec_command.ic" as execCommand
-import "@/src/tools/read_file.ic" as readFile
-import "@/src/tools/list_dir.ic" as listDir
-import "@/src/tools/search_text.ic" as searchText
-import "@/src/tools/web_fetch.ic" as webFetch
-import "@/src/tools/web_search.ic" as webSearch
-import "@/src/tools/skill_tool.ic" as skillTool
+import "@/pkg/tools/exec_command.ic" as execCommand
+import "@/pkg/tools/read_file.ic" as readFile
+import "@/pkg/tools/list_dir.ic" as listDir
+import "@/pkg/tools/search_text.ic" as searchText
+import "@/pkg/tools/web_fetch.ic" as webFetch
+import "@/pkg/tools/web_search.ic" as webSearch
+import "@/pkg/tools/skill_tool.ic" as skillTool
 
 export class ToolRegistry {
   init(toolPath, ignore, webCommon, skillCatalog) {

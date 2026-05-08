@@ -21,6 +21,9 @@ func runExtract(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := ensureParentDir(outputPath); err != nil {
+		return err
+	}
 	if err := os.WriteFile(outputPath, data, 0o644); err != nil {
 		return fmt.Errorf("write extracted bundle: %w", err)
 	}

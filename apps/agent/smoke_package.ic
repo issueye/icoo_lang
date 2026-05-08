@@ -1,0 +1,3 @@
+import "pkg:issueye/agent" as agent
+
+agent.main()

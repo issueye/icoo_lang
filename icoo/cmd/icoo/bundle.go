@@ -33,6 +33,9 @@ func runBundle(args []string) error {
 	if err != nil {
 		return fmt.Errorf("encode bundle: %w", err)
 	}
+	if err := ensureParentDir(outputPath); err != nil {
+		return err
+	}
 	if err := os.WriteFile(outputPath, data, 0o644); err != nil {
 		return fmt.Errorf("write bundle: %w", err)
 	}
@@ -59,7 +62,7 @@ type buildArchiveOptions struct {
 }
 
 func buildArchive(opts buildArchiveOptions) (*api.BundleArchive, string, error) {
-	resolved, err := resolveRunTarget(opts.Target)
+	resolved, err := resolveArchiveTarget(opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -136,6 +139,17 @@ func buildArchive(opts buildArchiveOptions) (*api.BundleArchive, string, error) 
 		return nil, "", err
 	}
 	return archive, outputPath, nil
+}
+
+func resolveArchiveTarget(opts buildArchiveOptions) (resolvedProject, error) {
+	if opts.Kind == api.ArchiveKindPackage {
+		if resolved, ok, err := tryLoadPackageTarget(opts.Target); err != nil {
+			return resolvedProject{}, err
+		} else if ok {
+			return resolved, nil
+		}
+	}
+	return resolveRunTarget(opts.Target)
 }
 
 type bundleGraph struct {

@@ -71,6 +71,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+	case "init-pkg":
+		if err := runInitPackage(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	case "repl":
 		runRepl()
 	case "help", "--help", "-h":
@@ -118,6 +123,7 @@ func printUsage() {
 	fmt.Println("  icoo repl                                              start REPL")
 	fmt.Println("  icoo init [dir] [--entry path] [--entry-fn name] [--root-alias name]")
 	fmt.Println("                                                         initialize project")
+	fmt.Println("  icoo init-pkg [dir] [--name value] [--version value]   initialize package scaffold with pkg.toml")
 	fmt.Println("  icoo bundle <file|dir> [output]                        bundle source into one .icb file")
 	fmt.Println("  icoo package <file|dir> [output] [--export path]       package source into one reusable .icpkg file")
 	fmt.Println("  icoo build <file|dir> [output] [--metadata file]       build a standalone executable with embedded bundle")

@@ -18,7 +18,11 @@ function Resolve-RepoRoot {
 }
 
 $root = Resolve-RepoRoot -InputRoot $RepoRoot
-Set-Location $root
+$moduleRoot = Join-Path $root "icoo"
+if (-not (Test-Path (Join-Path $moduleRoot "go.mod"))) {
+  throw "Go module root not found: $moduleRoot"
+}
+Set-Location $moduleRoot
 
 if ($RunTests) {
   Write-Host "==> Running tests"

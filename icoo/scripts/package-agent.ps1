@@ -3,6 +3,10 @@ param(
   [string]$CliOutput = "dist/icoo.exe",
   [string]$AgentTarget = "apps/agent",
   [string]$AgentOutput = "dist/icoo-agent.exe",
+  [string]$PackageVersion = "0.1.2",
+  [string]$PackageRoot = "",
+  [switch]$SkipExecutable,
+  [switch]$SkipVerify,
   [switch]$RunTests
 )
 
@@ -20,7 +24,32 @@ function Resolve-RepoRoot {
 }
 
 $root = Resolve-RepoRoot -InputRoot $RepoRoot
-Set-Location $root
+$moduleRoot = Join-Path $root "icoo"
+if (-not (Test-Path (Join-Path $moduleRoot "go.mod"))) {
+  throw "Go module root not found: $moduleRoot"
+}
+Set-Location $moduleRoot
+
+function Resolve-RelativePath {
+  param(
+    [string]$Base,
+    [string]$Child
+  )
+
+  return [System.IO.Path]::GetFullPath((Join-Path $Base $Child))
+}
+
+function Invoke-Icoo {
+  param(
+    [string]$CliPath,
+    [string[]]$Arguments
+  )
+
+  & $CliPath @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "icoo command failed: $CliPath $($Arguments -join ' ')"
+  }
+}
 
 if ($RunTests) {
   Write-Host "==> Running tests"
@@ -32,8 +61,65 @@ if ($RunTests) {
 Write-Host "==> Building host CLI: $CliOutput"
 go build -o $CliOutput ./cmd/icoo
 
-Write-Host "==> Packaging agent: $AgentTarget -> $AgentOutput"
-& ".\$CliOutput" build $AgentTarget $AgentOutput
+$cliPath = Resolve-RelativePath -Base $moduleRoot -Child $CliOutput
+$agentPath = Resolve-RelativePath -Base $root -Child $AgentTarget
+$packageDir = $PackageRoot
+if (-not $packageDir -or $packageDir.Trim() -eq "") {
+  $packageDir = Join-Path $agentPath ".icoo\packages\issueye"
+} elseif (-not [System.IO.Path]::IsPathRooted($packageDir)) {
+  $packageDir = Resolve-RelativePath -Base $root -Child $PackageRoot
+}
+
+$configPackagePath = Join-Path $packageDir "agent\pkg\config.icpkg"
+$toolsPackagePath = Join-Path $packageDir "agent\pkg\tools.icpkg"
+$agentPackagePath = Join-Path $packageDir "agent.icpkg"
+$smokePath = Join-Path $agentPath "smoke_package.ic"
+
+Write-Host "==> Packaging reusable modules into $packageDir"
+Invoke-Icoo -CliPath $cliPath -Arguments @(
+  "package",
+  (Join-Path $agentPath "pkg\config\package.ic"),
+  $configPackagePath,
+  "--name", "issueye/agent/pkg/config",
+  "--version", $PackageVersion
+)
+Invoke-Icoo -CliPath $cliPath -Arguments @(
+  "package",
+  (Join-Path $agentPath "pkg\tools\package.ic"),
+  $toolsPackagePath,
+  "--name", "issueye/agent/pkg/tools",
+  "--version", $PackageVersion
+)
+Invoke-Icoo -CliPath $cliPath -Arguments @(
+  "package",
+  $agentPath,
+  $agentPackagePath,
+  "--name", "issueye/agent",
+  "--version", $PackageVersion,
+  "--export", "src/main.ic"
+)
+
+if (-not $SkipExecutable) {
+  Write-Host "==> Building standalone agent executable: $AgentTarget -> $AgentOutput"
+  Invoke-Icoo -CliPath $cliPath -Arguments @("build", $agentPath, $AgentOutput)
+}
+
+if (-not $SkipVerify) {
+  Write-Host "==> Verifying source project"
+  Invoke-Icoo -CliPath $cliPath -Arguments @("run", $agentPath, "--", "--help")
+
+  Write-Host "==> Verifying packaged agent archive"
+  Invoke-Icoo -CliPath $cliPath -Arguments @("run", $agentPackagePath, "--", "--help")
+
+  if (Test-Path $smokePath) {
+    Write-Host "==> Verifying pkg: import smoke test"
+    Invoke-Icoo -CliPath $cliPath -Arguments @("run", $smokePath, "--", "--help")
+  }
+}
 
 Write-Host "==> Done"
-Get-Item $CliOutput, $AgentOutput | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize
+$outputs = @($cliPath, $configPackagePath, $toolsPackagePath, $agentPackagePath)
+if (-not $SkipExecutable) {
+  $outputs += (Resolve-RelativePath -Base $moduleRoot -Child $AgentOutput)
+}
+Get-Item $outputs | Select-Object FullName, Length, LastWriteTime | Format-Table -AutoSize
