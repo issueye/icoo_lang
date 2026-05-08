@@ -339,6 +339,18 @@ func TestAgentDistributableIncludesRuntimeConfigTemplate(t *testing.T) {
 	if !strings.Contains(string(runtimeConfig), `task = "今天成都的天气"`) {
 		t.Fatalf("expected runtime config template task, got: %s", string(runtimeConfig))
 	}
+	if !strings.Contains(string(runtimeConfig), `server_read_timeout_ms = 0`) {
+		t.Fatalf("expected runtime config template server_read_timeout_ms, got: %s", string(runtimeConfig))
+	}
+	if !strings.Contains(string(runtimeConfig), `server_read_header_timeout_ms = 0`) {
+		t.Fatalf("expected runtime config template server_read_header_timeout_ms, got: %s", string(runtimeConfig))
+	}
+	if !strings.Contains(string(runtimeConfig), `server_write_timeout_ms = 0`) {
+		t.Fatalf("expected runtime config template server_write_timeout_ms, got: %s", string(runtimeConfig))
+	}
+	if !strings.Contains(string(runtimeConfig), `server_idle_timeout_ms = 0`) {
+		t.Fatalf("expected runtime config template server_idle_timeout_ms, got: %s", string(runtimeConfig))
+	}
 }
 
 func writeJSON(t *testing.T, w http.ResponseWriter, payload map[string]any) {
