@@ -95,6 +95,8 @@ export class ConfigFile {
     config = this.applyString(config, object.get(loaded, "session"), "sessionId")
     config = this.applyString(config, object.get(loaded, "resume"), "resumeSession")
     config = this.applyString(config, object.get(loaded, "approval"), "approval")
+    config = this.applyString(config, object.get(loaded, "server_host"), "serverHost")
+    config = this.applyInt(config, object.get(loaded, "server_port"), "serverPort")
     config = this.applyString(
       config,
       this.resolvePathValue(configDir, object.get(loaded, "skills_dir")),

@@ -1,0 +1,162 @@
+import std.core.object as object
+import std.core.string as str
+import std.data.json as json
+import std.io.console as io
+import std.time.basic as time
+import std.web.express as express
+
+export class Server {
+  init(baseConfig, runtimeApp) {
+    this.baseConfig = baseConfig
+    this.runtime = runtimeApp
+  }
+
+  requestBody(req) {
+    if req.json != null && typeOf(req.json) == "object" {
+      return req.json
+    }
+    return {}
+  }
+
+  buildRequestConfig(body, responseStream) {
+    let nextTask = object.get(body, "task", this.baseConfig.task)
+    if typeOf(nextTask) == "string" {
+      nextTask = str.trimSpace(nextTask)
+    }
+
+    let nextConfig = object.merge(this.baseConfig, {
+      mode: "server",
+      task: nextTask,
+      streamFinalAnswer: responseStream == true,
+      responseStream: responseStream == true
+    })
+
+    let allowed = [
+      "workspace",
+      "model",
+      "approval",
+      "sessionId",
+      "resumeSession",
+      "maxTurns",
+      "maxFiles",
+      "maxTotalBytes"
+    ]
+    for i, key in allowed {
+      let value = object.get(body, key)
+      if value != null {
+        nextConfig[key] = value
+      }
+    }
+
+    return nextConfig
+  }
+
+  resultPayload(result) {
+    return {
+      ok: result.ok,
+      sessionId: result.session.sessionId,
+      sessionPath: result.sessionPath,
+      resumed: result.resumed,
+      mode: result.model.mode,
+      text: result.model.text,
+      reasoningContent: result.model.reasoningContent,
+      toolRuns: result.toolRuns,
+      turnsUsed: result.turnsUsed,
+      stopReason: result.stopReason,
+      contextSummary: result.context.summary
+    }
+  }
+
+  streamComplete(res, result) {
+    res.sse({
+      event: "completed",
+      data: json.encode(this.resultPayload(result))
+    })
+    res.sse({
+      event: "done",
+      data: "ok"
+    })
+    return res.end()
+  }
+
+  streamError(res, err) {
+    res.status(500)
+    res.sse({
+      event: "error",
+      data: json.encode({
+        ok: false,
+        error: err
+      })
+    })
+    return res.end()
+  }
+
+  app() {
+    let current = this
+    let app = express.create()
+
+    app.get("/healthz", fn(req) {
+      return express.json({
+        ok: true,
+        agent: current.baseConfig.agentName,
+        mode: "server",
+        model: current.baseConfig.model
+      })
+    })
+
+    app.post("/chat", fn(req) {
+      let body = current.requestBody(req)
+      let config = current.buildRequestConfig(body, false)
+      let result = current.runtime.execute(config)
+      return express.json(current.resultPayload(result))
+    })
+
+    app.post("/stream_chat", fn(req, res) {
+      let body = current.requestBody(req)
+      let config = current.buildRequestConfig(body, true)
+      config.streamHooks = {
+        onDelta: fn(delta) {
+          res.sse({
+            event: "delta",
+            data: json.encode(delta)
+          })
+        }
+      }
+
+      res.sse({
+        event: "started",
+        data: json.encode({
+          ok: true,
+          task: config.task,
+          model: config.model,
+          at: time.now()
+        })
+      })
+
+      try {
+        let result = current.runtime.execute(config)
+        return current.streamComplete(res, result)
+      } catch err {
+        return current.streamError(res, err)
+      }
+    })
+
+    return app
+  }
+
+  start() {
+    let server = this.app().listen({
+      host: this.baseConfig.serverHost,
+      port: this.baseConfig.serverPort
+    })
+
+    io.println("== " + this.baseConfig.agentName + " server ==")
+    io.println("url:", server.url)
+    io.println("chat:", server.url + "/chat")
+    io.println("stream_chat:", server.url + "/stream_chat")
+
+    while true {
+      time.sleep(1000)
+    }
+  }
+}

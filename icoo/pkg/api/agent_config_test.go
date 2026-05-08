@@ -31,6 +31,8 @@ api_key = "test-key"
 max_turns = 7
 stream_final_answer = false
 agent_name = "icoo_agent"
+server_host = "0.0.0.0"
+server_port = 9090
 session_dir = ".agent/sessions"
 log_path = ".agent/agent.log"
 `
@@ -63,6 +65,12 @@ fn main() {
   }
   if cfg.agentName != "icoo_agent" {
     panic("expected config.toml agent_name")
+  }
+  if cfg.serverHost != "0.0.0.0" {
+    panic("expected config.toml server_host")
+  }
+  if cfg.serverPort != 9090 {
+    panic("expected config.toml server_port")
   }
   if cfg.sessionDir != "` + filepath.Join(workspace, ".agent", "sessions") + `" {
     panic("expected config.toml session_dir")

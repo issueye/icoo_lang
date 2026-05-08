@@ -10,7 +10,11 @@ export class ModelClient {
     this.parser = modelParser
   }
 
-  shouldStreamFinalAnswer(config, builtMessages) {
+  shouldStreamResponse(config, builtMessages) {
+    if config.responseStream == true {
+      return true
+    }
+
     if config.streamFinalAnswer != true {
       return false
     }
@@ -21,6 +25,24 @@ export class ModelClient {
       }
     }
     return false
+  }
+
+  emitDelta(hooks, state) {
+    if hooks == null || typeOf(hooks) != "object" {
+      return
+    }
+
+    let onDelta = object.get(hooks, "onDelta")
+    if onDelta == null {
+      return
+    }
+
+    onDelta({
+      text: state.deltaText,
+      fullText: state.text,
+      reasoningContent: state.reasoningContent,
+      finishReason: state.finishReason
+    })
   }
 
   tryParseStreamLine(line) {
@@ -64,6 +86,7 @@ export class ModelClient {
       hasToolCalls: false,
       deltaText: ""
     }
+    let hooks = object.get(config, "streamHooks")
     let printed = false
     let startedOutput = false
 
@@ -86,15 +109,23 @@ export class ModelClient {
 
         state = this.parser.parseStreamEvent(parsedLine.json, state)
         if state.sawToolCallDelta == true {
-          panic("stream emitted tool_calls; fallback to non-streaming response")
+          if startedOutput == true {
+            panic("stream emitted tool_calls after text output started")
+          }
+          return {
+            fallback: true
+          }
         }
         if state.deltaText != "" {
-          if startedOutput != true {
-            io.println("streaming final answer:")
-            startedOutput = true
+          this.emitDelta(hooks, state)
+          if hooks == null || typeOf(hooks) != "object" {
+            if startedOutput != true {
+              io.println("streaming final answer:")
+              startedOutput = true
+            }
+            io.print(state.deltaText)
+            printed = true
           }
-          io.print(state.deltaText)
-          printed = true
         }
       }
     } finally {
@@ -203,11 +234,15 @@ export class ModelClient {
       tools: this.messages.toolDefinitions()
     }
 
-    if this.shouldStreamFinalAnswer(config, builtMessages) == true {
+    if this.shouldStreamResponse(config, builtMessages) == true {
       try {
-        return this.requestRemoteStream(config, object.merge(payload, {
+        let streamed = this.requestRemoteStream(config, object.merge(payload, {
           stream: true
         }))
+        if typeOf(streamed) == "object" && object.get(streamed, "fallback") == true {
+          return this.requestRemote(config, payload)
+        }
+        return streamed
       } catch err {
         return this.requestRemote(config, payload)
       }

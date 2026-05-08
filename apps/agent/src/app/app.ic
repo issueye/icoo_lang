@@ -7,6 +7,7 @@ import "@/src/model/messages.ic" as modelMessages
 import "@/src/model/parser.ic" as modelParser
 import "pkg:issueye/agent/pkg/session" as agentSession
 import "@/src/runtime/runtime.ic" as runtime
+import "@/src/server/server.ic" as agentServer
 import "@/src/skills/catalog.ic" as skills
 import "pkg:issueye/agent/pkg/tools" as agentTools
 
@@ -89,7 +90,11 @@ export class App {
   start(overrides) {
     this.resolveCliLaunch()
     let loaded = this.loadConfig(overrides)
-    return this.runtime.start(loaded.config)
+    let cfg = loaded.config
+    if cfg.mode == "server" {
+      return agentServer.Server(cfg, this.runtime).start()
+    }
+    return this.runtime.start(cfg)
   }
 
   stop(runtimeApp) {
